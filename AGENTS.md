@@ -13,6 +13,7 @@ The workflow must cover source-data discovery, structured forcing conversion, st
 - HICAR fork: `/Users/fuhrer/Work/agentic/icon_hicar/HICAR`
 - Fieldextra source reference: `/Users/fuhrer/Work/agentic/icon_hicar/fieldextra`
 - Balfrin project root: `$SCRATCH/icon_hicar`
+- Durable online root: `/store_new/mch/msopr/olifu/icon_downscaling`
 - HICAR remote: `git@github.com:ofuhrer/HICAR.git`
 - Production-performance branch: `feature/icon_downscaling`
 - Retired solver-research and experiment history: `archives/`
@@ -58,6 +59,9 @@ Fall back to `rg` or direct reads for scripts/configuration, exact strings, or f
 - Select partitions explicitly: `debug`/`short`/`normal` for GPU; `pp-short`/`pp-long` for CPU/post-processing.
 - Initialize the MCH module path in every non-interactive shell and Slurm job.
 - Keep large data/builds in `$SCRATCH/icon_hicar`; use `/tmp` only for small transient payloads.
+- Use `/store_new/mch/msopr/olifu` for project-owned durable online storage.
+  This namespace is authoritative and must not be rewritten to another storage
+  prefix.
 - Verify live Confluence/Rovo guidance when behavior depends on current operational configuration.
 
 ## Engineering rules

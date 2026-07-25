@@ -2,6 +2,11 @@
   "schema_version": 1,
   "status": "READY",
   "purpose": "Track source and artifact protection required before deleting all local and Balfrin scratch copies.",
+  "storage_policy": {
+    "path": "recovery/storage_policy.json",
+    "authoritative_root": "/store_new/mch/msopr/olifu/icon_downscaling",
+    "sha256": "cec557db8ca87684176d0b0e4899299261e9965fda251d79121d682fab92813a"
+  },
   "hicar_repository": "git@github.com:ofuhrer/HICAR.git",
   "source_protection_manifest": {
     "path": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/source/source-protection-manifest-v1.json",

@@ -62,11 +62,15 @@ The current compact recovery foundation is rooted at:
 /store_new/mch/msopr/olifu/icon_downscaling/recovery/v1
 ```
 
-It is deliberately separate from `$SCRATCH`. The MeteoSwiss storage guidance
-describes this online store tier as backed and suitable for medium- to
-long-term data. That guidance also names a future `/store_new` to `/store`
-migration, so consumers must use the recorded manifest path rather than
-assuming the namespace will never change.
+It is deliberately separate from `$SCRATCH`.
+`/store_new/mch/msopr/olifu` is the permanent, authoritative project-owned
+online namespace. Durable locators must not be rewritten to another storage
+prefix. The machine-readable authority is `recovery/storage_policy.json`.
+
+The immutable v1 archive plan contains an earlier provenance sentence about a
+possible namespace change. Its bytes cannot be edited without invalidating the
+published plan hash; the storage policy supersedes that sentence only. All
+payload, manifest, and checksum identities remain unchanged.
 
 The foundation consists of:
 

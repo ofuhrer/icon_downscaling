@@ -25,10 +25,17 @@ CMake 3.24, gmake 4.4, ecCodes 2.36, NCO 5.0, NetCDF, HDF5, and FFTW.
 ```text
 Local workspace: /Users/fuhrer/Work/agentic/icon_hicar
 Balfrin root:    $SCRATCH/icon_hicar
+Durable root:    /store_new/mch/msopr/olifu/icon_downscaling
 ```
 
 Use `/tmp` only for small transient payloads. Keep large data and builds in
 scratch. Never store secrets in the workspace or scratch manifests.
+
+Use `/store_new/mch/msopr/olifu` for project-owned, longer-term online
+storage outside scratch. It is the authoritative namespace for this project;
+do not rewrite durable locators to another storage prefix. Keep versioned
+manifests below the durable project root and retain checksum-bound ready
+markers when payloads move within that namespace.
 
 ## Slurm policy
 

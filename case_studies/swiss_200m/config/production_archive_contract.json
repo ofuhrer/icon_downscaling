@@ -12,7 +12,9 @@
         "storage_policy": {
             "role": "Backed, high-resilience online storage for medium- to long-term retention.",
             "source": "https://meteoswiss.atlassian.net/wiki/spaces/CSCS/pages/1250197512/CSCS+Resources+2026",
-            "migration_note": "The storage guidance names a future /store_new to /store migration; retain hashes and update locators without changing archive identities."
+            "namespace_policy": "/store_new/mch/msopr/olifu is the permanent authoritative project namespace and must not be rewritten to another storage prefix.",
+            "authority": "recovery/storage_policy.json",
+            "authority_sha256": "cec557db8ca87684176d0b0e4899299261e9965fda251d79121d682fab92813a"
         },
         "source_protection": {
             "manifest": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/source/source-protection-manifest-v1.json",
@@ -59,13 +61,12 @@
             ]
         }
     },
-    "classification_and_candidates": {
+  "classification_and_candidates": {
     "proposed_retention_category": "Retention (facultative)",
     "classification_status": "PENDING_DATA_OWNER_APPROVAL",
     "rationale": "The outputs are reproducible climate grids retained for validation and later analysis; the approved MeteoSwiss guideline lists climate grids as the example for facultative retention rather than irreplaceable national-heritage archiving.",
     "observed_balfrin_paths": {
-      "online_store": "/store/mch/msclim",
-      "tape_archive": "/archive/mch/msclim",
+      "project_online_store": "/store_new/mch/msopr/olifu",
       "access_observed_2026_07_25": true,
       "authorization_to_publish": false
     },

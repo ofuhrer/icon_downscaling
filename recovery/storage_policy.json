@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "status": "AUTHORITATIVE",
+  "owner": "olifu",
+  "group": "s83",
+  "project_root": "/store_new/mch/msopr/olifu/icon_downscaling",
+  "recovery_root": "/store_new/mch/msopr/olifu/icon_downscaling/recovery",
+  "namespace_policy": "The /store_new/mch/msopr/olifu namespace is permanent for this project. Durable locators must not be rewritten to another storage prefix.",
+  "publication_policy": "Publish payloads atomically, bind them to SHA-256 manifests, and create archive ready markers last.",
+  "supersedes": [
+    {
+      "path": "recovery/archive_plan_foundation_v1.json",
+      "field": "provenance.destination_policy",
+      "scope": "The historical namespace-change sentence only; the immutable plan hash and every archive identity remain valid."
+    }
+  ]
+}
