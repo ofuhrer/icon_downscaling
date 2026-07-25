@@ -182,9 +182,12 @@ make test
 ```
 
 This portable suite is required to pass against the pinned, reachable HICAR
-submodule. Two source-coupled test files describe newer HICAR metadata and
-restart contracts under active development; run them only against the matching
-HICAR candidate worktree:
+submodule. Its compression test requires `nccopy` from the NetCDF command-line
+tools (`netcdf-bin` on Debian and Ubuntu).
+
+Two source-coupled test files describe newer HICAR metadata and restart
+contracts under active development; run them only against the matching HICAR
+candidate worktree:
 
 ```bash
 make test-hicar-contract

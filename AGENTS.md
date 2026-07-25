@@ -9,6 +9,7 @@ The workflow must cover source-data discovery, structured forcing conversion, st
 ## Workspace
 
 - Coordinating repository: `/Users/fuhrer/Work/agentic/icon_hicar`
+- Coordinating remote: `git@github.com:ofuhrer/icon_downscaling.git`
 - HICAR fork: `/Users/fuhrer/Work/agentic/icon_hicar/HICAR`
 - Fieldextra source reference: `/Users/fuhrer/Work/agentic/icon_hicar/fieldextra`
 - Balfrin project root: `$SCRATCH/icon_hicar`
