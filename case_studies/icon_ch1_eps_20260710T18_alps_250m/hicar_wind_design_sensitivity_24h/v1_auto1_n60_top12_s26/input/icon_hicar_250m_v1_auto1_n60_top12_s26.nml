@@ -1,0 +1,108 @@
+&general
+  start_date = '2026-07-10 18:00:00'
+  end_date = '2026-07-11 18:00:00'
+/
+
+&restart
+  restart_folder = '/scratch/mch/olifu/icon_hicar/case_studies/icon_ch1_eps_20260710T18_alps_250m/hicar_wind_design_sensitivity_24h/v1_auto1_n60_top12_s26/restart/'
+/
+
+&domain
+  init_conditions_file = '/scratch/mch/olifu/icon_hicar/case_studies/icon_ch1_eps_20260710T18_alps_250m/static/domain_static_relaxed.nc'
+  wait_for_ready_file = .True.
+  ready_file_timeout = 120
+  dx = 250.0
+  nz = 60
+  lat_hi = 'lat'
+  lon_hi = 'lon'
+  hgt_hi = 'topo'
+  landvar = 'landmask'
+  cropcategory_var = 'landuse'
+  soiltype_var = 'soil_type'
+  use_map_factors = .True.
+  auto_level = 1
+  height_lowest_level = 20.0
+  model_top_height = 12000.0
+  stretch_fac = 0.65
+  decay_rate_L_topo = 2.0
+  decay_rate_S_topo = 6.0
+/
+
+&forcing
+  forcing_file_list = '/scratch/mch/olifu/icon_hicar/case_studies/icon_ch1_eps_20260710T18_alps_250m/hicar_wind_design_sensitivity_24h/v1_auto1_n60_top12_s26/input/forcing_file_list.txt'
+  wait_for_ready_file = .True.
+  ready_file_timeout = 120
+  inputinterval = 3600
+  time_var = 'time'
+  pvar = 'P'
+  tvar = 'T'
+  qvvar = 'QV'
+  uvar = 'U'
+  vvar = 'V'
+  wvar = 'W'
+  hgtvar = 'HSURF'
+  zvar = 'HFL'
+  latvar = 'lat_1'
+  lonvar = 'lon_1'
+  qv_is_spec_humidity = .True.
+  t_is_potential = .False.
+  relax_filters = .True.
+/
+
+&physics
+  wind = 'variational solver'
+  mp = 'morrison'
+  pbl = 'none'
+  lsm = 'none'
+  sfc = 'none'
+  water = 'none'
+  rad = 'none'
+/
+
+&time_parameters
+  RK3 = .True.
+  cfl_reduction_factor = 1.6
+/
+
+&lt_parameters
+/
+
+&mp_parameters
+/
+
+&adv_parameters
+  h_order = 3
+  v_order = 3
+  flux_corr = 1
+  cz_diff_order = 0
+/
+
+&sm_parameters
+/
+
+&lsm_parameters
+  LU_Categories = 'USGS'
+/
+
+&cu_parameters
+/
+
+&rad_parameters
+/
+
+&pbl_parameters
+/
+
+&sfc_parameters
+/
+
+&wind
+  Sx = .True.
+  smooth_wind_distance = 500.0
+/
+
+&output
+  output_folder = '/scratch/mch/olifu/icon_hicar/case_studies/icon_ch1_eps_20260710T18_alps_250m/hicar_wind_design_sensitivity_24h/v1_auto1_n60_top12_s26/output/'
+  outputinterval = 3600
+  output_vars = 'qv', 'temperature', 'potential_temperature', 'pressure', 'density', 'precipitation', 'u', 'v', 'w', 'w_grid', 'z', 'dzdx', 'dzdy', 'jacobian', 'wind_alpha'
+/

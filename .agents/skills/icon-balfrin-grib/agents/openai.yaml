@@ -1,0 +1,4 @@
+interface:
+  display_name: "ICON Balfrin GRIB"
+  short_description: "Find and inspect ICON source data"
+  default_prompt: "Use -balfrin-grib to find and inspect ICON source data for HICAR on Balfrin."

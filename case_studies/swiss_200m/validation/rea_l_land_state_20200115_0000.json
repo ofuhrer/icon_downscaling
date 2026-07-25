@@ -1,0 +1,27 @@
+{
+  "fdb_image": "fdb/5.19:v2",
+  "fieldextra_target_grid": "geolatlon,5030000,45200000,11420000,48390000,10000,10000",
+  "output": "/scratch/mch/olifu/icon_hicar/streaming/rea_l_ch1/land_state/rea_l_land_state_20200115_0000.nc",
+  "output_sha256": "249e235125fdef03e64605d2f8e9af7355dc50b42dab016804709c6da8977e50",
+  "output_size_bytes": 8415368,
+  "request": {
+    "class": "rd",
+    "date": "20200115",
+    "expver": "r001",
+    "fields": [
+      "SKT",
+      "T_SO",
+      "W_SO",
+      "W_SNOW",
+      "RHO_SNOW"
+    ],
+    "model": "icon-rea-l-ch1",
+    "step": 0,
+    "stream": "reanl",
+    "time": "0000",
+    "type": "cf"
+  },
+  "schema_version": 1,
+  "source": "ICON REA-L-CH1 FDB",
+  "status": "PASS"
+}

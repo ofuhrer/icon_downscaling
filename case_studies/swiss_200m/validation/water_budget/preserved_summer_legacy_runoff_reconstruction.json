@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "status": "AUDIT_COMPLETE_NOT_PROMOTION_ELIGIBLE",
+  "event": {
+    "name": "preserved_national_summer_20200701_20200704",
+    "start": "2020-07-01T00:00:00",
+    "end": "2020-07-04T00:00:00",
+    "model_job_id": "4932691",
+    "publication_recovery_job_id": "4934458",
+    "hicar_commit": "2ea31109801a2477a946840693934318f8d50c95",
+    "output_record_count": 25,
+    "output_interval_seconds": 10800,
+    "output_bytes": 14096051582,
+    "final_restart_sha256": "4f8ea50c0f2774163e06e596cf5bda23acbed8cb3d2aae2fcc8976a8a09ab879",
+    "model_log_sha256": "4b070c520e61d7701e1ea1a0024a08a661f66945d168bd2a3a20101d82f2287d",
+    "validator_snapshot_sha256": "acb1d0693656b55c083a39ad94156b03563e0143d98124673accabee144557cb"
+  },
+  "runoff_semantics_correction": {
+    "fields": [
+      "runoff_surface",
+      "runoff_subsurface"
+    ],
+    "incorrect_frozen_metadata": "mm s-1",
+    "authoritative_semantics": "water depth over the last completed Noah-MP soil timestep",
+    "soil_timestep_seconds": 300,
+    "reconstruction": "divide each three-hourly last-step depth sample by 300 s, then trapezoid-integrate the sampled rates",
+    "sampling_limitation": "The 25 output records sample only the final 300 s soil step in each 10800 s output interval; unresolved sub-interval runoff variability prevents exact interval closure."
+  },
+  "frozen_report_diagnostic": {
+    "active_soil_all": {
+      "runoff_kg_m2": 494.07,
+      "water_budget_residual_kg_m2": -492.93
+    },
+    "interpretation": "Invalid as a water-budget diagnostic because last-soil-step depths were integrated as if they were rates."
+  },
+  "corrected_approximate_reconstruction": {
+    "active_soil_all": {
+      "runoff_kg_m2": 1.6384495,
+      "water_budget_residual_kg_m2": -0.5042596
+    },
+    "active_soil_interior": {
+      "runoff_kg_m2": 1.646887,
+      "water_budget_residual_kg_m2": -0.5103263
+    },
+    "elevation_strata": {
+      "minimum_residual_kg_m2_approximate": -2.02,
+      "maximum_residual_kg_m2_approximate": 12.89
+    }
+  },
+  "qualification": {
+    "mode": "legacy_snapshot_reconstruction",
+    "representativeness_limited": true,
+    "production_eligible": false,
+    "exact_interval_closure_claimed": false,
+    "reasons": [
+      "Three-hourly snapshots do not contain online interval runoff totals.",
+      "The preserved output omits the groundwater stores required for the exact evaluator.",
+      "The elevation-stratum residual reaches approximately +12.89 kg m-2."
+    ]
+  },
+  "publication": {
+    "separate_from_frozen_event_reports": true,
+    "frozen_event_reports_modified": false,
+    "ready_marker_created": false,
+    "ready_marker_reason": "This is a representativeness-limited audit reconstruction, not a production-qualified publication."
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "vertical_levels": 80,
+  "compute_gpus": 64,
+  "gpus_per_node": 4,
+  "io_ranks_per_node": 1,
+  "nodes": 16,
+  "tasks_per_node": 5,
+  "target_horizontal_cells_per_gpu": 234216,
+  "benchmark_basis": "250 m, 240x160 km, 12-24 A100 GPU production-physics benchmarks; multi-node national 100 m throughput remains unmeasured.",
+  "planning_sdpd_range": [20, 30],
+  "output_default": {
+    "interval_seconds": 3600,
+    "two_d_float32_fields": 8,
+    "three_d_float32_fields": 0,
+    "estimated_uncompressed_gib_per_output": 0.447,
+    "estimated_uncompressed_tib_per_year": 3.82
+  },
+  "output_validation_only": {
+    "interval_seconds": 3600,
+    "two_d_float32_fields": 8,
+    "three_d_float32_fields": 8,
+    "estimated_uncompressed_gib_per_output": 36.185,
+    "estimated_uncompressed_tib_per_year": 309.77
+  },
+  "gates": [
+    "Measure full-wall SDPD, including asynchronous I/O, on a representative 100 m large domain before trusting this range.",
+    "Retain one CPU-only I/O rank per node; benchmark more only when output timing proves a write bottleneck.",
+    "Do not plan routine hourly three-dimensional output for the 20-year archive."
+  ]
+}

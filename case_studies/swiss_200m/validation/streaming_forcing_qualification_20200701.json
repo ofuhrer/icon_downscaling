@@ -1,0 +1,87 @@
+{
+  "aggregate_worker_stage_seconds": {
+    "convert": 126,
+    "dynamic_extract": 38,
+    "static_wait_or_publish": 12,
+    "total": 208,
+    "validate_and_publish": 32
+  },
+  "chunk_id": "qualification_20200701_00_02",
+  "cycle_policy": "For each valid hour use that UTC date's 00 UTC cycle and step equal to the valid hour; use next-cycle step 0 at midnight and never previous-cycle step 24.",
+  "end": "2020-07-01T02:00:00",
+  "entries": [
+    {
+      "cycle_date": "20200701",
+      "forcing_file": "/scratch/mch/olifu/icon_hicar/streaming/rea_l_ch1/qualification_20200701_00_02/forcing/rea_l_hicar_20200701_0000.nc",
+      "forcing_sha256": "4a06cd980cc5518c26f4cfdc7262e93fede55a74492a58c9c280ed97d27dfdfa",
+      "forcing_size_bytes": 275580561,
+      "index": 0,
+      "record_manifest": "/scratch/mch/olifu/icon_hicar/streaming/rea_l_ch1/qualification_20200701_00_02/forcing/rea_l_hicar_20200701_0000.manifest.json",
+      "record_manifest_sha256": "8486ada44d8cc59ef4258b2f28e5ef85e6a82ff4bcddc293906bcd5dcaad6e77",
+      "stage_seconds": {
+        "convert": 40,
+        "dynamic_extract": 6,
+        "static_wait_or_publish": 5,
+        "total": 62,
+        "validate_and_publish": 11
+      },
+      "step_hours": 0,
+      "valid_time": "2020-07-01T00:00:00",
+      "validation_report": "/scratch/mch/olifu/icon_hicar/streaming/rea_l_ch1/qualification_20200701_00_02/forcing/rea_l_hicar_20200701_0000.validation.json",
+      "validation_report_sha256": "fda55ee56c26046c4580ffd74315927691d81aa4a491084a6aed6c2f83415b40"
+    },
+    {
+      "cycle_date": "20200701",
+      "forcing_file": "/scratch/mch/olifu/icon_hicar/streaming/rea_l_ch1/qualification_20200701_00_02/forcing/rea_l_hicar_20200701_0100.nc",
+      "forcing_sha256": "859513eeac73ad5741ce9a8e032ebfe3903717bf8dd027c7b653db79a67f9b58",
+      "forcing_size_bytes": 273602970,
+      "index": 1,
+      "record_manifest": "/scratch/mch/olifu/icon_hicar/streaming/rea_l_ch1/qualification_20200701_00_02/forcing/rea_l_hicar_20200701_0100.manifest.json",
+      "record_manifest_sha256": "36791e58cfc20d9a88b8c4ff9bab6b48d62d5c08d5e7a210c3cb0d3bdda54530",
+      "stage_seconds": {
+        "convert": 38,
+        "dynamic_extract": 7,
+        "static_wait_or_publish": 6,
+        "total": 61,
+        "validate_and_publish": 10
+      },
+      "step_hours": 1,
+      "valid_time": "2020-07-01T01:00:00",
+      "validation_report": "/scratch/mch/olifu/icon_hicar/streaming/rea_l_ch1/qualification_20200701_00_02/forcing/rea_l_hicar_20200701_0100.validation.json",
+      "validation_report_sha256": "eb3bd88fe05ef14d5cff8768b26c41a6f087ec12de211a909992698035f06e36"
+    },
+    {
+      "cycle_date": "20200701",
+      "forcing_file": "/scratch/mch/olifu/icon_hicar/streaming/rea_l_ch1/qualification_20200701_00_02/forcing/rea_l_hicar_20200701_0200.nc",
+      "forcing_sha256": "612a3c22964cda3fcf10780b06f0c2336e890145abd7131558a342bc5dbad1dd",
+      "forcing_size_bytes": 274394617,
+      "index": 2,
+      "record_manifest": "/scratch/mch/olifu/icon_hicar/streaming/rea_l_ch1/qualification_20200701_00_02/forcing/rea_l_hicar_20200701_0200.manifest.json",
+      "record_manifest_sha256": "57d54748433552e8706a95297a05282d923ca9cbfbd71e77ca0d2edd4eab4192",
+      "stage_seconds": {
+        "convert": 48,
+        "dynamic_extract": 25,
+        "static_wait_or_publish": 1,
+        "total": 85,
+        "validate_and_publish": 11
+      },
+      "step_hours": 2,
+      "valid_time": "2020-07-01T02:00:00",
+      "validation_report": "/scratch/mch/olifu/icon_hicar/streaming/rea_l_ch1/qualification_20200701_00_02/forcing/rea_l_hicar_20200701_0200.validation.json",
+      "validation_report_sha256": "6aa64cc3b5ee4936641b363bf14bf1341b948c2f588b1da09e152489dfcbf216"
+    }
+  ],
+  "expected_records": 3,
+  "failures": [],
+  "forcing_list": "/scratch/mch/olifu/icon_hicar/streaming/rea_l_ch1/qualification_20200701_00_02/forcing_list.txt",
+  "forcing_list_sha256": "5f77ebe8303a014f71a5f954021a519892446a1c2bb99171eff2d6751c9ed72f",
+  "hours": 2,
+  "mean_forcing_bytes": 274526049.3333333,
+  "plan": "/scratch/mch/olifu/icon_hicar/streaming/rea_l_ch1/qualification_20200701_00_02/chunk_plan.json",
+  "plan_sha256": "162e4d98ec8392450c3157460bb0ab2c46524cbe230e4cc658994de2dc575e67",
+  "records": 3,
+  "start": "2020-07-01T00:00:00",
+  "status": "PASS",
+  "total_forcing_bytes": 823578148,
+  "transient_source_bytes_read": 2023021481
+}

@@ -1,0 +1,89 @@
+diff --git a/src/physics/lsm_driver.F90 b/src/physics/lsm_driver.F90
+--- a/src/physics/lsm_driver.F90
++++ b/src/physics/lsm_driver.F90
+@@ -382,14 +382,18 @@ contains
+             call allocate_noah_data(num_soil_layers, num_snow_layers)
+         endif
+ 
+-        ! initial guesses
+-        !$acc parallel loop gang vector collapse(2) present(temperature_2m, humidity_2m, temperature, water_vapor)
+-        do j = jms, jme
+-            do i = ims, ime
+-                temperature_2m(i,j) = temperature(i,kms,j)
+-                humidity_2m(i,j) = water_vapor(i,kms,j)
++        ! Initial guesses are cold-start state only.  On restart, T2/Q2 have
++        ! already been restored and must not be replaced by the lowest model
++        ! level before the first surface/land update.
++        if (.not. restart) then
++            !$acc parallel loop gang vector collapse(2) present(temperature_2m, humidity_2m, temperature, water_vapor)
++            do j = jms, jme
++                do i = ims, ime
++                    temperature_2m(i,j) = temperature(i,kms,j)
++                    humidity_2m(i,j) = water_vapor(i,kms,j)
++                end do
+             end do
+-        end do
++        endif
+         
+         
+         ! Noah-MP Land Surface Model
+@@ -436,16 +440,20 @@ contains
+                         VEGFRAC(i,j) = veg_frac(i, 1, j)
+                     endif
+ 
+-                    ! prevents init from failing when processing water points that may have "soil_t"=0
+-                    !$acc loop
+-                    do k=1,ubound(soil_temperature,2)
+-                        if (soil_temperature(i,k,j) < 200) then
+-                            soil_temperature(i,k,j) = 200.0
+-                        end if
+-                        if (soil_water_content(i,k,j) < 0.0001) then
+-                            soil_water_content(i,k,j) = 0.0001
+-                        end if
+-                    end do
++                    ! Cold-start protection for water points whose static
++                    ! soil fields may be zero.  Restart values are model
++                    ! state and must remain byte-for-byte untouched.
++                    if (.not. restart) then
++                        !$acc loop
++                        do k=1,ubound(soil_temperature,2)
++                            if (soil_temperature(i,k,j) < 200) then
++                                soil_temperature(i,k,j) = 200.0
++                            end if
++                            if (soil_water_content(i,k,j) < 0.0001) then
++                                soil_water_content(i,k,j) = 0.0001
++                            end if
++                        end do
++                    endif
+                 end do
+             end do
+ 
+diff --git a/src/physics/pbl_driver.F90 b/src/physics/pbl_driver.F90
+--- a/src/physics/pbl_driver.F90
++++ b/src/physics/pbl_driver.F90
+@@ -106,7 +106,7 @@ contains
+         its = domain%its ; ite = domain%ite ; jts = domain%jts ; jte = domain%jte ; kts = domain%kts ; kte = domain%kte
+ 
+         allowed_to_read = .True.
+-        restart = .False.
++        restart = context_change .or. options%restart%restart
+         flag_qi = .true.
+ 
+         if (STD_OUT_PE .and. .not.context_change) write(*,*) "Initializing PBL Scheme"
+@@ -173,6 +173,6 @@ contains
+             ! initialize tendencies (this is done in ysu init but only for tiles, not mem (ie its vs ims))
+             ! BK: check if this actually matters ???
+-            if(.not.context_change)then
++            if(.not.restart)then
+                 do j = jms,jme
+                 do k = kms,kme
+                 do i = ims,ime
+@@ -196,7 +196,7 @@ contains
+                         ,rqiblten=domain%tend%qi_pbl            &
+                         ,p_qi=1                                 &
+                         ,p_first_scalar=1                       &
+-                        ,restart=context_change                        &
++                        ,restart=restart                               &
+                         ,allowed_to_read= allowed_to_read      &
+                         ,ids=ids, ide=ide, jds=jds, jde=jde     &
+                         ,kds=kds, kde=kde, ims=ims, ime=ime     &

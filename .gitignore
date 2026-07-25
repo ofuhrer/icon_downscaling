@@ -1,0 +1,71 @@
+# Operating-system and editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Python environments and caches
+.venv/
+.venv-*/
+.codex_pydeps/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local workflow and code-discovery caches
+.cache/
+.codebase-memory/
+tmp_diagnostics/
+
+# Optional private source-reference checkout. Its exact revision is recorded
+# in externals/fieldextra.lock without making public clones depend on access.
+/fieldextra/
+
+# Compiled and generated build products
+build/
+build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile.user
+*.mod
+*.smod
+*.o
+*.a
+*.so
+*.dylib
+
+# Large meteorological inputs and model products
+*.nc
+*.nc4
+*.grib
+*.grib1
+*.grib2
+*.grb
+*.grb2
+*.zarr/
+*.partial
+*.partial.*
+*.ready
+
+# Runtime products
+**/output/
+**/restart/
+**/logs/
+**/forcing/
+slurm-*.out
+*.out
+*.err
+
+# Generated experiment matrices
+**/runs/
+
+# Retired research history is preserved locally as Git bundles, not nested
+# into the coordinating repository.
+archives/

@@ -1,0 +1,6 @@
+# Local coordinator and validation dependencies.
+numpy>=1.26
+netCDF4>=1.6
+pyproj>=3.6
+scipy>=1.11
+PyYAML>=6

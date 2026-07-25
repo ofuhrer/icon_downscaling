@@ -1,0 +1,4 @@
+interface:
+  display_name: "HICAR Balfrin Runtime"
+  short_description: "Build, run, and debug HICAR"
+  default_prompt: "Use -balfrin-runtime to build or run HICAR safely on Balfrin."

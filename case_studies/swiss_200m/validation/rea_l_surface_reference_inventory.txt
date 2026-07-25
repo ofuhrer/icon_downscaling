@@ -1,0 +1,22 @@
+schema_version=1
+source=ICON REA-L-CH1 FDB
+fdb_image=fdb/5.19:v2
+probe_cycle=20200701T0000
+probe_step_hours=3
+/scratch/mch/olifu/icon_hicar/tmp/rea_l_surface_audit.PaSkZ9/current.grib
+shortName       paramId         name            units           typeOfLevel     level           stepType        stepRange       dataDate        dataTime        validityDate    validityTime    numberOfPoints  
+PS              500000          Pressure (S) (not reduced)  Pa              surface         0               instant         3               20200701        0               20200701        300             1147980        
+T_2M            500011          2m Temperature  K               heightAboveGround  2               instant         3               20200701        0               20200701        300             1147980        
+TD_2M           500017          2m Dew Point Temperature  K               heightAboveGround  2               instant         3               20200701        0               20200701        300             1147980        
+U_10M           500027          U-Component of Wind  m s-1           heightAboveGround  10              instant         3               20200701        0               20200701        300             1147980        
+V_10M           500029          V-Component of Wind  m s-1           heightAboveGround  10              instant         3               20200701        0               20200701        300             1147980        
+TOT_PREC        500041          Total Precipitation (Accumulation)  kg m-2          surface         0               accum           0-3             20200701        0               20200701        300             1147980        
+H_SNOW          500045          Snow Depth      m               surface         0               instant         3               20200701        0               20200701        300             1147980        
+RHO_SNOW        500147          Snow density    kg m-3          surface         0               instant         3               20200701        0               20200701        300             1147980        
+8 of 8 messages in /scratch/mch/olifu/icon_hicar/tmp/rea_l_surface_audit.PaSkZ9/current.grib
+
+/scratch/mch/olifu/icon_hicar/tmp/rea_l_surface_audit.PaSkZ9/precip_start.grib
+TOT_PREC        500041          Total Precipitation (Accumulation)  kg m-2          surface         0               accum           0m              20200701        0               20200701        0               1147980        
+1 of 1 messages in /scratch/mch/olifu/icon_hicar/tmp/rea_l_surface_audit.PaSkZ9/precip_start.grib
+
+9 of 9 total messages in 2 files

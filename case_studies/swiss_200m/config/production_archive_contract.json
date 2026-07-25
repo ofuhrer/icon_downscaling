@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "status": "UNRESOLVED",
+  "purpose": "Durable archive and retention contract required before a one-year or 20-year HICAR campaign may be authorized.",
+  "classification_and_candidates": {
+    "proposed_retention_category": "Retention (facultative)",
+    "classification_status": "PENDING_DATA_OWNER_APPROVAL",
+    "rationale": "The outputs are reproducible climate grids retained for validation and later analysis; the approved MeteoSwiss guideline lists climate grids as the example for facultative retention rather than irreplaceable national-heritage archiving.",
+    "observed_balfrin_paths": {
+      "online_store": "/store/mch/msclim",
+      "tape_archive": "/archive/mch/msclim",
+      "access_observed_2026_07_25": true,
+      "authorization_to_publish": false
+    },
+    "capacity_screen": {
+      "current_msclim_tape_plan_tb": 10,
+      "estimated_200m_twenty_year_compressed_routine_output_tib_range": [
+        13.252540466424762,
+        21.20406474627962
+      ],
+      "estimated_200m_twenty_annual_checkpoints_tib": 0.7706734047860664,
+      "result": "INSUFFICIENT_OR_UNAPPROVED",
+      "interpretation": "The current tape plan is smaller than even the lower routine-output estimate and does not include checkpoints, validation products, wind-climatology products, or transfer headroom."
+    },
+    "required_decision": "The data owner and CSCS division SPOC must select a durable tier, assign at least the measured campaign envelope plus headroom, and approve a project-owned destination before a transfer test.",
+    "policy_sources": [
+      {
+        "title": "Archiving & Retention Guidelines",
+        "url": "https://meteoswiss.atlassian.net/wiki/spaces/UA/pages/1697382577/Archiving+Retention+Guidelines",
+        "version": "1.0 approved 2026-07-17"
+      },
+      {
+        "title": "CSCS Resources 2026",
+        "url": "https://meteoswiss.atlassian.net/wiki/spaces/CSCS/pages/1250197512/CSCS+Resources+2026"
+      },
+      {
+        "title": "Balfrin & Tasna",
+        "url": "https://meteoswiss.atlassian.net/wiki/spaces/CSCS/pages/256278614/Balfrin+Tasna"
+      }
+    ]
+  },
+  "scratch_policy": {
+    "role": "rolling production workspace only",
+    "maximum_restart_boundaries_per_chain": 2,
+    "raw_history_retirement": "Only after lossless compressed publication, checksum verification, all scientific reports, and durable archive acknowledgement.",
+    "forcing_retirement": "Only after model output and exact-end restart publication for the consuming segment."
+  },
+  "required_for_approval": [
+    "Named durable destination outside scratch with responsible owner and quota.",
+    "Immutable per-segment manifest containing source requests, configuration and executable hashes, output/restart checksums, validation reports, and compression provenance.",
+    "Measured transfer throughput and one restore/readback drill on a month-pilot artifact.",
+    "Documented retention periods for compressed routine output, selected checkpoints, forcing manifests, validation reports, and raw transient files.",
+    "Failure-recovery policy for partial transfer, checksum mismatch, interrupted model segments, and unavailable FDB records.",
+    "Approved 200 m and 100 m storage envelopes, including rolling restart peaks and observation/reference products."
+  ],
+  "approval": {
+    "destination": null,
+    "owner": null,
+    "quota_bytes": null,
+    "measured_transfer_bytes_per_second": null,
+    "restore_drill_report": null,
+    "approved_by": null
+  },
+  "interpretation": "UNRESOLVED intentionally blocks GO_ANNUAL_CYCLE and every 20-year production decision. It does not block the bounded 31-day scientific pilot."
+}

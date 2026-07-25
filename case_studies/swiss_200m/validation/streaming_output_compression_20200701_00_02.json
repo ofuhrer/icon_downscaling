@@ -1,0 +1,28 @@
+{
+  "compression_level": 1,
+  "logical_variable_sha256": {
+    "emiss": "38df1690d1330ee972e8456feff7fd9093cd44a6009f04d60b9e0720c1074a9c",
+    "hfgs": "b63495f5394aa09a3a9f7e57648947bbee4ca72611463345f915582b4ef25c2a",
+    "hus2m": "e17fcd2dbc706427c7388d5563bc46ccf601fb826930cf3e8c819c02b19abfde",
+    "lat": "2be61c761ce68a22296ccf48cc8db010693e2d82958bba0627650d2c7daf0405",
+    "lon": "dc559393e25a98a60d6d523cd5ccb64bbf4d89890dcccd8905baedea6be31f73",
+    "lwtr": "f8f5e034f31bf344f668182b877e592dea57a751620418ed00d38c18b2d51daa",
+    "precipitation": "06cd06d5a0775b8386b4b348b11ba965030bec3456fffe7e9fb673685f1e6c93",
+    "psfc": "7da48143977a705114164c249bbbc55d10bb924237c5b73a972a9a6124e89a53",
+    "rlus": "052693f71f307b73433055e76c8ab6537e401be585bbb80e6f2ac54be7053486",
+    "rsds": "c8c4c4d5a96171dedb51e6ea77f8ac84e0fa1cb9153eaf09cc0fedd1a8267faa",
+    "taix": "33f8e7daf35b070c02ce908ef5b401d4e1f400c1971049eff3de885fc8530fe2",
+    "time": "a89e1ced50f5b38655c27752ed7b49698dcf1662f1c71ce5863446ee59608c41",
+    "u10m": "edab0905c35e953b12953a051769515734c5747495042d5d805b642340de175a",
+    "v10m": "8c22c815984a2995a4bf731fa3ab44f913f06580a17cdd4f1388a0bcc3dbbcd9",
+    "z": "3ad9eac966e3b46749a2063021ac7d2b0b5932e778d9e60f7090bbff1ea78686"
+  },
+  "physical_size_ratio": 0.5657498603327914,
+  "source": "/scratch/mch/olifu/icon_hicar/streaming/rea_l_ch1/qualification_20200701_00_02/model_initial/output/domain_static_swiss_200m_2020-07-01_00-00-00.nc",
+  "source_bytes": 1725351300,
+  "source_sha256": "01e717f709f78cfefe54e7799de30313a1b2f493c0733ab1f6ac2c9f0f5d0a4b",
+  "status": "PASS",
+  "target": "/scratch/mch/olifu/icon_hicar/streaming/rea_l_ch1/qualification_20200701_00_02/model_initial/output_compressed/domain_static_swiss_200m_2020-07-01_00-00-00.nc",
+  "target_bytes": 976117257,
+  "target_sha256": "426d1c4ca61b804d26ffb36fbcdc2e881f19144173d775a1c20b36b278811031"
+}

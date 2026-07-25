@@ -1,0 +1,117 @@
+{
+  "status": "PASS",
+  "case": "701x701 Alpine bridge at 200 m, 80 levels, 2010-01-01T00:00:00/2010-01-01T00:30:00",
+  "heights_agl_m": [
+    50.0,
+    75.0,
+    100.0,
+    125.0,
+    150.0,
+    200.0
+  ],
+  "runtime": {
+    "partition": "debug",
+    "nodes": 2,
+    "gpu_compute_ranks": 8,
+    "cpu_io_ranks": 2,
+    "gpu_arch": "cc80",
+    "halo_transport": "NCCL",
+    "wind_solver": "discretely adjoint projection with exact Galerkin hierarchy",
+    "compact_profile_job": 4930774,
+    "compact_profile_slurm_elapsed": "00:03:04",
+    "compact_profile_model_timing_seconds": 77.95855,
+    "reference_profile_job": 4930858,
+    "reference_profile_slurm_elapsed": "00:02:58",
+    "reference_profile_model_timing_seconds": 78.89693,
+    "minimum_mass_jacobian": 0.24726,
+    "minimum_interface_thickness_m": 12.508,
+    "maximum_adjoint_relative_Bq": 7.8605e-06,
+    "adjoint_relative_Bq_target": 2e-05,
+    "parallel_height_coordinate_write": "PASS"
+  },
+  "compact_native_output": {
+    "variables": [
+      "u10m",
+      "v10m",
+      "u_agl",
+      "v_agl",
+      "rho_agl"
+    ],
+    "record_count": 2,
+    "remote_output": "/scratch/mch/olifu/icon_hicar/validation/wind-climatology/bridge-runs/4930774/output/domain_static_alpine_bridge_200m_2010-01-01_00-00-00.nc",
+    "size_bytes": 82830089,
+    "sha256": "0df1622e89ec401ca20ac72102364c1cbc735bac53a8182e4eebc95b8027f8fd"
+  },
+  "qualification_reference_output": {
+    "additional_variables": [
+      "u",
+      "v",
+      "z",
+      "density"
+    ],
+    "production_policy": "Full-level fields are qualification-only and are not part of the wind_climatology production profile.",
+    "remote_output": "/scratch/mch/olifu/icon_hicar/validation/wind-climatology/bridge-runs/4930858/output/domain_static_alpine_bridge_200m_2010-01-01_00-00-00.nc",
+    "size_bytes": 1191714490,
+    "sha256": "d491dd9e795d2aba5c4376fdd6046269194c22834a301f84fa3637b0cd45fffc"
+  },
+  "independent_fixed_height_comparison": {
+    "absolute_tolerance": 2e-05,
+    "u_agl": {
+      "maximum_absolute_error": 9.462116299374657e-07,
+      "root_mean_square_error": 3.46473610475699e-08,
+      "nonfinite_pairs": 0
+    },
+    "v_agl": {
+      "maximum_absolute_error": 4.841813394662609e-07,
+      "root_mean_square_error": 3.076704234605769e-08,
+      "nonfinite_pairs": 0
+    },
+    "rho_agl": {
+      "maximum_absolute_error": 6.017925335832786e-08,
+      "root_mean_square_error": 2.9205494960809858e-08,
+      "nonfinite_pairs": 0
+    }
+  },
+  "compact_reduction": {
+    "interval_seconds": 1800,
+    "sample_interval_seconds": 1800.0,
+    "interval_sample_convention": "start < sample_time <= end",
+    "time_coordinate_canonicalized": true,
+    "observed_input_time_offset_seconds": 0.432,
+    "interval_count": 1,
+    "samples_per_interval": [
+      1
+    ],
+    "output_size_bytes": 61258509,
+    "output_sha256": "4f21b8adcebd891e4200e90fb968b4e0dad9774de5da4c5d9d622887a243d507",
+    "qualification_raw_to_compact_size_ratio": 19.4538605240947
+  },
+  "user_product_smoke": {
+    "direction_definition": "wind-from direction of vector mean",
+    "minimum_direction_speed_m_s": 0.1,
+    "minimum_shear_speed_m_s": 1.0,
+    "shear_definition": "power-law exponent of scalar mean speeds",
+    "shear_pairs_m": [
+      [
+        50.0,
+        100.0
+      ],
+      [
+        100.0,
+        150.0
+      ],
+      [
+        100.0,
+        200.0
+      ]
+    ],
+    "output_size_bytes": 14595148,
+    "output_sha256": "869397abbd7a9879bad17475033d0d6cf694015a7fce57f8947ff4523b7bc044"
+  },
+  "gust_policy": "ICON VMAX is not used or preserved. Resolved HICAR sample maxima are not 3-second gusts.",
+  "limitations": [
+    "This bridge establishes regional scaling and independent interpolation accuracy, not Swiss national throughput or storage.",
+    "The one-sample interval proves reduction and delivery plumbing, not a climatological distribution.",
+    "Surface/PBL qualification, storage-qualified directional and threshold/persistence accumulators, observation validation, and a HICAR-native gust method remain gated."
+  ]
+}

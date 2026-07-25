@@ -1,0 +1,4 @@
+[submodule "HICAR"]
+	path = HICAR
+	url = https://github.com/ofuhrer/HICAR.git
+	branch = feature/icon_downscaling

@@ -1,0 +1,4 @@
+interface:
+  display_name: "ICON to HICAR Forcing"
+  short_description: "Prepare structured ICON forcing for HICAR"
+  default_prompt: "Use -hicar-forcing to prepare and validate HICAR forcing from ICON output."

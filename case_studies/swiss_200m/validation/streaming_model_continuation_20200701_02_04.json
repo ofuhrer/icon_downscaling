@@ -1,0 +1,57 @@
+{
+  "chunk_id": "qualification_20200701_02_04",
+  "end": "2020-07-01T04:00:00",
+  "failures": [],
+  "hours": 2,
+  "model_log": "/scratch/mch/olifu/icon_hicar/streaming/rea_l_ch1/qualification_20200701_02_04/model_continuation/model.out",
+  "output": {
+    "files": [
+      {
+        "path": "/scratch/mch/olifu/icon_hicar/streaming/rea_l_ch1/qualification_20200701_02_04/model_continuation/output/domain_static_swiss_200m_2020-07-01_02-00-00.nc",
+        "sha256": "715a6599060316cfb7b83ffd9a3590b26c71c8df1ad5f4c0979a95fcb0cb207b",
+        "size_bytes": 360387970,
+        "times": [
+          "2020-07-01T03:00:00",
+          "2020-07-01T04:00:00"
+        ]
+      }
+    ],
+    "size_bytes": 360387970,
+    "times": [
+      "2020-07-01T03:00:00",
+      "2020-07-01T04:00:00"
+    ],
+    "variables": [
+      "emiss",
+      "hfgs",
+      "hus2m",
+      "lat",
+      "lon",
+      "lwtr",
+      "precipitation",
+      "psfc",
+      "rlus",
+      "rsds",
+      "taix",
+      "time",
+      "u10m",
+      "v10m"
+    ]
+  },
+  "plan": "/scratch/mch/olifu/icon_hicar/streaming/rea_l_ch1/qualification_20200701_02_04/chunk_plan.json",
+  "plan_sha256": "adf80b39bf77721db9a79df130a57608ffdaa23a48ec8bcdfa16899ad14aa78e",
+  "restart": {
+    "dt_seconds": 3.6449830532073975,
+    "path": "/scratch/mch/olifu/icon_hicar/streaming/rea_l_ch1/qualification_20200701_00_02/chain_restart/domain_static_swiss_200m_2020-07-01_04-00-00.nc",
+    "sha256": "54ea039a5c8836c227eb7f79b357d3872a641b4c92e29109d20ad1b4787ca96c",
+    "size_bytes": 42368218489,
+    "times": [
+      "2020-07-01T04:00:00"
+    ],
+    "variable_count": 136
+  },
+  "restart_continuation": true,
+  "run_dir": "/scratch/mch/olifu/icon_hicar/streaming/rea_l_ch1/qualification_20200701_02_04/model_continuation",
+  "start": "2020-07-01T02:00:00",
+  "status": "PASS"
+}

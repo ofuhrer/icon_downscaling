@@ -1,0 +1,103 @@
+&general
+  start_date = '@START_DATE@'
+  end_date = '@END_DATE@'
+/
+&restart
+  restart_folder = '@RESTART_DIR@'
+@RESTART_LINES@
+/
+&domain
+  init_conditions_file = '@STATIC_FILE@'
+  wait_for_ready_file = .True.
+  ready_file_timeout = 1800
+  dx = 200.0
+  nz = @NZ@
+  lat_hi = 'lat'
+  lon_hi = 'lon'
+  hgt_hi = 'topo'
+  landvar = 'landmask'
+  vegtype_var = 'landuse'
+  soiltype_var = 'soil_type'
+  surface_temp_var = 'surface_temperature'
+  soil_deept_var = 'soil_deep_temperature'
+  soil_t_var = 'soil_temperature'
+  soil_vwc_var = 'soil_vwc'
+@SNOW_INIT_LINES@
+  use_map_factors = .True.
+  auto_level = 1
+  height_lowest_level = 15.0
+  model_top_height = 12000.0
+  stretch_fac = 0.65
+  terrain_smooth_windowsize = 5
+  terrain_smooth_cycles = 10
+  decay_rate_L_topo = 2.0
+  decay_rate_S_topo = 6.0
+/
+&forcing
+  forcing_file_list = '@FORCING_FILE_LIST@'
+  wait_for_ready_file = .True.
+  ready_file_timeout = 1800
+  inputinterval = 3600
+  time_var = 'time'
+  pvar = 'P'
+  tvar = 'T'
+  qvvar = 'QV'
+  uvar = 'U'
+  vvar = 'V'
+  wvar = 'W'
+  hgtvar = 'HSURF'
+  zvar = 'HFL'
+  latvar = 'lat_1'
+  lonvar = 'lon_1'
+  qv_is_spec_humidity = .True.
+  t_is_potential = .False.
+  relax_filters = .True.
+/
+&physics
+  wind = 'variational solver'
+  mp = 'morrison'
+  pbl = 'ysu'
+  lsm = 'noahmp'
+  sfc = 'revmm5'
+  water = 'simple'
+  rad = 'rrtmgp'
+  sm = 'none'
+/
+&time_parameters
+  RK3 = .True.
+  cfl_reduction_factor = 1.6
+/
+&lt_parameters
+/
+&mp_parameters
+/
+&adv_parameters
+  h_order = 3
+  v_order = 3
+  flux_corr = 1
+  cz_diff_order = 0
+/
+&sm_parameters
+/
+&lsm_parameters
+  LU_Categories = 'USGS'
+/
+&cu_parameters
+/
+&rad_parameters
+/
+&pbl_parameters
+/
+&sfc_parameters
+/
+&wind
+  Sx = .True.
+  smooth_wind_distance = 500.0
+@ALPHA_CONST_LINE@
+  wind_solver_iterations = @WIND_SOLVER_ITERATIONS@
+/
+&output
+  output_folder = '@OUTPUT_DIR@'
+  outputinterval = @OUTPUT_INTERVAL@
+  output_vars = @OUTPUT_VARS@
+/

@@ -1,0 +1,17 @@
+HICAR CPU Debug vs Release Comparison
+======================================
+
+Debug files: 1
+Release files: 1
+
+File pair: domain_static_relaxed_2026-07-10_18-00-00.nc vs domain_static_relaxed_2026-07-10_18-00-00.nc
+--------------------------------------------------------------------------------------------------------------
+PASS time: exact coordinate match
+PASS temperature: shape=(2, 40, 81, 81), ref_range=[208.90962, 303.47717], rel_range=[208.90965, 303.47717], max_abs=0.058303833, p99_abs=0.003326416, p999_abs=0.01091188, mean_abs=0.00020223614, rmse=0.00086252778, max_rel=0.00025399061, tol=0.1, nonfinite=(0, 0)
+PASS qv: shape=(2, 40, 81, 81), ref_range=[2.5538304e-06, 0.01483117], rel_range=[2.5538307e-06, 0.01483117], max_abs=2.1273736e-05, p99_abs=2.2165477e-07, p999_abs=9.9282205e-07, mean_abs=1.4837424e-08, rmse=8.7193436e-08, max_rel=0.064855173, tol=5e-05, nonfinite=(0, 0)
+PASS u: shape=(2, 40, 81, 82), ref_range=[-5.6464672, 12.799306], rel_range=[-5.6464705, 12.799315], max_abs=0.0025423765, p99_abs=0.00012636185, p999_abs=0.00026226044, mean_abs=1.2207955e-05, rmse=2.9873848e-05, max_rel=0.71706176, tol=0.01, nonfinite=(0, 0)
+PASS v: shape=(2, 40, 82, 81), ref_range=[-7.4370909, 12.881825], rel_range=[-7.4370847, 12.881818], max_abs=0.00085586309, p99_abs=0.00010251999, p999_abs=0.0002155304, mean_abs=9.7433365e-06, rmse=2.2705029e-05, max_rel=0.34492828, tol=0.01, nonfinite=(0, 0)
+PASS w: shape=(2, 40, 81, 81), ref_range=[-27.284531, 25.727953], rel_range=[-27.28323, 25.724134], max_abs=0.050554752, p99_abs=0.0046601295, p999_abs=0.013263248, mean_abs=0.00041472111, rmse=0.0011616895, max_rel=1399.1932, tol=0.1, nonfinite=(0, 0)
+PASS precipitation: shape=(2, 81, 81), ref_range=[0, 0], rel_range=[0, 0], max_abs=0, p99_abs=0, p999_abs=0, mean_abs=0, rmse=0, max_rel=0, tol=0.0001, nonfinite=(0, 0)
+
+Overall status: PASS

@@ -1,0 +1,4 @@
+-r core.txt
+
+pytest>=8
+ruff>=0.13

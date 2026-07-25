@@ -1,0 +1,32 @@
+{
+  "attributes": {
+    "dt_seconds": 3.3334126472473145,
+    "git": "validation/radiation-cloud-fraction-0-g2ea31109",
+    "git_tag": "2ea31109"
+  },
+  "checkpoint": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/runs/science_summer_radiation_recovery_20200701_00_20200704_00/restart/domain_static_swiss_200m_rea_l_20200701_0000_2020-07-03_00-00-00.nc",
+  "checkpoint_time": "2020-07-03T00:00:00",
+  "dimensions": {
+    "lat_v": 1652,
+    "lat_y": 1651,
+    "level": 80,
+    "level_i": 81,
+    "lon_u": 2272,
+    "lon_x": 2271,
+    "nsnow": 3,
+    "nsnowsoil": 7,
+    "nsoil": 4,
+    "time": 1
+  },
+  "encoded_time_offset_seconds": 0.432,
+  "expected_source_commit": "2ea31109801a2477a946840693934318f8d50c95",
+  "expected_time": "2020-07-03T00:00:00",
+  "failures": [],
+  "required_variable_count": 17,
+  "schema_version": 1,
+  "sha256": "c26baa2f151a21c587c220e5f283acfb26b449809e9b7df37e216f7d5af9b710",
+  "size_bytes": 42368218492,
+  "status": "PASS",
+  "validation_scope": "Header/schema/time/provenance plus whole-file checksum; this bounded inventory does not scan every restart-state value for finiteness.",
+  "variable_count": 136
+}

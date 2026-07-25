@@ -1,0 +1,68 @@
+{
+  "land_state": "/scratch/mch/olifu/icon_hicar/streaming/rea_l_ch1/land_state/rea_l_land_state_20200115_0000.nc",
+  "land_state_sha256": "249e235125fdef03e64605d2f8e9af7355dc50b42dab016804709c6da8977e50",
+  "output": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/static_initializations/domain_static_swiss_200m_rea_l_20200115_0000.nc",
+  "output_sha256": "76fc241ec8658b6ba71854fdc51f88f4c84e028f75effb9e00ac7ba698ec8cbd",
+  "schema_version": 1,
+  "snow_density_fallback_kg_m3": null,
+  "source_temperature_depths_m": [
+    0.0,
+    0.005,
+    0.02,
+    0.06,
+    0.18,
+    0.54,
+    1.62,
+    4.86
+  ],
+  "source_water_layer_bounds_m": [
+    0.0,
+    0.01,
+    0.03,
+    0.09,
+    0.27,
+    0.81,
+    2.43,
+    7.29,
+    21.87
+  ],
+  "spatial_regridding": "bilinear from rectilinear latitude/longitude",
+  "static_template": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/static/domain_static_swiss_200m.nc",
+  "static_template_sha256": "bf03fa8ce45270bb1bfb4e7f987b2af59e0a18db7a16b1d83fd2ed33c64b7372",
+  "statistics": {
+    "land_cells": 3657651,
+    "snow_height_m": [
+      0.0,
+      3.993098028046563
+    ],
+    "soil_temperature_k": [
+      262.47948497110735,
+      283.8855356638045
+    ],
+    "soil_vwc_m3_m3": [
+      0.0,
+      0.4861723797216601
+    ],
+    "surface_temperature_k": [
+      259.07718887901655,
+      284.08170915359545
+    ],
+    "swe_kg_m2": [
+      0.0,
+      1038.7136453085993
+    ],
+    "target_column_water_kg_m2": [
+      0.0,
+      704.6877101023773
+    ]
+  },
+  "status": "PASS",
+  "target_soil_layer_bounds_m": [
+    0.0,
+    0.1,
+    0.3,
+    0.7,
+    1.5
+  ],
+  "valid_time": "2020-01-15T00:00:00"
+}

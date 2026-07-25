@@ -1,0 +1,64 @@
+{
+  "status": "PLANNED",
+  "source": {
+    "dataset": "ICON REA-L-CH1",
+    "cycle": "2010-01-01T00:00:00",
+    "step_hours": [0, 1, 2, 3, 4, 5, 6],
+    "interval_seconds": 3600,
+    "required_records": 7
+  },
+  "hicar": {
+    "start": "2010-01-01T00:00:00",
+    "end": "2010-01-01T06:00:00",
+    "dx_m": 200,
+    "levels": 80,
+    "model_top_m": 12000,
+    "sleve_decay_large": 2,
+    "sleve_decay_small": 6,
+    "terrain_smooth_window": 5,
+    "terrain_smooth_cycles": 10,
+    "output_interval_seconds": 21600,
+    "output_records": 2,
+    "output_profile": "full engineering state at start and end"
+  },
+  "balfrin": {
+    "partition": "normal",
+    "nodes": 4,
+    "compute_gpus": 16,
+    "cpu_io_ranks": 4,
+    "requested_wall_seconds": 3600
+  },
+  "budgets": {
+    "predicted_wall_seconds": 1650,
+    "acceptance_wall_seconds": 2700,
+    "maximum_task_rss_gib": 40,
+    "maximum_output_gib": 30,
+    "forcing_gib": 2.0
+  },
+  "acceptance": {
+    "minimum_mass_jacobian": 0.1,
+    "minimum_interface_thickness_m": 5,
+    "maximum_solver_relative_residual": 1e-05,
+    "maximum_independent_constraint_ratio": 2e-05,
+    "required_output_records": 2,
+    "all_required_output_fields_finite": true,
+    "height_strictly_increasing": true,
+    "pressure_strictly_decreasing": true,
+    "source_aware_comparison_required": true
+  },
+  "scaling_to_100m": {
+    "status": "ESTIMATE_ONLY",
+    "horizontal_cell_factor": 4,
+    "expected_timestep_factor": 0.5,
+    "recommended_nodes": 16,
+    "compute_gpus": 64,
+    "predicted_wall_seconds": 3300,
+    "requested_wall_seconds": 7200,
+    "predicted_two_record_output_gib": 81,
+    "prerequisites": [
+      "actual constructed 100 m SLEVE geometry passes the runtime gate",
+      "100 m initial adjoint solve and independent conservation gates pass",
+      "200 m six-hour physical comparison is accepted"
+    ]
+  }
+}

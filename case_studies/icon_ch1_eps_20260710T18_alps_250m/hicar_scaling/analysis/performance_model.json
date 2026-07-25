@@ -1,0 +1,64 @@
+{
+  "model_version": 1,
+  "configuration": "HICAR production configuration, 80 levels, 250 m benchmark forcing",
+  "resolution_reference_m": 250,
+  "formula": "log(t_step_s) = c0 + c_work*log(cells_per_socket) + c_socket*log(sockets) + c_interaction*log(cells_per_socket)*log(sockets)",
+  "definitions": {
+    "cpu_socket": "32 HICAR compute MPI ranks",
+    "gpu_socket": "one NVIDIA A100 96GB GPU"
+  },
+  "limitations": [
+    "Timed integration only: initialization, I/O, queueing, and staging are excluded.",
+    "Calibrated only to the listed 250 m, 80-level production configuration and ICON forcing window.",
+    "Resolution changes scale grid-cell count exactly but timestep only by an assumed CFL-linear dx relation unless supplied explicitly.",
+    "Legacy measurements contain no reliable memory high-water marks; this model does not predict capacity or memory."
+  ],
+  "platforms": {
+    "cpu": {
+      "parameters": {
+        "c0": -13.579293576760994,
+        "c_work": 1.1520252824898716,
+        "c_socket": -0.2577878822889601,
+        "c_interaction": 0.05526254371350934
+      },
+      "fit_quality": {
+        "median_absolute_percentage_error": 13.288307870121251,
+        "max_absolute_percentage_error": 35.22317252211992,
+        "rmse_seconds_per_timestep": 0.38375803979791623
+      },
+      "calibration_range": {
+        "sockets": [
+          0.03125,
+          8.0
+        ],
+        "cells_per_socket": [
+          25600.0,
+          3276800.0
+        ]
+      }
+    },
+    "gpu": {
+      "parameters": {
+        "c0": -11.633678902166425,
+        "c_work": 0.8002447214511229,
+        "c_socket": 1.346258692513336,
+        "c_interaction": -0.10015402112357298
+      },
+      "fit_quality": {
+        "median_absolute_percentage_error": 3.782398910367879,
+        "max_absolute_percentage_error": 9.642692819201383,
+        "rmse_seconds_per_timestep": 0.0030963346230064573
+      },
+      "calibration_range": {
+        "sockets": [
+          1,
+          24
+        ],
+        "cells_per_socket": [
+          4266.666666666667,
+          102400.0
+        ]
+      }
+    }
+  }
+}

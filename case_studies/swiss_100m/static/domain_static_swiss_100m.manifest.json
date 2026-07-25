@@ -1,0 +1,17 @@
+{
+  "case_id": "swiss_100m_v1",
+  "static_file": "domain_static_swiss_100m.nc",
+  "static_sha256": "367337b127a8259d58fd7a30cd73f0f859ea5fb120c12f454d1106678de06a13",
+  "boundary_topography_file": "../static_boundary/rea_l_hsurf_20100101_0000.nc",
+  "boundary_topography_sha256": "59c10f093d12cd7fada85406c76b72a0e1487e53d729f9a4948e7c18d726feef",
+  "topography_blend": {
+    "width_km": 30,
+    "shape": "cosine"
+  },
+  "forcing_grid": "geolatlon,5030000,45200000,11420000,48390000,10000,10000",
+  "public_sources": [
+    "Copernicus DEM GLO-30",
+    "ESA WorldCover 2021 v200",
+    "SoilGrids 250 m 0-5 cm mean texture"
+  ]
+}

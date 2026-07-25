@@ -1,0 +1,4 @@
+interface:
+  display_name: "ICON HICAR Domain"
+  short_description: "Build Alpine HICAR static domains"
+  default_prompt: "Use -hicar-domain to create a static HICAR domain and matching forcing subdomain."

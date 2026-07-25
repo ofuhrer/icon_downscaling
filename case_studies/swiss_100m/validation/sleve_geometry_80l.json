@@ -1,0 +1,66 @@
+{
+  "acceptance": {
+    "minimum_interface_layer_thickness_m": 5.0,
+    "minimum_mass_jacobian": 0.1,
+    "minimum_mass_level_spacing_m": 5.0
+  },
+  "configuration": {
+    "auto_level": 1,
+    "decay_rate_large": 2.0,
+    "decay_rate_small": 6.0,
+    "height_lowest_level_m": 15.0,
+    "model_top_height_m": 12000.0,
+    "nz": 80,
+    "sleve_exponent": 1.35,
+    "stretch_factor": 0.65,
+    "terrain_smooth_cycles": 10,
+    "terrain_smooth_window_radius": 5
+  },
+  "failures": [],
+  "generated_layer_thickness_range_m": [
+    15.0,
+    242.25000000000182
+  ],
+  "minimum_interface_layer_thickness": {
+    "index_yx": [
+      720,
+      1830
+    ],
+    "level": 1,
+    "value_m": 12.566162109375
+  },
+  "minimum_mass_jacobian": {
+    "h1_m": 3246.475830078125,
+    "h2_m": 1053.708251953125,
+    "index_yx": [
+      720,
+      1830
+    ],
+    "level": 20,
+    "terrain_m": 4300.18408203125,
+    "value": 0.26087814569473267
+  },
+  "minimum_mass_level_spacing": {
+    "between_levels": [
+      1,
+      2
+    ],
+    "index_yx": [
+      720,
+      1830
+    ],
+    "value_m": 13.4222412109375
+  },
+  "static_path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_100m/static/domain_static_swiss_100m.nc",
+  "static_sha256": "367337b127a8259d58fd7a30cd73f0f859ea5fb120c12f454d1106678de06a13",
+  "status": "PASS",
+  "terrain_range_m": [
+    19.6701602935791,
+    4785.23876953125
+  ],
+  "terrain_shape": [
+    3301,
+    4541
+  ],
+  "terrain_variable": "topo"
+}

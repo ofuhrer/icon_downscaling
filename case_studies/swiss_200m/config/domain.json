@@ -1,0 +1,29 @@
+{
+  "case_id": "swiss_200m_v1",
+  "purpose": "National 200 m HICAR domain retaining the validated Swiss border geometry.",
+  "crs": "local azimuthal equidistant centred on 46.815 N, 8.225 E (WGS84)",
+  "center_lat": 46.815,
+  "center_lon": 8.225,
+  "dx_m": 200.0,
+  "width_km": 454.0,
+  "height_km": 330.0,
+  "nx": 2271,
+  "ny": 1651,
+  "horizontal_cells": 3749421,
+  "switzerland_bbox": {
+    "west_lon": 5.96,
+    "east_lon": 10.50,
+    "south_lat": 45.82,
+    "north_lat": 47.81
+  },
+  "hicar_external_border_km": 50.0,
+  "topography_blend_width_km": 30.0,
+  "minimum_unblended_highres_buffer_km": 20.0,
+  "forcing_border_km": 10.0,
+  "forcing_grid_spacing_deg": 0.01,
+  "static_sources": {
+    "interior": "Copernicus DEM GLO-30, ESA WorldCover 2021, SoilGrids",
+    "boundary_topography": "ICON REA-L-CH1 HSURF",
+    "land_use_categories": "USGS"
+  }
+}

@@ -1,0 +1,143 @@
+{
+  "compact_reduction": {
+    "path": "/scratch/mch/olifu/icon_hicar/validation/wind-climatology/bridge-runs/4931145/validation/wind_statistics_1800s.nc",
+    "report": {
+      "calm_wind_speed_threshold_m_s": 0.5,
+      "created_utc": "2026-07-24T23:20:13.166432+00:00",
+      "gust_policy": "No ICON VMAX; resolved sample maximum is not a 3-second gust.",
+      "heights_agl_m": [
+        50.0,
+        75.0,
+        100.0,
+        125.0,
+        150.0,
+        200.0
+      ],
+      "inputs": [
+        {
+          "path": "/scratch/mch/olifu/icon_hicar/validation/wind-climatology/bridge-runs/4931145/output/domain_static_alpine_bridge_200m_2010-01-01_00-00-00.nc",
+          "sha256": "92765c7349977d72e97f03459987d95bd44f418cd230db461fd4bbab2e675659",
+          "size_bytes": 1207455751
+        }
+      ],
+      "interval_count": 1,
+      "interval_seconds": 1800,
+      "interval_start": "2010-01-01T00:00:00",
+      "output": "/scratch/mch/olifu/icon_hicar/validation/wind-climatology/bridge-runs/4931145/validation/wind_statistics_1800s.nc",
+      "output_sha256": "f3cfdc67ba04eb19140a39615e9e7878e1c99425a70ed7f3875a7e2cd49af3cd",
+      "sample_interval_seconds": 1800.0,
+      "samples_per_interval": [
+        1
+      ],
+      "status": "PASS",
+      "surface_pbl_statistics": true,
+      "time_coordinate_canonicalized": true,
+      "wind_distribution_heights_agl_m": [
+        10.0,
+        50.0,
+        75.0,
+        100.0,
+        125.0,
+        150.0,
+        200.0
+      ],
+      "wind_distribution_statistics": true,
+      "wind_from_direction_sectors_degrees": [
+        0.0,
+        30.0,
+        60.0,
+        90.0,
+        120.0,
+        150.0,
+        180.0,
+        210.0,
+        240.0,
+        270.0,
+        300.0,
+        330.0
+      ],
+      "wind_speed_thresholds_m_s": [
+        3.0,
+        5.0,
+        10.0,
+        15.0,
+        20.0,
+        25.0
+      ]
+    },
+    "sha256": "f3cfdc67ba04eb19140a39615e9e7878e1c99425a70ed7f3875a7e2cd49af3cd",
+    "size_bytes": 81437906
+  },
+  "created_utc": "2026-07-24T23:20:14.514682+00:00",
+  "failures": [],
+  "fixed_height_reference": {
+    "absolute_tolerance": 2e-06,
+    "created_utc": "2026-07-24T23:20:07.580312+00:00",
+    "failures": [],
+    "heights_agl_m": [
+      50.0,
+      75.0,
+      100.0,
+      125.0,
+      150.0,
+      200.0
+    ],
+    "input": "/scratch/mch/olifu/icon_hicar/validation/wind-climatology/bridge-runs/4931145/output/domain_static_alpine_bridge_200m_2010-01-01_00-00-00.nc",
+    "static_domain": "/scratch/mch/olifu/icon_hicar/case_studies/alpine_bridge_200m/static/domain_static_alpine_bridge_200m.nc",
+    "status": "PASS",
+    "variables": {
+      "rho_agl": {
+        "maximum_absolute_error": 6.017925335832786e-08,
+        "nonfinite_pairs": 0,
+        "root_mean_square_error": 2.9205494960809858e-08
+      },
+      "u_agl": {
+        "maximum_absolute_error": 9.462116299374657e-07,
+        "nonfinite_pairs": 0,
+        "root_mean_square_error": 3.46473610475699e-08
+      },
+      "v_agl": {
+        "maximum_absolute_error": 4.841813394662609e-07,
+        "nonfinite_pairs": 0,
+        "root_mean_square_error": 3.076704234605769e-08
+      }
+    }
+  },
+  "gust_policy": "No ICON VMAX. Resolved maxima are HICAR sample maxima, not 3-second gusts.",
+  "model_job": 4931145,
+  "model_log_sha256": "87bc93161bcf36f7b51fef3137a7fff814540ac00cbb456edf17c32c7d17beb5",
+  "model_output": {
+    "path": "/scratch/mch/olifu/icon_hicar/validation/wind-climatology/bridge-runs/4931145/output/domain_static_alpine_bridge_200m_2010-01-01_00-00-00.nc",
+    "sha256": "92765c7349977d72e97f03459987d95bd44f418cd230db461fd4bbab2e675659",
+    "size_bytes": 1207455751
+  },
+  "schema_version": 1,
+  "source_commit": "2999c9bdf6e0ed50a7f44311e2c8555e26848d31",
+  "status": "PASS",
+  "surface_pbl": {
+    "created_utc": "2026-07-24T23:20:08.059736+00:00",
+    "failures": [],
+    "input": "/scratch/mch/olifu/icon_hicar/validation/wind-climatology/bridge-runs/4931145/output/domain_static_alpine_bridge_200m_2010-01-01_00-00-00.nc",
+    "metadata_policy": "CF standard names where available; sfc_Ri uses a descriptive long_name because CF has no matching standard name.",
+    "mol_policy": "Excluded: HICAR mol is a surface-layer temperature scale in K, not Monin-Obukhov length.",
+    "ranges": {
+      "hpbl": [
+        6.5855712890625,
+        1438.73388671875
+      ],
+      "sfc_Ri": [
+        -12.537740707397461,
+        344.5669250488281
+      ],
+      "surface_roughness": [
+        0.0010000000474974513,
+        1.0
+      ],
+      "ustar": [
+        0.0007034224108792841,
+        0.8304831981658936
+      ]
+    },
+    "status": "PASS"
+  }
+}

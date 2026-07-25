@@ -1,0 +1,95 @@
+{
+  "status": "PASS",
+  "case": "81x81 Alpine 250 m, 80 levels, 2026-07-10T18:00:00/2026-07-10T19:00:00",
+  "heights_agl_m": [
+    50.0,
+    75.0,
+    100.0,
+    125.0,
+    150.0,
+    200.0
+  ],
+  "hicar_validation": {
+    "field_and_schema_job": 4930263,
+    "independent_comparison_job": 4930158,
+    "remote_output": "/scratch/mch/olifu/icon_hicar/validation/wind-climatology/runs/4930158/output/domain_static_relaxed_2026-07-10_18-00-00.nc",
+    "raw_size_bytes": 15984336,
+    "raw_sha256": "4c0e560a7fb6b5c086db3b3bd53653290bd21fac79eee5efa66eb06275bade89",
+    "schema": {
+      "height_agl": "PASS",
+      "u10m": "PASS",
+      "v10m": "PASS",
+      "u_agl": "PASS",
+      "v_agl": "PASS",
+      "rho_agl": "PASS",
+      "cf_standard_names": "PASS"
+    },
+    "model_timing_seconds": {
+      "job_4930158": 53.808,
+      "job_4930263": 69.128
+    }
+  },
+  "independent_fixed_height_comparison": {
+    "absolute_tolerance": 2e-05,
+    "u_agl": {
+      "maximum_absolute_error": 1.9982056658762737e-06,
+      "root_mean_square_error": 1.4501348636707964e-07,
+      "nonfinite_pairs": 0
+    },
+    "v_agl": {
+      "maximum_absolute_error": 1.936294552667972e-06,
+      "root_mean_square_error": 9.389524860311334e-08,
+      "nonfinite_pairs": 0
+    },
+    "rho_agl": {
+      "maximum_absolute_error": 6.671319208173543e-08,
+      "root_mean_square_error": 2.594981344478611e-08,
+      "nonfinite_pairs": 0
+    }
+  },
+  "compact_reduction": {
+    "interval_seconds": 3600,
+    "sample_interval_seconds": 3600.0,
+    "interval_sample_convention": "start < sample_time <= end",
+    "time_coordinate_canonicalized": true,
+    "observed_input_time_offset_seconds": 0.432,
+    "output_size_bytes": 888780,
+    "output_sha256": "7f00c75d2e8d620b40e39c2b137910bcf5325a010e9faa24c4c34628af3dff6a",
+    "raw_to_compact_size_ratio": 17.984582219676974
+  },
+  "calendar_merge_smoke": {
+    "group_by": "month",
+    "input_interval_count": 1,
+    "group_count": 1,
+    "output_size_bytes": 891187,
+    "output_sha256": "0771f83c4b1f8873169106a25a336e80d069a7da7a221204211a512869f96aba"
+  },
+  "user_product_smoke": {
+    "direction_definition": "wind-from direction of vector mean",
+    "minimum_direction_speed_m_s": 0.1,
+    "minimum_shear_speed_m_s": 1.0,
+    "shear_definition": "power-law exponent of scalar mean speeds",
+    "shear_pairs_m": [
+      [
+        50.0,
+        100.0
+      ],
+      [
+        100.0,
+        150.0
+      ],
+      [
+        100.0,
+        200.0
+      ]
+    ],
+    "output_size_bytes": 304656,
+    "output_sha256": "087f11a56fac5ef1979e81d7c6d1585e02dcd7f023eff6edbc610b0a84e1557a"
+  },
+  "gust_policy": "ICON VMAX is not used or preserved. Resolved HICAR sample maxima are not 3-second gusts.",
+  "limitations": [
+    "This is the 81x81 regression case; the 701x701 bridge is recorded separately in bridge_wind_reference_20100101.json, while Swiss national scale remains unqualified.",
+    "The one-sample interval proves schema and reduction plumbing, not a wind distribution.",
+    "Surface/PBL fields, directional frequency, threshold/persistence accumulators, observation validation, and a HICAR-native gust method remain gated."
+  ]
+}

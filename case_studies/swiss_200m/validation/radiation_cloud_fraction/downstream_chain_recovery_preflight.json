@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "status": "PASS",
+  "checked_at_balfrin": "2026-07-25T09:13:26+02:00",
+  "scope": "Post-model summer publication recovery, replacement winter execution, and restart-overlap resubmission after correcting both the accumulated-snowfall/graupel range contract and a read-only-runner launch defect.",
+  "cause": {
+    "model_job_id": "4932691",
+    "model_step_state": "COMPLETED",
+    "batch_state": "FAILED",
+    "model_completed_successfully": true,
+    "initial_publication_failure": "The model validator treated accumulated snowfall and graupel amounts as instantaneous values and capped both at 10 kg m-2.",
+    "observed_accumulated_ranges_kg_m2": {
+      "snowfall": [
+        0.0,
+        31.71368980407715
+      ],
+      "graupel": [
+        0.0,
+        190.0962371826172
+      ],
+      "total_precipitation": [
+        -9.598783356698504e-14,
+        713.4046020507812
+      ]
+    }
+  },
+  "publication_recovery": {
+    "job_id": "4934458",
+    "state": "COMPLETED",
+    "elapsed": "00:01:32",
+    "max_rss_kib": 1845284,
+    "report_ready": true,
+    "output_record_count": 25,
+    "output_bytes": 14096051582,
+    "restart_bytes": 42368218492,
+    "restart_sha256": "4f8ea50c0f2774163e06e596cf5bda23acbed8cb3d2aae2fcc8976a8a09ab879",
+    "model_log_sha256": "4b070c520e61d7701e1ea1a0024a08a661f66945d168bd2a3a20101d82f2287d",
+    "original_failed_report_preserved": true
+  },
+  "validator_snapshot": {
+    "path": "case_studies/swiss_200m/validation/runtime_snapshots/validate_model_chunk_acb1d0693656b55c083a39ad94156b03563e0143d98124673accabee144557cb.py",
+    "sha256": "acb1d0693656b55c083a39ad94156b03563e0143d98124673accabee144557cb",
+    "remote_mode": "0444",
+    "local_remote_equal": true,
+    "contract": "Snowfall, graupel, and total precipitation are accumulated kg m-2 amounts and share a broad 10000 kg m-2 corruption ceiling; event plausibility remains an independent diagnostic."
+  },
+  "runtime_hashes": {
+    "stream_runner_sha256": "68eaf6b7fd07d2e1e4624fdead566a5e8ff5eed0404b91c0ffe56dacf13a3d00",
+    "restart_overlap_wrapper_sha256": "45d6ce18b0433d6b222011b7cc79cec3228290c9cbcf8f76a5c5df9a54bb81b7",
+    "local_remote_equal": true
+  },
+  "summer_validation": {
+    "scientific_and_source_job": "4932694",
+    "solver_job": "4932695",
+    "swissmetnet_job": "4932696",
+    "ogd_job": "4932697",
+    "exact_end_restart_job": "4933360",
+    "three_checkpoint_audit_job": "4933477",
+    "all_states": "COMPLETED",
+    "all_reports_ready": true
+  },
+  "replacement_chain": {
+    "cancelled_unstarted_winter_job": "4933656",
+    "winter_job": {
+      "job_id": "4934501",
+      "partition": "normal",
+      "nodes": 4,
+      "compute_gpus": 16,
+      "validator_snapshot_sha256": "acb1d0693656b55c083a39ad94156b03563e0143d98124673accabee144557cb"
+    },
+    "cancelled_unstarted_overlap_job": "4933657",
+    "failed_pre_model_overlap_job": {
+      "job_id": "4934502",
+      "exit_code": "126:0",
+      "elapsed": "00:00:02",
+      "cause": "The overlap wrapper directly executed the deliberately read-only stream-runner snapshot; Bash now invokes the unchanged runner content explicitly.",
+      "model_started": false
+    },
+    "summer_restart_overlap_job": {
+      "job_id": "4934663",
+      "dependency": null,
+      "validator_snapshot_sha256": "acb1d0693656b55c083a39ad94156b03563e0143d98124673accabee144557cb"
+    },
+    "trajectory_comparison_job": {
+      "job_id": "4933658",
+      "dependency": "afterok:4934663"
+    },
+    "winter_validator_jobs": [
+      "4932698",
+      "4932699",
+      "4932700",
+      "4932701"
+    ],
+    "winter_restart_audit_job": "4933478",
+    "winter_dependencies": "afterok:4934501",
+    "paired_verdict_job": "4932702",
+    "planning_only_successors": [
+      "4932768",
+      "4932769"
+    ],
+    "planning_successor_state": "USER_HELD_PENDING_FUTURE_STAGE_P0_RUNTIME_SYNC"
+  },
+  "coordinator_tests": {
+    "passed": 179,
+    "failed": 0
+  },
+  "interpretation": "The 72-hour summer physics is not being rerun. Its original post-run validation failure is preserved, the corrected immutable validator has revalidated the exact existing artifacts, and all independent summer validators pass. The first replacement overlap allocation failed before HICAR because its wrapper tried to execute the deliberately read-only runner snapshot; the wrapper now invokes that same hash-pinned runner through Bash, replacement job 4934663 is submitted, and comparison job 4933658 depends on it. Month and 100 m successors remain planning-only and afterok-gated on the paired verdict."
+}

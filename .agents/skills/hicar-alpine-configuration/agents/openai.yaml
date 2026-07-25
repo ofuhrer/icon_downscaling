@@ -1,0 +1,4 @@
+interface:
+  display_name: "HICAR Alpine Configuration"
+  short_description: "Choose stable Alpine model settings"
+  default_prompt: "Use -alpine-configuration to design a 100–250 m Alpine HICAR experiment."

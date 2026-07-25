@@ -1,0 +1,297 @@
+{
+  "events": {
+    "runoff_subsurface_lt_-1e-8": {
+      "active_soil_excluding_usgs_ice_24": {
+        "count": 0,
+        "landuse_counts": {},
+        "soil_type_counts": {}
+      },
+      "all_raw_land": {
+        "count": 441,
+        "landuse_counts": {
+          "24": 441
+        },
+        "latitude_deg_n": [
+          45.53565216064453,
+          46.653053283691406
+        ],
+        "longitude_deg_e": [
+          6.816262245178223,
+          8.167539596557617
+        ],
+        "soil_type_counts": {
+          "6": 441
+        },
+        "terrain_m": [
+          1947.4793701171875,
+          4449.67138671875
+        ]
+      },
+      "effective_noahmp_land": {
+        "count": 441,
+        "landuse_counts": {
+          "24": 441
+        },
+        "latitude_deg_n": [
+          45.53565216064453,
+          46.653053283691406
+        ],
+        "longitude_deg_e": [
+          6.816262245178223,
+          8.167539596557617
+        ],
+        "soil_type_counts": {
+          "6": 441
+        },
+        "terrain_m": [
+          1947.4793701171875,
+          4449.67138671875
+        ]
+      }
+    },
+    "runoff_surface_lt_-1e-8": {
+      "active_soil_excluding_usgs_ice_24": {
+        "count": 0,
+        "landuse_counts": {},
+        "soil_type_counts": {}
+      },
+      "all_raw_land": {
+        "count": 0,
+        "landuse_counts": {},
+        "soil_type_counts": {}
+      },
+      "effective_noahmp_land": {
+        "count": 0,
+        "landuse_counts": {},
+        "soil_type_counts": {}
+      }
+    },
+    "soil_column_total_water_ge_1499": {
+      "active_soil_excluding_usgs_ice_24": {
+        "count": 0,
+        "landuse_counts": {},
+        "soil_type_counts": {}
+      },
+      "all_raw_land": {
+        "count": 85197,
+        "landuse_counts": {
+          "24": 85197
+        },
+        "latitude_deg_n": [
+          45.316993713378906,
+          47.471397399902344
+        ],
+        "longitude_deg_e": [
+          6.151248931884766,
+          11.20653247833252
+        ],
+        "soil_type_counts": {
+          "3": 24,
+          "6": 84869,
+          "7": 1,
+          "9": 303
+        },
+        "terrain_m": [
+          1495.8802490234375,
+          4739.70703125
+        ]
+      },
+      "effective_noahmp_land": {
+        "count": 85197,
+        "landuse_counts": {
+          "24": 85197
+        },
+        "latitude_deg_n": [
+          45.316993713378906,
+          47.471397399902344
+        ],
+        "longitude_deg_e": [
+          6.151248931884766,
+          11.20653247833252
+        ],
+        "soil_type_counts": {
+          "3": 24,
+          "6": 84869,
+          "7": 1,
+          "9": 303
+        },
+        "terrain_m": [
+          1495.8802490234375,
+          4739.70703125
+        ]
+      }
+    },
+    "soil_water_content_ge_0.99": {
+      "active_soil_excluding_usgs_ice_24": {
+        "count": 0,
+        "landuse_counts": {},
+        "soil_type_counts": {}
+      },
+      "all_raw_land": {
+        "count": 85197,
+        "landuse_counts": {
+          "24": 85197
+        },
+        "latitude_deg_n": [
+          45.316993713378906,
+          47.471397399902344
+        ],
+        "longitude_deg_e": [
+          6.151248931884766,
+          11.20653247833252
+        ],
+        "soil_type_counts": {
+          "3": 24,
+          "6": 84869,
+          "7": 1,
+          "9": 303
+        },
+        "terrain_m": [
+          1495.8802490234375,
+          4739.70703125
+        ]
+      },
+      "effective_noahmp_land": {
+        "count": 85197,
+        "landuse_counts": {
+          "24": 85197
+        },
+        "latitude_deg_n": [
+          45.316993713378906,
+          47.471397399902344
+        ],
+        "longitude_deg_e": [
+          6.151248931884766,
+          11.20653247833252
+        ],
+        "soil_type_counts": {
+          "3": 24,
+          "6": 84869,
+          "7": 1,
+          "9": 303
+        },
+        "terrain_m": [
+          1495.8802490234375,
+          4739.70703125
+        ]
+      }
+    }
+  },
+  "output_file": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/runs/land_init_smoke_20200701_00_02/output/domain_static_swiss_200m_rea_l_20200701_0000_2020-07-01_00-00-00.nc",
+  "schema_version": 1,
+  "static_file": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/static_initializations/domain_static_swiss_200m_rea_l_20200701_0000.nc",
+  "surface_classes": {
+    "active_soil_excluding_usgs_ice_24": {
+      "count": 3572244,
+      "landuse_counts": {
+        "1": 154974,
+        "15": 1703428,
+        "17": 211,
+        "19": 184968,
+        "2": 415313,
+        "7": 1113274,
+        "8": 76
+      },
+      "latitude_deg_n": [
+        45.29324722290039,
+        48.29905700683594
+      ],
+      "longitude_deg_e": [
+        5.167336463928223,
+        11.282663345336914
+      ],
+      "soil_type_counts": {
+        "11": 33740,
+        "12": 19750,
+        "2": 65,
+        "3": 45024,
+        "4": 75696,
+        "6": 2169057,
+        "7": 5180,
+        "8": 393491,
+        "9": 830241
+      },
+      "terrain_m": [
+        19.68608283996582,
+        4508.92626953125
+      ]
+    },
+    "effective_noahmp_land": {
+      "count": 3657651,
+      "landuse_counts": {
+        "1": 154974,
+        "15": 1703428,
+        "17": 211,
+        "19": 184968,
+        "2": 415313,
+        "24": 85407,
+        "7": 1113274,
+        "8": 76
+      },
+      "latitude_deg_n": [
+        45.29324722290039,
+        48.29905700683594
+      ],
+      "longitude_deg_e": [
+        5.167336463928223,
+        11.282663345336914
+      ],
+      "soil_type_counts": {
+        "11": 33740,
+        "12": 19750,
+        "2": 65,
+        "3": 45048,
+        "4": 75696,
+        "6": 2254136,
+        "7": 5181,
+        "8": 393491,
+        "9": 830544
+      },
+      "terrain_m": [
+        19.68608283996582,
+        4739.70703125
+      ]
+    },
+    "raw_land": {
+      "count": 3657651,
+      "landuse_counts": {
+        "1": 154974,
+        "15": 1703428,
+        "17": 211,
+        "19": 184968,
+        "2": 415313,
+        "24": 85407,
+        "7": 1113274,
+        "8": 76
+      },
+      "latitude_deg_n": [
+        45.29324722290039,
+        48.29905700683594
+      ],
+      "longitude_deg_e": [
+        5.167336463928223,
+        11.282663345336914
+      ],
+      "soil_type_counts": {
+        "11": 33740,
+        "12": 19750,
+        "2": 65,
+        "3": 45048,
+        "4": 75696,
+        "6": 2254136,
+        "7": 5181,
+        "8": 393491,
+        "9": 830544
+      },
+      "terrain_m": [
+        19.68608283996582,
+        4739.70703125
+      ]
+    },
+    "usgs_water_16_on_raw_land": {
+      "count": 0,
+      "landuse_counts": {},
+      "soil_type_counts": {}
+    }
+  }
+}

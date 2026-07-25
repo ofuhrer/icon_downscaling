@@ -1,0 +1,19 @@
+{
+  "case_id": "alpine_bridge_200m_v1",
+  "purpose": "Regional solver bridge spanning the densest steep-terrain cluster in the Swiss 200 m domain.",
+  "center_lat": 46.5593529,
+  "center_lon": 8.4232283,
+  "dx_m": 200.0,
+  "width_km": 140.0,
+  "height_km": 140.0,
+  "nx": 701,
+  "ny": 701,
+  "horizontal_cells": 491401,
+  "topography_blend_width_km": 20.0,
+  "forcing_source": "Reuse the schema-validated Swiss 200 m REA-L-CH1 forcing package after an explicit coverage check.",
+  "static_sources": {
+    "interior": "Copernicus DEM GLO-30, ESA WorldCover 2021, SoilGrids",
+    "boundary_topography": "ICON REA-L-CH1 HSURF",
+    "land_use_categories": "USGS"
+  }
+}

@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "status": "EVENT_REFERENCE_ACCESS_ESTABLISHED",
+  "purpose": "Define independent evidence needed to claim useful 100-200 m REA-L-to-HICAR downscaling, while keeping driver consistency separate from observational skill.",
+  "principles": [
+    "REA-L comparisons test source consistency and large-scale inheritance; they are not independent validation.",
+    "HICAR and REA-L must be evaluated against the same observations, times, sampling operator, and quality-control mask.",
+    "Scores must be stratified by season, elevation, terrain exposure, land class, and distance from the HICAR boundary.",
+    "Event pilots diagnose gross behavior; monthly and annual samples are required for bias, drift, distribution, and added-value decisions.",
+    "Numerical acceptance thresholds will be frozen before launching the annual-cycle qualification, not tuned on its results."
+  ],
+  "datasets": {
+    "surface_temperature": {
+      "primary": [
+        "MeteoSwiss station observations",
+        "TabsD daily gridded temperature"
+      ],
+      "sampling": "Station comparison uses the model grid cell containing the station with a documented elevation correction reported both on and off; TabsD uses common-grid daily aggregates.",
+      "metrics": [
+        "bias",
+        "mean absolute error",
+        "root mean squared error",
+        "correlation",
+        "diurnal-cycle amplitude and phase",
+        "daily minimum and maximum quantiles"
+      ],
+      "known_reference_issue": "REA-L evaluation reports warm cold-pool valleys and cold high elevations, especially in winter; elevation stratification is mandatory."
+    },
+    "precipitation": {
+      "primary": [
+        "RhiresD",
+        "CombiPrecip",
+        "MeteoSwiss precipitation stations"
+      ],
+      "sampling": "Compare common daily accumulation for RhiresD and event/hourly accumulation where CombiPrecip or station sampling is available.",
+      "metrics": [
+        "bias ratio",
+        "mean absolute error",
+        "root mean squared error",
+        "wet-day frequency",
+        "quantile bias",
+        "fraction skill score at application-relevant neighbourhood scales",
+        "elevation-gradient error"
+      ],
+      "known_reference_issue": "Gauge undercatch, representativeness, and radar degradation in complex terrain require dataset-specific masks and uncertainty reporting."
+    },
+    "shortwave_radiation": {
+      "primary": [
+        "MeteoSwiss radiation stations",
+        "SIS-No-Horizon or GeoSatClim"
+      ],
+      "sampling": "Use station point sampling and daily common-grid aggregates; evaluate clear-sky and cloudy subsets separately.",
+      "metrics": [
+        "bias",
+        "mean absolute error",
+        "root mean squared error",
+        "daily-integral bias",
+        "clear-sky ratio"
+      ],
+      "known_reference_issue": "Station-to-grid comparisons in the Alps are sensitive to unresolved horizon shading; the gridded no-horizon product and terrain-shadow effects must not be conflated."
+    },
+    "wind": {
+      "primary": [
+        "MeteoSwiss station 10 m wind",
+        "independent exposed-ridge and valley station subsets"
+      ],
+      "observation_channels": {
+        "hourly_mean_speed": "fkl010h0",
+        "hourly_mean_direction": "dkl010h0",
+        "hourly_maximum_one_second_speed": "fkl010h1"
+      },
+      "sampling": "Apply station exposure and measurement-height metadata. Compare vector components, speed, and direction from the hourly-mean channels. Treat fkl010h1 as a separate hourly maximum of one-second wind; compare it with a HICAR extreme only after explicitly harmonizing the HICAR diagnostic support duration and sampling cadence.",
+      "metrics": [
+        "vector root mean squared error",
+        "speed bias",
+        "circular direction error",
+        "quantile bias",
+        "exceedance reliability",
+        "valley and ridge conditional error"
+      ],
+      "policy": "ICON VMAX is excluded as a HICAR output target. HICAR sampled interval maxima are not gusts. A HICAR-native three-second gust diagnostic must not be relabeled or compared directly with the one-second fkl010h1 observation without an explicit duration-harmonization method and held-out upper-tail validation."
+    },
+    "snow": {
+      "primary": [
+        "MeteoSwiss snow stations",
+        "available gridded or remotely sensed snow-cover and snow-water-equivalent products"
+      ],
+      "sampling": "Evaluate snow depth, snow-cover duration, onset, melt-out date, and SWE where available, stratified by elevation and exposure.",
+      "metrics": [
+        "snow-depth bias and root mean squared error",
+        "snow-cover probability",
+        "onset-date error",
+        "melt-out-date error",
+        "seasonal maximum bias"
+      ]
+    }
+  },
+  "stage_requirements": {
+    "72_hour_events": [
+      "Complete all structural, solver, physical-range, water, and surface-energy diagnostics.",
+      "Complete REA-L driver-consistency comparisons.",
+      "Run observation comparisons where hourly or daily data access is already operational; do not block the structural event verdict solely on unavailable long-period observations."
+    ],
+    "31_day_pilot": [
+      "Establish reproducible access to at least station temperature/wind, RhiresD precipitation, and one radiation reference.",
+      "Freeze sampling and quality-control code and report HICAR-versus-observation and REA-L-versus-observation side by side.",
+      "Characterize spin-up separately from retained statistics."
+    ],
+    "annual_cycle": [
+      "Freeze numerical acceptance thresholds and application weights before execution.",
+      "Cover all seasons and the declared elevation/exposure classes.",
+      "Demonstrate that claimed added value is robust across independent subsets rather than a single event."
+    ]
+  },
+  "acceptance_design": {
+    "absolute_quality": "Each application will declare maximum acceptable bias, RMSE, distribution error, and event error before annual execution.",
+    "added_value": "At identical observational samples, compare HICAR and REA-L errors and confidence intervals; finer visual structure alone is not added value.",
+    "drift": "Test monthly and seasonal tendencies after the declared spin-up period for soil water, snow, canopy storage, surface energy residual, and near-surface climate.",
+    "failure_policy": "A systematic degradation across both seasons or a persistent unexplained storage/energy trend blocks production escalation."
+  },
+  "annual_acceptance_thresholds": {
+    "status": "UNRESOLVED",
+    "required_before_annual_launch": true,
+    "purpose": "Freeze independently justified application-specific absolute quality limits and application weights after the event and month pipelines establish feasible metrics, but before an annual-cycle run can reveal the seasonal result; limits must not be chosen merely to pass the pilot.",
+    "required_metrics": {
+      "temperature": [
+        "station and TabsD bias",
+        "station and TabsD root mean squared error",
+        "diurnal amplitude and phase error",
+        "daily minimum and maximum quantile error"
+      ],
+      "precipitation": [
+        "station and RhiresD bias ratio",
+        "station and RhiresD root mean squared error",
+        "wet-day frequency error",
+        "upper-quantile and elevation-gradient error"
+      ],
+      "wind": [
+        "station vector root mean squared error",
+        "speed bias",
+        "direction error",
+        "threshold and upper-quantile reliability"
+      ],
+      "radiation": [
+        "station and SIS bias",
+        "root mean squared error",
+        "daily-integral and clear-sky-ratio error"
+      ],
+      "snow": [
+        "snow-depth bias and root mean squared error",
+        "snow-cover duration",
+        "onset and melt-out date error",
+        "seasonal maximum error"
+      ]
+    },
+    "required_strata": [
+      "DJF",
+      "MAM",
+      "JJA",
+      "SON",
+      "elevation_lt_500m",
+      "elevation_500_1000m",
+      "elevation_1000_1500m",
+      "elevation_1500_2000m",
+      "elevation_2000_3000m",
+      "elevation_ge_3000m",
+      "active_soil_boundary_10km",
+      "active_soil_interior",
+      "valley",
+      "neutral",
+      "ridge"
+    ],
+    "approval": {
+      "application": null,
+      "metric_weights": null,
+      "absolute_limits": null,
+      "approved_by": null,
+      "frozen_at": null
+    },
+    "interpretation": "UNRESOLVED blocks GO_ANNUAL_CYCLE. Relative HICAR-versus-REA-L non-degradation is necessary but is not an application-quality threshold."
+  },
+  "access_state": {
+    "balfrin": "SwissMetNet hourly observations are reproducibly available through the operational JRetrieve PROD wrapper using station group SMN, DWH data-quality category 4, and use limitation 50. The summer and winter event publications each contain 158 station abbreviations and retain their raw internal-use CSV only in the event scratch tree. Public MeteoSwiss OGD STAC archives now provide checksum-verified 2020 RhiresD, TabsD, hourly SIS, and hourly SIS-No-Horizon NetCDF assets on Balfrin. A historical CombiPrecip/CPC path remains unavailable and is optional rather than a substitute for the operational RhiresD event reference.",
+    "event_station_publications": [
+      "case_studies/swiss_200m/validation/swissmetnet_observations_summer_20200701_20200704.json",
+      "case_studies/swiss_200m/validation/swissmetnet_observations_winter_20200115_20200118.json"
+    ],
+    "station_access_procedure": "case_studies/swiss_200m/scripts/retrieve_smn_event_observations_balfrin.sbatch",
+    "station_comparison_procedure": "case_studies/swiss_200m/validation/compare_hicar_rea_l_to_smn.py",
+    "station_data_policy": "DWH use limitation 50 is internal-only. Do not copy the raw CSV into a public repository or external archive; retain a checksum-bearing manifest and derived aggregate validation report.",
+    "public_grid_manifest": "case_studies/swiss_200m/validation/ogd_grid_reference_2020_events.json",
+    "public_grid_access_procedure": "case_studies/swiss_200m/scripts/retrieve_ogd_grid_references_balfrin.sbatch",
+    "public_grid_comparison_procedure": "case_studies/swiss_200m/validation/compare_hicar_rea_l_to_ogd_grids.py",
+    "next_action": "Complete both event station and OGD-grid comparisons, then freeze retained-period, spin-up, and sampling diagnostics before the 31-day pilot.",
+    "not_a_blocker_for": [
+      "REA-L source-reference packaging",
+      "72-hour numerical and physical event diagnostics",
+      "72-hour SwissMetNet station diagnostics",
+      "31-day precipitation/radiation reference access"
+    ],
+    "blocker_for": [
+      "annual-cycle qualification",
+      "any claim of 100-200 m observational added value"
+    ]
+  },
+  "sources": [
+    "https://meteoswiss.atlassian.net/wiki/spaces/AK/pages/1757085708/REA-L+evaluation+with+station+verification+movero",
+    "https://meteoswiss.atlassian.net/wiki/spaces/IW2/pages/902891289/Data+of+REA-L-CH1",
+    "https://meteoswiss.atlassian.net/wiki/spaces/NO/pages/1906212/jretrievedwh",
+    "https://meteoswiss.atlassian.net/wiki/spaces/APN/pages/1902355/Measurements+at+MCH+stations",
+    "https://data.geo.admin.ch/api/stac/v1/collections/ch.meteoschweiz.ogd-surface-derived-grid",
+    "https://data.geo.admin.ch/api/stac/v1/collections/ch.meteoschweiz.ogd-satellite-derived-grid"
+  ]
+}

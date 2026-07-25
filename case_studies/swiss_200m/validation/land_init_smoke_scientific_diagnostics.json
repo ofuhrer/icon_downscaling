@@ -1,0 +1,1207 @@
+{
+  "classes": {
+    "active_soil_all": {
+      "cell_count": 3572244,
+      "linear_tendencies_per_day": {
+        "canopy_water_kg_m2": 0.009699517364845821,
+        "snow_height_m": -0.0069284593776161125,
+        "soil_water_kg_m2": -3.8417013532139213,
+        "swe_kg_m2": -0.0285322251003004,
+        "temperature_2m_k": -36.386530017139194,
+        "water_store_kg_m2": -3.860534060948794
+      },
+      "surface_energy_diagnostic": {
+        "integrated_residual_mj_m2": 0.008574073772914276,
+        "mean_absolute_residual_w_m2": 1.0615331492891746,
+        "mean_residual_w_m2": 1.0615331492891746
+      },
+      "time_series": {
+        "canopy_water_kg_m2": [
+          0.0,
+          0.00010052800319174525,
+          0.0008082931137371516
+        ],
+        "evaporation_rate_kg_m2_s": [
+          0.0,
+          4.405580441683241e-07,
+          3.778909074644514e-07
+        ],
+        "precipitation_cumulative_kg_m2": [
+          0.0,
+          0.00017721031154670095,
+          0.0018678814294597972
+        ],
+        "runoff_rate_kg_m2_s": [
+          0.0,
+          0.0005427187194189922,
+          0.0005417876940766019
+        ],
+        "snow_height_m": [
+          0.006225098783577918,
+          0.005694748562835629,
+          0.005647727168776575
+        ],
+        "soil_water_kg_m2": [
+          393.5494014161014,
+          393.376344644313,
+          393.2292596366669
+        ],
+        "soil_water_reported_kg_m2": [
+          0.0,
+          391.2701344787885,
+          391.12304942179486
+        ],
+        "surface_energy_residual_w_m2": [
+          0.0,
+          1.5787748704181848,
+          1.605824577449339
+        ],
+        "swe_kg_m2": [
+          1.6180229747254007,
+          1.6156394984744014,
+          1.6156452893003757
+        ],
+        "temperature_2m_k": [
+          289.52571798059876,
+          286.717746195673,
+          286.49350714583716
+        ],
+        "times": [
+          "2020-07-01T00:00:00",
+          "2020-07-01T01:00:00",
+          "2020-07-01T02:00:00"
+        ],
+        "water_store_kg_m2": [
+          395.1674243908268,
+          394.9920846707906,
+          394.84571321908106
+        ],
+        "wind_speed_10m_m_s": [
+          1.5197388175250335,
+          1.6769047215951813,
+          1.596367630319021
+        ]
+      },
+      "water_diagnostic_kg_m2": {
+        "evaporation": 0.0022662125924419792,
+        "precipitation": 0.0018678814294597972,
+        "residual": -2.607692398663505,
+        "resolved_storage_change": -0.3217111717457328,
+        "runoff": 2.9290052392462558
+      }
+    },
+    "active_soil_boundary_10km": {
+      "cell_count": 375141,
+      "linear_tendencies_per_day": {
+        "canopy_water_kg_m2": 0.0060973183523521275,
+        "snow_height_m": -0.0032324404446798,
+        "soil_water_kg_m2": -3.66641892916914,
+        "swe_kg_m2": -0.015071918789643313,
+        "temperature_2m_k": -30.25076517420848,
+        "water_store_kg_m2": -3.675393529606026
+      },
+      "surface_energy_diagnostic": {
+        "integrated_residual_mj_m2": 0.008783164710980229,
+        "mean_absolute_residual_w_m2": 1.0873463436503095,
+        "mean_residual_w_m2": 1.0873463436503095
+      },
+      "time_series": {
+        "canopy_water_kg_m2": [
+          0.0,
+          6.551337730590955e-05,
+          0.0005081098626960106
+        ],
+        "evaporation_rate_kg_m2_s": [
+          0.0,
+          2.9712764454657177e-07,
+          2.772782984398649e-07
+        ],
+        "precipitation_cumulative_kg_m2": [
+          0.0,
+          6.810253655423403e-05,
+          0.0007115020224335119
+        ],
+        "runoff_rate_kg_m2_s": [
+          0.0,
+          0.00047383065979304546,
+          0.0004797696190499727
+        ],
+        "snow_height_m": [
+          0.002717747322178865,
+          0.002470533118657519,
+          0.002448377285122215
+        ],
+        "soil_water_kg_m2": [
+          330.89268761021975,
+          330.7321911093783,
+          330.58715269945566
+        ],
+        "soil_water_reported_kg_m2": [
+          0.0,
+          310.6759482654448,
+          310.53090981517107
+        ],
+        "surface_energy_residual_w_m2": [
+          0.0,
+          1.6174969195936428,
+          1.6445421113572856
+        ],
+        "swe_kg_m2": [
+          0.6131118320863893,
+          0.6118137941932876,
+          0.611855838853919
+        ],
+        "temperature_2m_k": [
+          290.5941518826649,
+          288.3619938637773,
+          288.0732547848142
+        ],
+        "times": [
+          "2020-07-01T00:00:00",
+          "2020-07-01T01:00:00",
+          "2020-07-01T02:00:00"
+        ],
+        "water_store_kg_m2": [
+          331.5057994423061,
+          331.3440704169489,
+          331.1995166481723
+        ],
+        "wind_speed_10m_m_s": [
+          1.5636618472914725,
+          1.6397480533378068,
+          1.5781399690189362
+        ]
+      },
+      "water_diagnostic_kg_m2": {
+        "evaporation": 0.0015687604575594153,
+        "precipitation": 0.0007115020224335119,
+        "residual": -2.263950153846205,
+        "resolved_storage_change": -0.3062827941338355,
+        "runoff": 2.5693756895449145
+      }
+    },
+    "active_soil_interior": {
+      "cell_count": 3197103,
+      "linear_tendencies_per_day": {
+        "canopy_water_kg_m2": 0.010122191435636122,
+        "snow_height_m": -0.00736214207051674,
+        "soil_water_kg_m2": -3.8622686054550286,
+        "swe_kg_m2": -0.030111627693741205,
+        "temperature_2m_k": -37.106487102958,
+        "water_store_kg_m2": -3.882258041711339
+      },
+      "surface_energy_diagnostic": {
+        "integrated_residual_mj_m2": 0.008549539504360213,
+        "mean_absolute_residual_w_m2": 1.0585042861134089,
+        "mean_residual_w_m2": 1.0585042861134089
+      },
+      "time_series": {
+        "canopy_water_kg_m2": [
+          0.0,
+          0.00010463654200624022,
+          0.0008435159529696769
+        ],
+        "evaporation_rate_kg_m2_s": [
+          0.0,
+          4.5738785025980875e-07,
+          3.896965686402385e-07
+        ],
+        "precipitation_cumulative_kg_m2": [
+          0.0,
+          0.00019001277672172002,
+          0.0020035684333290023
+        ],
+        "runoff_rate_kg_m2_s": [
+          0.0,
+          0.0005508018920837882,
+          0.0005490647579320877
+        ],
+        "snow_height_m": [
+          0.006636643652348396,
+          0.006073070877113405,
+          0.006023131813138668
+        ],
+        "soil_water_kg_m2": [
+          400.9014017344685,
+          400.726871168247,
+          400.57954601734724
+        ],
+        "soil_water_reported_kg_m2": [
+          0.0,
+          400.72687816526343,
+          400.5795529639605
+        ],
+        "surface_energy_residual_w_m2": [
+          0.0,
+          1.574231310748781,
+          1.6012815475914455
+        ],
+        "swe_kg_m2": [
+          1.735937027216278,
+          1.7334261880273252,
+          1.7334277249084662
+        ],
+        "temperature_2m_k": [
+          289.4003503079104,
+          286.5248138083022,
+          286.30814304933057
+        ],
+        "times": [
+          "2020-07-01T00:00:00",
+          "2020-07-01T01:00:00",
+          "2020-07-01T02:00:00"
+        ],
+        "water_store_kg_m2": [
+          402.6373387616847,
+          402.4604019928163,
+          402.31381725820876
+        ],
+        "wind_speed_10m_m_s": [
+          1.5145849862879381,
+          1.6812646029273561,
+          1.5985064238104334
+        ]
+      },
+      "water_diagnostic_kg_m2": {
+        "evaporation": 0.0023480500844877406,
+        "precipitation": 0.0020035684333290023,
+        "residual": -2.648026353954609,
+        "resolved_storage_change": -0.3235215034759449,
+        "runoff": 2.971203375779395
+      }
+    },
+    "elevation_1000_1500m": {
+      "cell_count": 457734,
+      "linear_tendencies_per_day": {
+        "canopy_water_kg_m2": 0.0024820109195920924,
+        "snow_height_m": -0.00018725303072366818,
+        "soil_water_kg_m2": -0.7898417214971686,
+        "swe_kg_m2": -0.0001731212680176437,
+        "temperature_2m_k": -39.796670835566374,
+        "water_store_kg_m2": -0.7875328318466472
+      },
+      "surface_energy_diagnostic": {
+        "integrated_residual_mj_m2": 0.0017051963646859127,
+        "mean_absolute_residual_w_m2": 0.2132133454190336,
+        "mean_residual_w_m2": 0.2132133454190336
+      },
+      "time_series": {
+        "canopy_water_kg_m2": [
+          0.0,
+          2.3434372539489928e-05,
+          0.00020683424329934105
+        ],
+        "evaporation_rate_kg_m2_s": [
+          0.0,
+          6.694557506447867e-07,
+          6.235418418528908e-07
+        ],
+        "precipitation_cumulative_kg_m2": [
+          0.0,
+          1.3239011861746575e-05,
+          0.00019420484190907987
+        ],
+        "runoff_rate_kg_m2_s": [
+          0.0,
+          0.00033577200128641425,
+          0.0003259697300880073
+        ],
+        "snow_height_m": [
+          3.6371945472086616e-05,
+          2.158606373402562e-05,
+          2.076752624511427e-05
+        ],
+        "soil_water_kg_m2": [
+          401.4940372264001,
+          401.45585733897286,
+          401.428217082942
+        ],
+        "soil_water_reported_kg_m2": [
+          0.0,
+          400.1250614758348,
+          400.0974211924138
+        ],
+        "surface_energy_residual_w_m2": [
+          0.0,
+          0.30769127745729513,
+          0.3319487587998057
+        ],
+        "swe_kg_m2": [
+          0.0018151716415307957,
+          0.0018033891270530043,
+          0.001800744869195992
+        ],
+        "temperature_2m_k": [
+          289.8785191180398,
+          286.5866294361174,
+          286.5621298817426
+        ],
+        "times": [
+          "2020-07-01T00:00:00",
+          "2020-07-01T01:00:00",
+          "2020-07-01T02:00:00"
+        ],
+        "water_store_kg_m2": [
+          401.4958523980417,
+          401.4576841624725,
+          401.43022466205446
+        ],
+        "wind_speed_10m_m_s": [
+          1.6051222247058847,
+          1.787908707439757,
+          1.7171636539599633
+        ]
+      },
+      "water_diagnostic_kg_m2": {
+        "evaporation": 0.0035324160176564354,
+        "precipitation": 0.00019420484190907987,
+        "residual": -1.733235193978031,
+        "resolved_storage_change": -0.0656277359872206,
+        "runoff": 1.7955247187895043
+      }
+    },
+    "elevation_1500_2000m": {
+      "cell_count": 352707,
+      "linear_tendencies_per_day": {
+        "canopy_water_kg_m2": 0.009403534747253618,
+        "snow_height_m": -0.002566196329843107,
+        "soil_water_kg_m2": -4.544351995815077,
+        "swe_kg_m2": -0.002496385957375724,
+        "temperature_2m_k": -37.91580553809763,
+        "water_store_kg_m2": -4.537444847024744
+      },
+      "surface_energy_diagnostic": {
+        "integrated_residual_mj_m2": 0.002928205707271837,
+        "mean_absolute_residual_w_m2": 0.3628102125132413,
+        "mean_residual_w_m2": 0.3628102125132413
+      },
+      "time_series": {
+        "canopy_water_kg_m2": [
+          0.0,
+          0.00016213594527879314,
+          0.0007836278956044681
+        ],
+        "evaporation_rate_kg_m2_s": [
+          0.0,
+          1.1930487640391052e-07,
+          5.4896927815368836e-08
+        ],
+        "precipitation_cumulative_kg_m2": [
+          0.0,
+          8.825286268978989e-05,
+          0.000362856422036296
+        ],
+        "runoff_rate_kg_m2_s": [
+          0.0,
+          0.0007271870034915456,
+          0.0006931880297685392
+        ],
+        "snow_height_m": [
+          0.0006289251755308552,
+          0.0004239830207224507,
+          0.0004150754813772629
+        ],
+        "soil_water_kg_m2": [
+          415.07735989215604,
+          414.8734498877496,
+          414.6986638925048
+        ],
+        "soil_water_reported_kg_m2": [
+          0.0,
+          413.8757698889646,
+          413.7009839098094
+        ],
+        "surface_energy_residual_w_m2": [
+          0.0,
+          0.5383503109446302,
+          0.5500803265950936
+        ],
+        "swe_kg_m2": [
+          0.05055531825604267,
+          0.050346942292002095,
+          0.050347286092928024
+        ],
+        "temperature_2m_k": [
+          287.3580071535861,
+          284.27765804306205,
+          284.19835669207794
+        ],
+        "times": [
+          "2020-07-01T00:00:00",
+          "2020-07-01T01:00:00",
+          "2020-07-01T02:00:00"
+        ],
+        "water_store_kg_m2": [
+          415.127915210412,
+          414.92395896598686,
+          414.7497948064933
+        ],
+        "wind_speed_10m_m_s": [
+          1.5791855902934042,
+          1.8677314895265846,
+          1.7672789941925149
+        ]
+      },
+      "water_diagnostic_kg_m2": {
+        "evaporation": 0.0005283120251217418,
+        "precipitation": 0.000362856422036296,
+        "residual": -3.4876567178372913,
+        "resolved_storage_change": -0.3781204039187287,
+        "runoff": 3.8656116661529345
+      }
+    },
+    "elevation_2000_3000m": {
+      "cell_count": 437316,
+      "linear_tendencies_per_day": {
+        "canopy_water_kg_m2": 0.026348624623815455,
+        "snow_height_m": -0.049497731388071356,
+        "soil_water_kg_m2": -12.570570805290345,
+        "swe_kg_m2": -0.20184933235223568,
+        "temperature_2m_k": -30.58254228272745,
+        "water_store_kg_m2": -12.74607151301916
+      },
+      "surface_energy_diagnostic": {
+        "integrated_residual_mj_m2": 0.020827077817854315,
+        "mean_absolute_residual_w_m2": 2.57586326690369,
+        "mean_residual_w_m2": 2.57586326690369
+      },
+      "time_series": {
+        "canopy_water_kg_m2": [
+          0.0,
+          0.0006074915095945127,
+          0.002195718718651288
+        ],
+        "evaporation_rate_kg_m2_s": [
+          0.0,
+          -5.368603387286216e-07,
+          -6.564834575213581e-07
+        ],
+        "precipitation_cumulative_kg_m2": [
+          0.0,
+          0.0012080347559282193,
+          0.003070568197209004
+        ],
+        "runoff_rate_kg_m2_s": [
+          0.0,
+          0.0015078408011057103,
+          0.001453109311141202
+        ],
+        "snow_height_m": [
+          0.027957988177289148,
+          0.02414444366514944,
+          0.023833177228283202
+        ],
+        "soil_water_kg_m2": [
+          451.3817552846188,
+          450.8388169872445,
+          450.3342077175113
+        ],
+        "soil_water_reported_kg_m2": [
+          0.0,
+          449.5567818777563,
+          449.05217251400626
+        ],
+        "surface_energy_residual_w_m2": [
+          0.0,
+          3.8430089869857733,
+          3.8845808137252957
+        ],
+        "swe_kg_m2": [
+          5.400969112671667,
+          5.3842653641114655,
+          5.384148334975647
+        ],
+        "temperature_2m_k": [
+          283.50478466414853,
+          281.1300275361038,
+          280.95623947392124
+        ],
+        "times": [
+          "2020-07-01T00:00:00",
+          "2020-07-01T01:00:00",
+          "2020-07-01T02:00:00"
+        ],
+        "water_store_kg_m2": [
+          456.7827243972905,
+          456.22368984286555,
+          455.7205517712056
+        ],
+        "wind_speed_10m_m_s": [
+          1.911825017582615,
+          2.4476325941432635,
+          2.255593753481014
+        ]
+      },
+      "water_diagnostic_kg_m2": {
+        "evaporation": -0.003114367442961482,
+        "precipitation": 0.003070568197209004,
+        "residual": -6.9754660823096195,
+        "resolved_storage_change": -1.06217262608493,
+        "runoff": 8.04382364403472
+      }
+    },
+    "elevation_500_1000m": {
+      "cell_count": 1180316,
+      "linear_tendencies_per_day": {
+        "canopy_water_kg_m2": 0.007340555036152846,
+        "snow_height_m": 0.0,
+        "soil_water_kg_m2": -3.8255767427440333,
+        "swe_kg_m2": 0.0,
+        "temperature_2m_k": -39.61629089055737,
+        "water_store_kg_m2": -3.8182361877077255
+      },
+      "surface_energy_diagnostic": {
+        "integrated_residual_mj_m2": 0.005267704446327551,
+        "mean_absolute_residual_w_m2": 0.6526103401616804,
+        "mean_residual_w_m2": 0.6526103401616804
+      },
+      "time_series": {
+        "canopy_water_kg_m2": [
+          0.0,
+          1.3520641786542483e-05,
+          0.0006117129196794037
+        ],
+        "evaporation_rate_kg_m2_s": [
+          0.0,
+          9.244814398794013e-07,
+          8.041374422071113e-07
+        ],
+        "precipitation_cumulative_kg_m2": [
+          0.0,
+          9.801671168578795e-06,
+          0.001411890254567544
+        ],
+        "runoff_rate_kg_m2_s": [
+          0.0,
+          0.00048689696838942714,
+          0.000452717246670707
+        ],
+        "snow_height_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "soil_water_kg_m2": [
+          407.59323146567937,
+          407.41584842511077,
+          407.27443340378403
+        ],
+        "soil_water_reported_kg_m2": [
+          0.0,
+          405.8592047247262,
+          405.71778965647246
+        ],
+        "surface_energy_residual_w_m2": [
+          0.0,
+          0.9686714496969313,
+          0.9891595707881099
+        ],
+        "swe_kg_m2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "temperature_2m_k": [
+          290.06563176945843,
+          287.00631511362286,
+          286.7642741952453
+        ],
+        "times": [
+          "2020-07-01T00:00:00",
+          "2020-07-01T01:00:00",
+          "2020-07-01T02:00:00"
+        ],
+        "water_store_kg_m2": [
+          407.59323146567937,
+          407.41586194575257,
+          407.2750451167037
+        ],
+        "wind_speed_10m_m_s": [
+          1.5053443299682743,
+          1.5610372593579982,
+          1.4973478551009978
+        ]
+      },
+      "water_diagnostic_kg_m2": {
+        "evaporation": 0.004775580579538644,
+        "precipitation": 0.001411890254567544,
+        "residual": -2.2528974715585375,
+        "resolved_storage_change": -0.3181863489756438,
+        "runoff": 2.56772013020921
+      }
+    },
+    "elevation_ge_3000m": {
+      "cell_count": 14195,
+      "linear_tendencies_per_day": {
+        "canopy_water_kg_m2": 1.0119865077402405e-05,
+        "snow_height_m": -0.14886721053552998,
+        "soil_water_kg_m2": -10.534523921723348,
+        "swe_kg_m2": -0.8941451921026554,
+        "temperature_2m_k": -35.24974851537718,
+        "water_store_kg_m2": -11.428658993960653
+      },
+      "surface_energy_diagnostic": {
+        "integrated_residual_mj_m2": 0.05334064699204105,
+        "mean_absolute_residual_w_m2": 6.58893424820707,
+        "mean_residual_w_m2": 6.58893424820707
+      },
+      "time_series": {
+        "canopy_water_kg_m2": [
+          0.0,
+          4.7634069134677094e-08,
+          8.433220897835338e-07
+        ],
+        "evaporation_rate_kg_m2_s": [
+          0.0,
+          -1.945596541143169e-06,
+          -1.8971264034702068e-06
+        ],
+        "precipitation_cumulative_kg_m2": [
+          0.0,
+          0.0034041250629512528,
+          0.007936745605343668
+        ],
+        "runoff_rate_kg_m2_s": [
+          0.0,
+          0.0013881628374032577,
+          0.0014104930882102233
+        ],
+        "snow_height_m": [
+          0.6884551767051393,
+          0.678045607935366,
+          0.6760495758271785
+        ],
+        "soil_water_kg_m2": [
+          444.5761424629578,
+          444.1714503474094,
+          443.6982654694809
+        ],
+        "soil_water_reported_kg_m2": [
+          0.0,
+          440.93725360493374,
+          440.4640686481918
+        ],
+        "surface_energy_residual_w_m2": [
+          0.0,
+          9.866890028734934,
+          9.899912715886277
+        ],
+        "swe_kg_m2": [
+          239.47732120010872,
+          239.39766968106744,
+          239.40280910076683
+        ],
+        "temperature_2m_k": [
+          278.5319847566471,
+          275.9194003329222,
+          275.594505713699
+        ],
+        "times": [
+          "2020-07-01T00:00:00",
+          "2020-07-01T01:00:00",
+          "2020-07-01T02:00:00"
+        ],
+        "water_store_kg_m2": [
+          684.0534636630665,
+          683.5691200761108,
+          683.1010754135698
+        ],
+        "wind_speed_10m_m_s": [
+          2.823580019265425,
+          4.6291587945367825,
+          4.209431176935672
+        ]
+      },
+      "water_diagnostic_kg_m2": {
+        "evaporation": -0.01041897507436178,
+        "precipitation": 0.007936745605343668,
+        "residual": -6.565529803253703,
+        "resolved_storage_change": -0.9523882494967211,
+        "runoff": 7.53627377343013
+      }
+    },
+    "elevation_lt_500m": {
+      "cell_count": 1129976,
+      "linear_tendencies_per_day": {
+        "canopy_water_kg_m2": 0.008857936856688198,
+        "snow_height_m": 0.0,
+        "soil_water_kg_m2": -1.4132102724536253,
+        "swe_kg_m2": 0.0,
+        "temperature_2m_k": -33.41465388867049,
+        "water_store_kg_m2": -1.404352335597423
+      },
+      "surface_energy_diagnostic": {
+        "integrated_residual_mj_m2": 0.01126804277201123,
+        "mean_absolute_residual_w_m2": 1.394907640455715,
+        "mean_residual_w_m2": 1.394907640455715
+      },
+      "time_series": {
+        "canopy_water_kg_m2": [
+          0.0,
+          8.47124301390888e-06,
+          0.0007381614047240164
+        ],
+        "evaporation_rate_kg_m2_s": [
+          0.0,
+          3.508779212344985e-07,
+          3.628606576222118e-07
+        ],
+        "precipitation_cumulative_kg_m2": [
+          0.0,
+          6.785606035411692e-06,
+          0.0029502438163615556
+        ],
+        "runoff_rate_kg_m2_s": [
+          0.0,
+          0.0002431426154715066,
+          0.0003113861090605011
+        ],
+        "snow_height_m": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "soil_water_kg_m2": [
+          345.91910914394026,
+          345.8516244838961,
+          345.8013416212358
+        ],
+        "soil_water_reported_kg_m2": [
+          0.0,
+          342.2064479146405,
+          342.1561649884417
+        ],
+        "surface_energy_residual_w_m2": [
+          0.0,
+          2.075300840861316,
+          2.1094220805058286
+        ],
+        "swe_kg_m2": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "temperature_2m_k": [
+          291.9637479392322,
+          289.5292497610163,
+          289.17919344850964
+        ],
+        "times": [
+          "2020-07-01T00:00:00",
+          "2020-07-01T01:00:00",
+          "2020-07-01T02:00:00"
+        ],
+        "water_store_kg_m2": [
+          345.91910914394026,
+          345.8516329551391,
+          345.8020797826405
+        ],
+        "wind_speed_10m_m_s": [
+          1.3135098959077816,
+          1.3580352123205928,
+          1.309563286848284
+        ]
+      },
+      "water_diagnostic_kg_m2": {
+        "evaporation": 0.001916309700164176,
+        "precipitation": 0.0029502438163615556,
+        "residual": -1.317745116590343,
+        "resolved_storage_change": -0.11702936129978525,
+        "runoff": 1.4358084120063257
+      }
+    }
+  },
+  "end": "2020-07-01T02:00:00",
+  "endpoint_distributions": {
+    "snow_height_m": {
+      "end": {
+        "count": 3572244,
+        "maximum": 3.840242624282837,
+        "mean": 0.005647727168776575,
+        "median": 0.0,
+        "minimum": 0.0,
+        "p01": 0.0,
+        "p05": 0.0,
+        "p95": 0.0,
+        "p99": 0.0,
+        "sample_count": 238150,
+        "sample_stride": 15
+      },
+      "start": {
+        "count": 3572244,
+        "maximum": 3.8426918983459473,
+        "mean": 0.006225098783577918,
+        "median": 0.0,
+        "minimum": 0.0,
+        "p01": 0.0,
+        "p05": 0.0,
+        "p95": 0.0,
+        "p99": 0.02361219748854637,
+        "sample_count": 238150,
+        "sample_stride": 15
+      }
+    },
+    "soil_water_kg_m2": {
+      "end": {
+        "count": 3572244,
+        "maximum": 705.3094118833542,
+        "mean": 393.2292596366669,
+        "median": 392.83809065818787,
+        "minimum": 0.14177603661664762,
+        "p01": 158.8164599351585,
+        "p05": 233.36277425289157,
+        "p95": 554.0197671949862,
+        "p99": 605.4906060397626,
+        "sample_count": 238150,
+        "sample_stride": 15
+      },
+      "start": {
+        "count": 3572244,
+        "maximum": 705.3094118833542,
+        "mean": 393.5494014161014,
+        "median": 392.6739625632763,
+        "minimum": 0.14999999621068127,
+        "p01": 158.8103601746261,
+        "p05": 233.35801128298044,
+        "p95": 556.5329012274742,
+        "p99": 613.1097348332406,
+        "sample_count": 238150,
+        "sample_stride": 15
+      }
+    },
+    "surface_energy_residual_w_m2": {
+      "end": {
+        "count": 3572244,
+        "maximum": 18.834348678588867,
+        "mean": 1.605824577449339,
+        "median": 0.8031102120876312,
+        "minimum": -16.856081008911133,
+        "p01": -2.4946909165382385,
+        "p05": -0.040463709831237794,
+        "p95": 9.515017401007933,
+        "p99": 11.971708139497789,
+        "sample_count": 238150,
+        "sample_stride": 15
+      },
+      "start": {
+        "count": 3572244,
+        "maximum": 0.0,
+        "mean": 0.0,
+        "median": 0.0,
+        "minimum": 0.0,
+        "p01": 0.0,
+        "p05": 0.0,
+        "p95": 0.0,
+        "p99": 0.0,
+        "sample_count": 238150,
+        "sample_stride": 15
+      }
+    },
+    "swe_kg_m2": {
+      "end": {
+        "count": 3572244,
+        "maximum": 1525.84912109375,
+        "mean": 1.6156452893003757,
+        "median": 0.0,
+        "minimum": 0.0,
+        "p01": 0.0,
+        "p05": 0.0,
+        "p95": 0.0,
+        "p99": 0.0,
+        "sample_count": 238150,
+        "sample_stride": 15
+      },
+      "start": {
+        "count": 3572244,
+        "maximum": 1525.8489990234375,
+        "mean": 1.6180229747254007,
+        "median": 0.0,
+        "minimum": 0.0,
+        "p01": 0.0,
+        "p05": 0.0,
+        "p95": 0.0,
+        "p99": 1.3554206323623956,
+        "sample_count": 238150,
+        "sample_stride": 15
+      }
+    },
+    "temperature_2m_k": {
+      "end": {
+        "count": 3572244,
+        "maximum": 308.4874267578125,
+        "mean": 286.49350714583716,
+        "median": 286.2324981689453,
+        "minimum": 267.1181945800781,
+        "p01": 278.0657019042969,
+        "p05": 280.3785064697266,
+        "p95": 294.1051055908203,
+        "p99": 296.09425872802734,
+        "sample_count": 238150,
+        "sample_stride": 15
+      },
+      "start": {
+        "count": 3572244,
+        "maximum": 300.6925354003906,
+        "mean": 289.52571798059876,
+        "median": 289.5227355957031,
+        "minimum": 270.2441101074219,
+        "p01": 280.588967590332,
+        "p05": 283.0193588256836,
+        "p95": 296.06776733398436,
+        "p99": 297.7293395996094,
+        "sample_count": 238150,
+        "sample_stride": 15
+      }
+    },
+    "wind_speed_10m_m_s": {
+      "end": {
+        "count": 3572244,
+        "maximum": 18.556961142944107,
+        "mean": 1.596367630319021,
+        "median": 1.4304210009862701,
+        "minimum": 0.0008040120621311031,
+        "p01": 0.14214222459911294,
+        "p05": 0.337192937970582,
+        "p95": 3.4184970627427766,
+        "p99": 4.768670546667343,
+        "sample_count": 238150,
+        "sample_stride": 15
+      },
+      "start": {
+        "count": 3572244,
+        "maximum": 10.454523498622317,
+        "mean": 1.5197388175250335,
+        "median": 1.4385339984726615,
+        "minimum": 0.0006611987900072152,
+        "p01": 0.16194121443375098,
+        "p05": 0.37480147198442637,
+        "p95": 2.9276234888753425,
+        "p99": 3.749622710148034,
+        "sample_count": 238150,
+        "sample_stride": 15
+      }
+    }
+  },
+  "event_name": "land_init_smoke_20200701_00_02",
+  "failures": [],
+  "limitations": [
+    "Water residual omits groundwater, lake, and atmospheric stores.",
+    "Three-hour instantaneous runoff and flux output is trapezoid-integrated; fast sub-interval peaks are unresolved.",
+    "The water budget uses the layer-derived soil column because HICAR's reported column diagnostic is not populated in the initial output frame.",
+    "Latent heat is converted with a fixed 2.5e6 J kg-1 vaporization heat.",
+    "The 72-hour linear tendency characterizes the event and is not evidence of climate drift.",
+    "Equal weighting is appropriate for the approximately equal-area 200 m projected grid."
+  ],
+  "mask_contract": {
+    "boundary_width_m": 10000.0,
+    "classes": {
+      "active_soil_all": 3572244,
+      "active_soil_boundary_10km": 375141,
+      "active_soil_interior": 3197103,
+      "elevation_1000_1500m": 457734,
+      "elevation_1500_2000m": 352707,
+      "elevation_2000_3000m": 437316,
+      "elevation_500_1000m": 1180316,
+      "elevation_ge_3000m": 14195,
+      "elevation_lt_500m": 1129976
+    },
+    "grid_spacing_m": 200.0,
+    "raw_land_cells": 3657651,
+    "usgs_snow_ice_24_cells": 85407,
+    "usgs_water_16_cells": 0
+  },
+  "nonfinite_counts": {
+    "albedo": 0,
+    "canopy_water": 0,
+    "hfgs": 0,
+    "hfls": 0,
+    "hfss": 0,
+    "hus2m": 0,
+    "lwtr": 0,
+    "precipitation": 0,
+    "rlus": 0,
+    "rsds": 0,
+    "runoff_subsurface": 0,
+    "runoff_surface": 0,
+    "snow_height": 0,
+    "soil_column_total_water": 0,
+    "soil_temperature": 0,
+    "soil_water_content": 0,
+    "swet": 0,
+    "taix": 0,
+    "u10m": 0,
+    "v10m": 0
+  },
+  "output_files": [
+    {
+      "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/runs/land_init_smoke_20200701_00_02/output/domain_static_swiss_200m_rea_l_20200701_0000_2020-07-01_00-00-00.nc",
+      "sha256": "1caffc366f58166e6785fe460ee794e117d747f7266aa8fc86c3d8f461917f0b",
+      "size_bytes": 2626282380
+    }
+  ],
+  "output_interval_seconds": 3600,
+  "precipitation_decrease_cells": 0,
+  "record_count": 3,
+  "schema_version": 1,
+  "soil_column_crosscheck": {
+    "calculation": "sum(soil_water_content * [0.1,0.2,0.4,0.8] m * 1000 kg m-3)",
+    "gate_class": "active_soil_interior",
+    "post_initial_tolerance_kg_m2": 0.01,
+    "records": [
+      {
+        "classes": {
+          "active_soil_all": {
+            "cells_above_tolerance": 3572244,
+            "maximum_absolute_difference_kg_m2": 705.3094118833542,
+            "mean_absolute_difference_kg_m2": 393.5494014161014
+          },
+          "active_soil_boundary_10km": {
+            "cells_above_tolerance": 375141,
+            "maximum_absolute_difference_kg_m2": 705.3094118833542,
+            "mean_absolute_difference_kg_m2": 330.89268761021975
+          },
+          "active_soil_interior": {
+            "cells_above_tolerance": 3197103,
+            "maximum_absolute_difference_kg_m2": 686.4617854356766,
+            "mean_absolute_difference_kg_m2": 400.9014017344685
+          },
+          "elevation_1000_1500m": {
+            "cells_above_tolerance": 457734,
+            "maximum_absolute_difference_kg_m2": 649.556377530098,
+            "mean_absolute_difference_kg_m2": 401.4940372264001
+          },
+          "elevation_1500_2000m": {
+            "cells_above_tolerance": 352707,
+            "maximum_absolute_difference_kg_m2": 650.9760200977325,
+            "mean_absolute_difference_kg_m2": 415.07735989215604
+          },
+          "elevation_2000_3000m": {
+            "cells_above_tolerance": 437316,
+            "maximum_absolute_difference_kg_m2": 705.3094118833542,
+            "mean_absolute_difference_kg_m2": 451.3817552846188
+          },
+          "elevation_500_1000m": {
+            "cells_above_tolerance": 1180316,
+            "maximum_absolute_difference_kg_m2": 686.4617854356766,
+            "mean_absolute_difference_kg_m2": 407.59323146567937
+          },
+          "elevation_ge_3000m": {
+            "cells_above_tolerance": 14195,
+            "maximum_absolute_difference_kg_m2": 662.1888607740402,
+            "mean_absolute_difference_kg_m2": 444.5761424629578
+          },
+          "elevation_lt_500m": {
+            "cells_above_tolerance": 1129976,
+            "maximum_absolute_difference_kg_m2": 679.2152792215347,
+            "mean_absolute_difference_kg_m2": 345.91910914394026
+          }
+        },
+        "time": "2020-07-01T00:00:00"
+      },
+      {
+        "classes": {
+          "active_soil_all": {
+            "cells_above_tolerance": 23146,
+            "maximum_absolute_difference_kg_m2": 705.3094118833542,
+            "mean_absolute_difference_kg_m2": 2.1062285517215753
+          },
+          "active_soil_boundary_10km": {
+            "cells_above_tolerance": 23146,
+            "maximum_absolute_difference_kg_m2": 705.3094118833542,
+            "mean_absolute_difference_kg_m2": 20.056257360307928
+          },
+          "active_soil_interior": {
+            "cells_above_tolerance": 0,
+            "maximum_absolute_difference_kg_m2": 7.998943328857422e-05,
+            "mean_absolute_difference_kg_m2": 1.1843257102127047e-05
+          },
+          "elevation_1000_1500m": {
+            "cells_above_tolerance": 1751,
+            "maximum_absolute_difference_kg_m2": 542.0122057199478,
+            "mean_absolute_difference_kg_m2": 1.3308148995444415
+          },
+          "elevation_1500_2000m": {
+            "cells_above_tolerance": 993,
+            "maximum_absolute_difference_kg_m2": 621.5258479118347,
+            "mean_absolute_difference_kg_m2": 0.9977000996181012
+          },
+          "elevation_2000_3000m": {
+            "cells_above_tolerance": 1172,
+            "maximum_absolute_difference_kg_m2": 705.3094118833542,
+            "mean_absolute_difference_kg_m2": 1.2820573936747297
+          },
+          "elevation_500_1000m": {
+            "cells_above_tolerance": 5969,
+            "maximum_absolute_difference_kg_m2": 544.6195840835571,
+            "mean_absolute_difference_kg_m2": 1.55666226532027
+          },
+          "elevation_ge_3000m": {
+            "cells_above_tolerance": 89,
+            "maximum_absolute_difference_kg_m2": 662.1888607740402,
+            "mean_absolute_difference_kg_m2": 3.234219133311882
+          },
+          "elevation_lt_500m": {
+            "cells_above_tolerance": 13172,
+            "maximum_absolute_difference_kg_m2": 632.4452728033066,
+            "mean_absolute_difference_kg_m2": 3.6451924112800898
+          }
+        },
+        "time": "2020-07-01T01:00:00"
+      },
+      {
+        "classes": {
+          "active_soil_all": {
+            "cells_above_tolerance": 23146,
+            "maximum_absolute_difference_kg_m2": 705.3094118833542,
+            "mean_absolute_difference_kg_m2": 2.1062285242484156
+          },
+          "active_soil_boundary_10km": {
+            "cells_above_tolerance": 23146,
+            "maximum_absolute_difference_kg_m2": 705.3094118833542,
+            "mean_absolute_difference_kg_m2": 20.05625733513912
+          },
+          "active_soil_interior": {
+            "cells_above_tolerance": 0,
+            "maximum_absolute_difference_kg_m2": 7.605552673339844e-05,
+            "mean_absolute_difference_kg_m2": 1.1815513554969956e-05
+          },
+          "elevation_1000_1500m": {
+            "cells_above_tolerance": 1751,
+            "maximum_absolute_difference_kg_m2": 542.0122057199478,
+            "mean_absolute_difference_kg_m2": 1.3308148841148277
+          },
+          "elevation_1500_2000m": {
+            "cells_above_tolerance": 993,
+            "maximum_absolute_difference_kg_m2": 621.5258479118347,
+            "mean_absolute_difference_kg_m2": 0.9977000971176118
+          },
+          "elevation_2000_3000m": {
+            "cells_above_tolerance": 1172,
+            "maximum_absolute_difference_kg_m2": 705.3094118833542,
+            "mean_absolute_difference_kg_m2": 1.2820573181383057
+          },
+          "elevation_500_1000m": {
+            "cells_above_tolerance": 5969,
+            "maximum_absolute_difference_kg_m2": 544.6195840835571,
+            "mean_absolute_difference_kg_m2": 1.5566622540527055
+          },
+          "elevation_ge_3000m": {
+            "cells_above_tolerance": 89,
+            "maximum_absolute_difference_kg_m2": 662.1888607740402,
+            "mean_absolute_difference_kg_m2": 3.234219069696014
+          },
+          "elevation_lt_500m": {
+            "cells_above_tolerance": 13172,
+            "maximum_absolute_difference_kg_m2": 632.4452728033066,
+            "mean_absolute_difference_kg_m2": 3.6451923732610245
+          }
+        },
+        "time": "2020-07-01T02:00:00"
+      }
+    ]
+  },
+  "start": "2020-07-01T00:00:00",
+  "static_file": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/static_initializations/domain_static_swiss_200m_rea_l_20200701_0000.nc",
+  "static_sha256": "dc949651c18f9c30e6d18419ba4935ce5d100493c594179da44bcb2942e14ef0",
+  "status": "PASS"
+}

@@ -1,0 +1,70 @@
+{
+  "after": {
+    "max_land_neighbor_difference_m": 420.0919189453125,
+    "maximum_m": 4727.47509765625,
+    "mean_land_neighbor_difference_m": 30.230856544504814,
+    "mean_m": 1010.3429088753319,
+    "minimum_m": 21.063779830932617,
+    "p999_land_neighbor_difference_m": 210.1879671630876
+  },
+  "before": {
+    "max_land_neighbor_difference_m": 447.7054443359375,
+    "maximum_m": 4739.70703125,
+    "mean_land_neighbor_difference_m": 31.29822878961888,
+    "mean_m": 1010.3368643408797,
+    "minimum_m": 21.03497886657715,
+    "p999_land_neighbor_difference_m": 219.84605236816708
+  },
+  "block_mean_change": {
+    "10_km": {
+      "block_cells": 50,
+      "blocks_with_land": 1485,
+      "max_absolute_change_m": 0.2603989485855941,
+      "mean_change_m": 0.007144923772241498,
+      "p99_absolute_change_m": 0.09817478286335474,
+      "rms_change_m": 0.026229329286074996
+    },
+    "1_km": {
+      "block_cells": 5,
+      "blocks_with_land": 147902,
+      "max_absolute_change_m": 24.934371948242188,
+      "mean_change_m": 0.016536679447160335,
+      "p99_absolute_change_m": 2.0068852294921853,
+      "rms_change_m": 0.6205007835036783
+    },
+    "5_km": {
+      "block_cells": 25,
+      "blocks_with_land": 5929,
+      "max_absolute_change_m": 1.2590151700106533,
+      "mean_change_m": 0.008616244696772798,
+      "p99_absolute_change_m": 0.21924629574275387,
+      "rms_change_m": 0.06547114884866384
+    }
+  },
+  "filter_method": "land-aware high-order Shapiro",
+  "nominal_1d_amplitude_response": {
+    "10_cells": 0.9998337081930958,
+    "25_cells": 0.9999998782244951,
+    "2_cells": 0.0,
+    "3_cells": 0.4673004150390628,
+    "4_cells": 0.87890625,
+    "50_cells": 0.9999999995167381,
+    "5_cells": 0.9717072916512083,
+    "8_cells": 0.9990802974504032
+  },
+  "order": 8,
+  "output": "/Users/fuhrer/Work/agentic/icon_hicar/case_studies/swiss_200m/static_sensitivities/domain_static_swiss_200m_shapiro8_p2.nc",
+  "output_sha256": "d5115f81858683fbc11434cfd83bbaa885d38b010363a10a6ebeb03951931420",
+  "passes": 2,
+  "point_change": {
+    "max_absolute_change_m": 86.2900390625,
+    "mean_change_m": 0.006044534452150906,
+    "p99_absolute_change_m": 19.18707275390625,
+    "rms_change_m": 5.442502203505815
+  },
+  "ready": "/Users/fuhrer/Work/agentic/icon_hicar/case_studies/swiss_200m/static_sensitivities/domain_static_swiss_200m_shapiro8_p2.nc.ready",
+  "source": "/Users/fuhrer/Work/agentic/icon_hicar/case_studies/swiss_200m/static/domain_static_swiss_200m.nc",
+  "source_sha256": "bf03fa8ce45270bb1bfb4e7f987b2af59e0a18db7a16b1d83fd2ed33c64b7372",
+  "strength": 1.0,
+  "water_policy": "preserve"
+}
