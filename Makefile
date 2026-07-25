@@ -5,12 +5,14 @@ HICAR_CONTRACT_TESTS := \
 	tests/test_hicar_output_metadata.py \
 	tests/test_hicar_restart_initialization.py
 
-.PHONY: help externals install-dev test test-hicar-contract test-all syntax check
+.PHONY: help externals install-dev recovery-audit test test-hicar-contract test-all syntax check
 
 help:
 	@echo "ICON-to-HICAR coordinator"
 	@echo "  make externals   initialize the pinned public HICAR source"
 	@echo "  make install-dev install local validation/test dependencies"
+	@echo "  make recovery-audit"
+	@echo "                    audit cold-start deletion readiness"
 	@echo "  make test        run the portable coordinator regression suite"
 	@echo "  make test-hicar-contract"
 	@echo "                    check the active HICAR source-development contract"
@@ -23,6 +25,9 @@ externals:
 
 install-dev:
 	$(PYTHON) -m pip install -r requirements/dev.txt
+
+recovery-audit:
+	./scripts/check_recovery_readiness.sh
 
 test:
 	$(PYTHON) -m pytest -q \

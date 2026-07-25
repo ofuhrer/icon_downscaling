@@ -54,12 +54,14 @@ validation reports are.
 | `tests/` | Coordinator regression and contract tests |
 | `validation/` | Small cross-case runtime probes and rank-layout helpers |
 | `orchestration/` | Reserved design boundary for future stateful campaign control |
+| `recovery/` | Source-protection and rebuild-critical artifact inventory |
 | `HICAR/` | Pinned HICAR fork submodule |
 | `externals/` | Locked metadata for optional external source references |
 | `fieldextra/` | Optional private fieldextra checkout, ignored by the outer repository |
 | `.agents/skills/` | Durable project procedures for source, forcing, domain, configuration, and runtime work |
 | `memory/project-state.md` | Current validated milestones, blockers, and canonical artifacts |
 | `docs/architecture.md` | Design boundaries, data lifecycle, and extension rules |
+| `docs/disaster-recovery.md` | Deletion gate and clean-room rebuild procedure |
 
 The case-study layout is intentionally preserved: operational scripts often
 refer to their neighbouring configuration and validation files by relative
@@ -172,6 +174,16 @@ Large inputs and products belong in campaign scratch storage, normally below
 Do not commit credentials, access tokens, archive payloads, local build trees,
 or model data. See [the architecture guide](docs/architecture.md) for the
 boundary between source-controlled evidence and external campaign data.
+
+Before deleting a workstation checkout or `$SCRATCH/icon_hicar`, follow the
+[disaster-recovery guide](docs/disaster-recovery.md) and run:
+
+```bash
+make recovery-audit
+```
+
+This is a conservative deletion gate, not merely a source-code check. It
+requires pushed external changes and an approved durable archive contract.
 
 ## Development
 

@@ -23,7 +23,7 @@ Use `memory/project-state.md` for current milestones, validated artifacts, and u
 
 Project skills live under `.agents/skills/` and apply only when Codex is working in this workspace. Use the smallest relevant skill:
 
-- Personal/global `$balfrin-user-environment`: modules, partitions, SSH, scratch, cluster safety.
+- Project-local `$balfrin-user-environment`: modules, partitions, SSH, scratch, cluster safety.
 - Project-local `$icon-balfrin-grib`: ICON archive/FDB discovery and GRIB inspection.
 - Project-local `$icon-hicar-forcing`: fieldextra regridding, NetCDF packaging, forcing schema and validation.
 - Project-local `$icon-hicar-domain`: static domain, public land data, forcing subdomain, boundary topography relaxation.

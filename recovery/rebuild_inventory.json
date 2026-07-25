@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "status": "NOT_READY",
+  "purpose": "Track source and artifact protection required before deleting all local and Balfrin scratch copies.",
+  "hicar_repository": "git@github.com:ofuhrer/HICAR.git",
+  "hicar_source_candidates": [
+    {
+      "commit": "2999c9bd",
+      "purpose": "Fixed-height wind climatology diagnostics",
+      "current_location": "local HICAR branch",
+      "protection": {
+        "kind": "none",
+        "locator": null,
+        "ref": null,
+        "sha256": null
+      }
+    },
+    {
+      "commit": "3bbc926b",
+      "purpose": "Cloud-fraction GPU repair",
+      "current_location": "local HICAR branch",
+      "protection": {
+        "kind": "none",
+        "locator": null,
+        "ref": null,
+        "sha256": null
+      }
+    },
+    {
+      "commit": "452f7245",
+      "purpose": "Water-budget P0 candidate",
+      "current_location": "Balfrin detached candidate",
+      "protection": {
+        "kind": "none",
+        "locator": null,
+        "ref": null,
+        "sha256": null
+      }
+    },
+    {
+      "commit": "7fa268f1",
+      "purpose": "Failed v2 restart-initialization qualification candidate",
+      "current_location": "Balfrin detached candidate",
+      "protection": {
+        "kind": "none",
+        "locator": null,
+        "ref": null,
+        "sha256": null
+      }
+    },
+    {
+      "commit": "518cc10b",
+      "purpose": "Active v3 restart-persistent Noah-MP counter candidate",
+      "current_location": "Balfrin detached candidate",
+      "protection": {
+        "kind": "none",
+        "locator": null,
+        "ref": null,
+        "sha256": null
+      }
+    }
+  ],
+  "rebuild_critical_artifact_classes": [
+    {
+      "id": "qualification-trajectories",
+      "required_contents": [
+        "canonical report and ready-marker hashes",
+        "model_runs manifests",
+        "source_commit.txt",
+        "executable SHA-256",
+        "module and build-script identity",
+        "selected validator-published restart checkpoints",
+        "model logs needed to reproduce the qualification conclusion"
+      ],
+      "archive_manifest": null,
+      "restore_verification": null
+    },
+    {
+      "id": "static-and-land-initialization",
+      "required_contents": [
+        "exact qualified static-domain payloads",
+        "REA-L land-initialization payloads",
+        "payload and report ready markers",
+        "source identities and whole-file hashes"
+      ],
+      "archive_manifest": null,
+      "restore_verification": null
+    },
+    {
+      "id": "conversion-and-reference-identities",
+      "required_contents": [
+        "fieldextra source commit",
+        "fieldextra executable SHA-256",
+        "fieldextra configuration SHA-256",
+        "versioned external OGD source identities",
+        "observation/reference products that cannot be guaranteed upstream"
+      ],
+      "archive_manifest": null,
+      "restore_verification": null
+    }
+  ],
+  "regenerable_scratch_classes": [
+    {
+      "id": "routine-forcing-cache",
+      "archive_required": false,
+      "condition": "FDB source requests, fieldextra identity, configurations, and source retention remain reproducible"
+    },
+    {
+      "id": "routine-raw-output",
+      "archive_required": false,
+      "condition": "The scientifically selected compressed products, manifests, and qualification evidence are durably archived"
+    },
+    {
+      "id": "build-products",
+      "archive_required": false,
+      "condition": "Source commits, module stack, build scripts, and executable hashes are preserved"
+    }
+  ]
+}
