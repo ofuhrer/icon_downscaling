@@ -13,6 +13,15 @@
     "sha256": "24305d0dcb8bdef8b3bcc5c4e010cf5d6322e4a9db3b0e332a78c2e3edbac7a3",
     "status": "PASS"
   },
+  "source_protection_addenda": [
+    {
+      "record": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/restart-v5-recovery-record.json",
+      "record_sha256": "6635338a8db81703e13328297a181702267a72b087d2448dc4ceb6a40c09b814",
+      "archive_manifest": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-restart-v5-record-v1.json",
+      "archive_manifest_sha256": "0ecbf2493a68ed0e8cb851e04db713f0709c16ee204a4856f8050d9b435baf7e",
+      "status": "PASS"
+    }
+  ],
   "hicar_source_candidates": [
     {
       "commit": "2999c9bdf6e0ed50a7f44311e2c8555e26848d31",
@@ -79,6 +88,19 @@
         "ref": "refs/heads/recovery/restart-timestep-v3-unqualified-518cc10b",
         "sha256": "baf7849b62a03852858796f26826cc391fb5c38267c5517e6e2443d410980c7e"
       }
+    },
+    {
+      "commit": "35dad662580bb27893626054bf156a63f5130ab9",
+      "purpose": "Unqualified v5 restart-cadence-state national-failed candidate",
+      "current_location": "Balfrin validation branch",
+      "classification": "UNQUALIFIED_NATIONAL_FAIL",
+      "protection": {
+        "kind": "git_bundle",
+        "locator": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/source/hicar-balfrin-restart-cadence-state-v5-35dad662.bundle",
+        "ref": "refs/heads/validation/restart-cadence-state-v5",
+        "sha256": "d0560c5adb20a1a15e7549f3c225a2df17896d1a70a805ddca90d7674bd04d5b"
+      },
+      "recovery_record": "recovery/restart_v5_recovery_record.json"
     }
   ],
   "hicar_dirty_patch": {
@@ -104,12 +126,16 @@
         "foundation": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-foundation-v1.json",
         "foundation_sha256": "e7a3dba9f5c8b90922cefb01efc8c7eff8f1b4d6bb73ea6fa563638445bb4757",
         "qualification_reports": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-qualification-reports-v1.json",
-        "qualification_reports_sha256": "946fcaaa3a589dd105f48a0e3ac65d4d1645c20f334313d6b198904c45e66621"
+        "qualification_reports_sha256": "946fcaaa3a589dd105f48a0e3ac65d4d1645c20f334313d6b198904c45e66621",
+        "restart_v5_evidence": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-restart-v5-evidence-v1.json",
+        "restart_v5_evidence_sha256": "7cd8347231981361e922f3361a6c04946a325c155e193abe5e87bfc82b8789b1"
       },
       "restore_verification": {
         "report": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-foundation-v1.readback.json",
         "sha256": "48cacc737717fd39ca67623463cc2175a25450657e672e1d1437d71ec734a0eb",
-        "status": "PASS"
+        "status": "PASS",
+        "restart_v5_evidence_readback": "PASS",
+        "restart_v5_recovered_commit": "35dad662580bb27893626054bf156a63f5130ab9"
       }
     },
     {

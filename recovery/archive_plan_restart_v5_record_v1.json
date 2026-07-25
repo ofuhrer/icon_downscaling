@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "archive_id": "icon-downscaling-recovery-restart-v5-record-v1",
+  "archive_root": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1",
+  "manifest": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-restart-v5-record-v1.json",
+  "provenance": {
+    "classification": "UNQUALIFIED_NATIONAL_FAIL",
+    "evidence_manifest": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-restart-v5-evidence-v1.json",
+    "evidence_manifest_sha256": "7cd8347231981361e922f3361a6c04946a325c155e193abe5e87bfc82b8789b1"
+  },
+  "files": [
+    {
+      "id": "recovery-record:restart-v5",
+      "source": "/scratch/mch/olifu/icon_hicar/recovery_staging/restart-v5-35dad662/restart_v5_recovery_record.json",
+      "destination": "manifests/restart-v5-recovery-record.json",
+      "classification": "UNQUALIFIED_NATIONAL_FAIL_RECOVERY_RECORD",
+      "expected_sha256": "6635338a8db81703e13328297a181702267a72b087d2448dc4ceb6a40c09b814"
+    }
+  ]
+}

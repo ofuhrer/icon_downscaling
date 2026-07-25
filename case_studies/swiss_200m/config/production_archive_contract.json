@@ -47,12 +47,30 @@
                 "status": "PASS"
             }
         },
+        "restart_v5_evidence_archive": {
+            "classification": "UNQUALIFIED_NATIONAL_FAIL",
+            "qualification_effect": "NONE",
+            "manifest": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-restart-v5-evidence-v1.json",
+            "manifest_sha256": "7cd8347231981361e922f3361a6c04946a325c155e193abe5e87bfc82b8789b1",
+            "plan": "recovery/archive_plan_restart_v5_evidence_v1.json",
+            "plan_sha256": "4448fdddd0593a2e6d635170c1c47fa56a9515d86682619542135eb924f5b88f",
+            "file_count": 15,
+            "size_bytes": 30656922,
+            "readback_status": "PASS",
+            "recovery_record": {
+                "path": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/restart-v5-recovery-record.json",
+                "sha256": "6635338a8db81703e13328297a181702267a72b087d2448dc4ceb6a40c09b814",
+                "archive_manifest": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-restart-v5-record-v1.json",
+                "archive_manifest_sha256": "0ecbf2493a68ed0e8cb851e04db713f0709c16ee204a4856f8050d9b435baf7e"
+            }
+        },
         "selection_boundary": {
             "archived": [
                 "Unpushed HICAR commit histories and the exact local dirty source patch.",
                 "Exact Swiss 200 m static domains and REA-L land initialization.",
                 "Fieldextra executable/configuration identity, ICON grid, and selected public OGD inputs.",
-                "Minimal v1/v2 failed national restart trajectories and all canonical v1/v2/v3 restart reports."
+                "Minimal v1/v2 failed national restart trajectories and all canonical v1/v2/v3 restart reports.",
+                "V5 source, patch, build identity, model manifests, bounded bridge-policy PASS, and national FAIL evidence."
             ],
             "regenerable_not_archived": [
                 "Routine forcing cache.",
