@@ -5,7 +5,10 @@ HICAR_CONTRACT_TESTS := \
 	tests/test_hicar_output_metadata.py \
 	tests/test_hicar_restart_initialization.py
 
-.PHONY: help externals install-dev recovery-audit test test-hicar-contract test-all syntax check
+.PHONY: help externals install-dev recovery-audit recovery-archive-verify test test-hicar-contract test-all syntax check
+
+RECOVERY_ARCHIVE_MANIFEST ?= /store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-foundation-v1.json
+RECOVERY_REPORTS_MANIFEST ?= /store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-qualification-reports-v1.json
 
 help:
 	@echo "ICON-to-HICAR coordinator"
@@ -13,6 +16,8 @@ help:
 	@echo "  make install-dev install local validation/test dependencies"
 	@echo "  make recovery-audit"
 	@echo "                    audit cold-start deletion readiness"
+	@echo "  make recovery-archive-verify"
+	@echo "                    read back and verify the durable recovery archive"
 	@echo "  make test        run the portable coordinator regression suite"
 	@echo "  make test-hicar-contract"
 	@echo "                    check the active HICAR source-development contract"
@@ -28,6 +33,12 @@ install-dev:
 
 recovery-audit:
 	./scripts/check_recovery_readiness.sh
+
+recovery-archive-verify:
+	$(PYTHON) ./scripts/verify_recovery_archive.py \
+		--manifest "$(RECOVERY_ARCHIVE_MANIFEST)"
+	$(PYTHON) ./scripts/verify_recovery_archive.py \
+		--manifest "$(RECOVERY_REPORTS_MANIFEST)"
 
 test:
 	$(PYTHON) -m pytest -q \

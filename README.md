@@ -183,7 +183,11 @@ make recovery-audit
 ```
 
 This is a conservative deletion gate, not merely a source-code check. It
-requires pushed external changes and an approved durable archive contract.
+requires protected external changes and an approved durable archive contract.
+The compact recovery foundation in
+`/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1` can be checked
+independently on Balfrin with `make recovery-archive-verify`; it does not by
+itself authorize an annual production campaign.
 
 ## Development
 

@@ -1,65 +1,88 @@
 {
   "schema_version": 1,
-  "status": "NOT_READY",
+  "status": "READY",
   "purpose": "Track source and artifact protection required before deleting all local and Balfrin scratch copies.",
   "hicar_repository": "git@github.com:ofuhrer/HICAR.git",
+  "source_protection_manifest": {
+    "path": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/source/source-protection-manifest-v1.json",
+    "sha256": "24305d0dcb8bdef8b3bcc5c4e010cf5d6322e4a9db3b0e332a78c2e3edbac7a3",
+    "status": "PASS"
+  },
   "hicar_source_candidates": [
     {
-      "commit": "2999c9bd",
+      "commit": "2999c9bdf6e0ed50a7f44311e2c8555e26848d31",
       "purpose": "Fixed-height wind climatology diagnostics",
       "current_location": "local HICAR branch",
       "protection": {
-        "kind": "none",
-        "locator": null,
-        "ref": null,
-        "sha256": null
+        "kind": "git_bundle",
+        "locator": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/source/hicar-local-feature-wind-galerkin-multilevel-3bbc926b.bundle",
+        "ref": "refs/heads/feature/wind-galerkin-multilevel",
+        "sha256": "4e9c6aa0bba0bf90896baa43253cc691ba86d8e93a56527dca352ee8098f0fd7"
       }
     },
     {
-      "commit": "3bbc926b",
+      "commit": "3bbc926b891b466e6957279c61a73c567533dad9",
       "purpose": "Cloud-fraction GPU repair",
       "current_location": "local HICAR branch",
       "protection": {
-        "kind": "none",
-        "locator": null,
-        "ref": null,
-        "sha256": null
+        "kind": "git_bundle",
+        "locator": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/source/hicar-local-feature-wind-galerkin-multilevel-3bbc926b.bundle",
+        "ref": "refs/heads/feature/wind-galerkin-multilevel",
+        "sha256": "4e9c6aa0bba0bf90896baa43253cc691ba86d8e93a56527dca352ee8098f0fd7"
       }
     },
     {
-      "commit": "452f7245",
+      "commit": "62f16b5c76ef65d8249e38de767e591415c533a2",
+      "purpose": "Failed v1 restart-initialization diagnostic candidate",
+      "current_location": "Balfrin qualification branch",
+      "protection": {
+        "kind": "git_bundle",
+        "locator": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/source/hicar-balfrin-restart-init-v1-62f16b5c.bundle",
+        "ref": "refs/heads/qualification/restart-initialization",
+        "sha256": "99ba840b8aa985927da1eb38539522496947b8aefadb4bd404c70e914fc97d7d"
+      }
+    },
+    {
+      "commit": "452f7245c3cd47957a0ee01c056b604712372598",
       "purpose": "Water-budget P0 candidate",
       "current_location": "Balfrin detached candidate",
       "protection": {
-        "kind": "none",
-        "locator": null,
-        "ref": null,
-        "sha256": null
+        "kind": "git_bundle",
+        "locator": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/source/hicar-balfrin-candidates-452f7245-7fa268f1-518cc10b.bundle",
+        "ref": "refs/heads/recovery/water-budget-p0-452f7245",
+        "sha256": "baf7849b62a03852858796f26826cc391fb5c38267c5517e6e2443d410980c7e"
       }
     },
     {
-      "commit": "7fa268f1",
+      "commit": "7fa268f1ae61d7be8567f32d85bf55557b104915",
       "purpose": "Failed v2 restart-initialization qualification candidate",
       "current_location": "Balfrin detached candidate",
       "protection": {
-        "kind": "none",
-        "locator": null,
-        "ref": null,
-        "sha256": null
+        "kind": "git_bundle",
+        "locator": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/source/hicar-balfrin-candidates-452f7245-7fa268f1-518cc10b.bundle",
+        "ref": "refs/heads/recovery/restart-init-v2-failed-7fa268f1",
+        "sha256": "baf7849b62a03852858796f26826cc391fb5c38267c5517e6e2443d410980c7e"
       }
     },
     {
-      "commit": "518cc10b",
-      "purpose": "Active v3 restart-persistent Noah-MP counter candidate",
+      "commit": "518cc10bac88e1eae9acec6329f866516c7f4dd0",
+      "purpose": "Unqualified v3 bridge-failed restart-persistent Noah-MP counter candidate",
       "current_location": "Balfrin detached candidate",
       "protection": {
-        "kind": "none",
-        "locator": null,
-        "ref": null,
-        "sha256": null
+        "kind": "git_bundle",
+        "locator": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/source/hicar-balfrin-candidates-452f7245-7fa268f1-518cc10b.bundle",
+        "ref": "refs/heads/recovery/restart-timestep-v3-unqualified-518cc10b",
+        "sha256": "baf7849b62a03852858796f26826cc391fb5c38267c5517e6e2443d410980c7e"
       }
     }
   ],
+  "hicar_dirty_patch": {
+    "base_commit": "3bbc926b891b466e6957279c61a73c567533dad9",
+    "locator": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/source/hicar-local-dirty-after-3bbc926b.patch",
+    "sha256": "4140888de16402e66e00968850b3951c91bf6147ebb52f2a953fec6e7beab57b",
+    "apply_check": "PASS",
+    "protection_manifest": "recovery/source_protection_manifest_v1.json"
+  },
   "rebuild_critical_artifact_classes": [
     {
       "id": "qualification-trajectories",
@@ -72,8 +95,17 @@
         "selected validator-published restart checkpoints",
         "model logs needed to reproduce the qualification conclusion"
       ],
-      "archive_manifest": null,
-      "restore_verification": null
+      "archive_manifest": {
+        "foundation": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-foundation-v1.json",
+        "foundation_sha256": "e7a3dba9f5c8b90922cefb01efc8c7eff8f1b4d6bb73ea6fa563638445bb4757",
+        "qualification_reports": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-qualification-reports-v1.json",
+        "qualification_reports_sha256": "946fcaaa3a589dd105f48a0e3ac65d4d1645c20f334313d6b198904c45e66621"
+      },
+      "restore_verification": {
+        "report": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-foundation-v1.readback.json",
+        "sha256": "48cacc737717fd39ca67623463cc2175a25450657e672e1d1437d71ec734a0eb",
+        "status": "PASS"
+      }
     },
     {
       "id": "static-and-land-initialization",
@@ -83,8 +115,15 @@
         "payload and report ready markers",
         "source identities and whole-file hashes"
       ],
-      "archive_manifest": null,
-      "restore_verification": null
+      "archive_manifest": {
+        "path": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-foundation-v1.json",
+        "sha256": "e7a3dba9f5c8b90922cefb01efc8c7eff8f1b4d6bb73ea6fa563638445bb4757"
+      },
+      "restore_verification": {
+        "report": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-foundation-v1.readback.json",
+        "sha256": "48cacc737717fd39ca67623463cc2175a25450657e672e1d1437d71ec734a0eb",
+        "status": "PASS"
+      }
     },
     {
       "id": "conversion-and-reference-identities",
@@ -95,8 +134,15 @@
         "versioned external OGD source identities",
         "observation/reference products that cannot be guaranteed upstream"
       ],
-      "archive_manifest": null,
-      "restore_verification": null
+      "archive_manifest": {
+        "path": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-foundation-v1.json",
+        "sha256": "e7a3dba9f5c8b90922cefb01efc8c7eff8f1b4d6bb73ea6fa563638445bb4757"
+      },
+      "restore_verification": {
+        "report": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-foundation-v1.readback.json",
+        "sha256": "48cacc737717fd39ca67623463cc2175a25450657e672e1d1437d71ec734a0eb",
+        "status": "PASS"
+      }
     }
   ],
   "regenerable_scratch_classes": [

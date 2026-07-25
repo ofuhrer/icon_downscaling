@@ -1,8 +1,65 @@
 {
   "schema_version": 1,
-  "status": "UNRESOLVED",
-  "purpose": "Durable archive and retention contract required before a one-year or 20-year HICAR campaign may be authorized.",
-  "classification_and_candidates": {
+    "status": "UNRESOLVED",
+    "purpose": "Durable archive and retention contract required before a one-year or 20-year HICAR campaign may be authorized.",
+    "recovery_foundation": {
+        "status": "PASS",
+        "destination": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1",
+        "owner": "olifu",
+        "group": "s83",
+        "scope": "Compact rebuild-critical recovery foundation; not a routine annual-production output archive.",
+        "annual_production_authorization": false,
+        "storage_policy": {
+            "role": "Backed, high-resilience online storage for medium- to long-term retention.",
+            "source": "https://meteoswiss.atlassian.net/wiki/spaces/CSCS/pages/1250197512/CSCS+Resources+2026",
+            "migration_note": "The storage guidance names a future /store_new to /store migration; retain hashes and update locators without changing archive identities."
+        },
+        "source_protection": {
+            "manifest": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/source/source-protection-manifest-v1.json",
+            "manifest_sha256": "24305d0dcb8bdef8b3bcc5c4e010cf5d6322e4a9db3b0e332a78c2e3edbac7a3",
+            "status": "PASS"
+        },
+        "artifact_archive": {
+            "manifest": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-foundation-v1.json",
+            "manifest_sha256": "e7a3dba9f5c8b90922cefb01efc8c7eff8f1b4d6bb73ea6fa563638445bb4757",
+            "plan_sha256": "1008b0bd5d2d693032387e76bcc50be8a6d1d80b65969cc92de05eb1d5fd5335",
+            "file_count": 68,
+            "size_bytes": 101389839078,
+            "readback": {
+                "job_id": "4937913",
+                "report": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-foundation-v1.readback.json",
+                "report_sha256": "48cacc737717fd39ca67623463cc2175a25450657e672e1d1437d71ec734a0eb",
+                "status": "PASS"
+            }
+        },
+        "qualification_report_archive": {
+            "manifest": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-qualification-reports-v1.json",
+            "manifest_sha256": "946fcaaa3a589dd105f48a0e3ac65d4d1645c20f334313d6b198904c45e66621",
+            "plan_sha256": "0ea843f6939792ec64d97e3ad401a1a8cae8d3b738d21a1795b3d399902b3767",
+            "file_count": 3,
+            "size_bytes": 249920,
+            "readback": {
+                "job_id": "4937916",
+                "report": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-qualification-reports-v1.readback.json",
+                "report_sha256": "461c762247bee56366af8cef3fc1496e74a603a1fb9fbcea268515c33c816d41",
+                "status": "PASS"
+            }
+        },
+        "selection_boundary": {
+            "archived": [
+                "Unpushed HICAR commit histories and the exact local dirty source patch.",
+                "Exact Swiss 200 m static domains and REA-L land initialization.",
+                "Fieldextra executable/configuration identity, ICON grid, and selected public OGD inputs.",
+                "Minimal v1/v2 failed national restart trajectories and all canonical v1/v2/v3 restart reports."
+            ],
+            "regenerable_not_archived": [
+                "Routine forcing cache.",
+                "Bulk raw model history and ordinary build directories.",
+                "Authoritative REA-L fields retained in institutional FDB."
+            ]
+        }
+    },
+    "classification_and_candidates": {
     "proposed_retention_category": "Retention (facultative)",
     "classification_status": "PENDING_DATA_OWNER_APPROVAL",
     "rationale": "The outputs are reproducible climate grids retained for validation and later analysis; the approved MeteoSwiss guideline lists climate grids as the example for facultative retention rather than irreplaceable national-heritage archiving.",

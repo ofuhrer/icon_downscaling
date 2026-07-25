@@ -54,6 +54,64 @@ They need not be archived merely to make a multi-terabyte scratch tree
 persistent. Their source requests, exact transformation identities, selected
 scientific products, and qualification evidence do need durable protection.
 
+## Recovery foundation archive
+
+The current compact recovery foundation is rooted at:
+
+```text
+/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1
+```
+
+It is deliberately separate from `$SCRATCH`. The MeteoSwiss storage guidance
+describes this online store tier as backed and suitable for medium- to
+long-term data. That guidance also names a future `/store_new` to `/store`
+migration, so consumers must use the recorded manifest path rather than
+assuming the namespace will never change.
+
+The foundation consists of:
+
+- `source/source-protection-manifest-v1.json`, checksum, and ready marker for
+  the verified HICAR bundles and exported working-tree patch;
+- `manifests/archive-foundation-v1.json` and ready marker for the selected
+  static domains, land initialization, conversion/reference identities, and
+  exact v1/v2 failed restart-comparison artifacts;
+- `manifests/archive-qualification-reports-v1.json` and ready marker for the
+  canonical v1/v2/v3 failed restart reports;
+- checksum-bound `*.readback.json` reports proving an independent full
+  post-publication read of both archives;
+- immutable per-file archive reports and ready markers below `artifacts/`.
+
+Small canonical qualification reports also remain in the GitHub coordinator
+history. The durable copies retain the deliberate scientific fact that these
+failed reports did not publish qualification ready markers; the archive's own
+ready markers assert byte-complete retention, not scientific qualification.
+
+The HICAR bundles are audit records, not qualification claims. In particular,
+the v2 candidate is a failed national comparison and
+`518cc10bac88e1eae9acec6329f866516c7f4dd0` is classified
+`UNQUALIFIED_BRIDGE_FAIL`.
+
+The source-controlled selections are
+`recovery/archive_plan_foundation_v1.json` and
+`recovery/archive_plan_qualification_reports_v1.json`. Publish them only
+through `scripts/archive_recovery_plan_balfrin.sbatch`; the publisher validates
+source identity, copies through a partial name, hashes the copy again, and
+creates ready markers last. On Balfrin, independently verify every published
+byte with:
+
+```bash
+module use /mch-environment/v8/modules
+module load python/3.11.7
+make recovery-archive-verify
+```
+
+Routine forcing and model-output caches remain intentionally excluded. The
+authoritative REA-L fields remain in institutional FDB; the archive instead
+preserves the exact fieldextra executable/configuration identities, ICON grid,
+static and land-initialization payloads, public OGD reference inputs, and
+minimal failed-qualification trajectories needed to reproduce the current
+scientific conclusions.
+
 ## Access that cannot be stored in Git
 
 Record the responsible owner and renewal procedure, but never credentials, for:

@@ -231,6 +231,57 @@ for candidate in inventory.get("hicar_source_candidates", []):
 PY
 )
 
+while IFS='|' read -r patch_locator patch_sha apply_check; do
+  if [ -z "$patch_locator" ]; then
+    fail "HICAR dirty patch has no durable locator"
+    continue
+  fi
+  case "$patch_locator" in
+    /*) patch_path="$patch_locator" ;;
+    *) patch_path="$REPO_ROOT/$patch_locator" ;;
+  esac
+  if [ ! -f "$patch_path" ]; then
+    fail "HICAR dirty patch is unavailable: $patch_locator"
+    continue
+  fi
+  observed_patch_sha=$(python3 - "$patch_path" <<'PY'
+import hashlib
+import sys
+
+digest = hashlib.sha256()
+with open(sys.argv[1], "rb") as handle:
+    for block in iter(lambda: handle.read(1024 * 1024), b""):
+        digest.update(block)
+print(digest.hexdigest())
+PY
+)
+  if [ -z "$patch_sha" ] || [ "$observed_patch_sha" != "$patch_sha" ]; then
+    fail "HICAR dirty patch checksum does not match"
+  elif [ "$apply_check" != "PASS" ]; then
+    fail "HICAR dirty patch has no recorded apply-check PASS"
+  else
+    pass "HICAR dirty patch is protected by a checksum-bound export"
+  fi
+done < <(python3 - "$REPO_ROOT/$rebuild_inventory" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    inventory = json.load(handle)
+
+patch = inventory.get("hicar_dirty_patch", {})
+print(
+    "|".join(
+        (
+            patch.get("locator") or "",
+            patch.get("sha256") or "",
+            patch.get("apply_check") or "",
+        )
+    )
+)
+PY
+)
+
 inventory_result=$(python3 - "$REPO_ROOT/$rebuild_inventory" <<'PY'
 import json
 import sys
@@ -251,13 +302,20 @@ for artifact in inventory.get("rebuild_critical_artifact_classes", []):
     if not artifact.get("archive_manifest") or not artifact.get("restore_verification"):
         unarchived.append(artifact.get("id", "UNKNOWN"))
 
+patch = inventory.get("hicar_dirty_patch", {})
+patch_ready = (
+    bool(patch.get("locator"))
+    and bool(patch.get("sha256"))
+    and patch.get("apply_check") == "PASS"
+)
 status = inventory.get("status", "MISSING")
-if status != "READY" or unprotected or unarchived:
+if status != "READY" or unprotected or unarchived or not patch_ready:
     print(
         "NOT_READY "
         f"status={status} "
         f"unprotected={','.join(unprotected) or 'none'} "
-        f"unarchived={','.join(unarchived) or 'none'}"
+        f"unarchived={','.join(unarchived) or 'none'} "
+        f"dirty_patch={'ready' if patch_ready else 'missing'}"
     )
 else:
     print("READY")
