@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
+import subprocess
 import sys
 
 
@@ -12,6 +14,13 @@ SPEC = importlib.util.spec_from_file_location("preemptible_campaign", MODULE_PAT
 MODULE = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
+RELEASE_SPEC = importlib.util.spec_from_file_location(
+    "prepare_runtime_release",
+    ROOT / "orchestration/prepare_runtime_release.py",
+)
+RELEASE_MODULE = importlib.util.module_from_spec(RELEASE_SPEC)
+sys.modules[RELEASE_SPEC.name] = RELEASE_MODULE
+RELEASE_SPEC.loader.exec_module(RELEASE_MODULE)
 
 
 class FakeSlurm:
@@ -45,6 +54,29 @@ def make_campaign(
     record_count: int = 0,
 ) -> Path:
     root = tmp_path / "campaign"
+    release_root = tmp_path / "runtime-release"
+    release = RELEASE_MODULE.build_release(ROOT, release_root, "engineering")
+    release_manifest = release_root / "runtime_release.json"
+    requirements = release_root / "requirements/balfrin-preemptible.txt"
+    python_report = tmp_path / "python_environment.json"
+    publish_json(
+        python_report,
+        {
+            "schema_version": 1,
+            "status": "PASS",
+            "purpose": "preemptible-runtime",
+            "python": sys.executable,
+            "python_version": ".".join(
+                str(item) for item in sys.version_info[:3]
+            ),
+            "runtime_release": str(release_manifest),
+            "runtime_release_sha256": MODULE.sha256(release_manifest),
+            "requirements": str(requirements),
+            "requirements_sha256": MODULE.sha256(requirements),
+            "versions": {},
+            "pip_freeze": [],
+        },
+    )
     independent_authorization = None
     if chain_count > 1:
         authorization_path = tmp_path / "independent_authorization.json"
@@ -75,7 +107,9 @@ def make_campaign(
             )
         chunk_plan = segment_root / "chunk_plan.json"
         chunk_plan.parent.mkdir(parents=True, exist_ok=True)
-        chunk_plan.write_text(json.dumps({"records": records}))
+        chunk_plan.write_text(
+            json.dumps({"records": records, "chunk_root": str(segment_root)})
+        )
         chains.append(
             {
                 "chain_id": chain_id,
@@ -101,6 +135,23 @@ def make_campaign(
         "campaign_id": "campaign-test",
         "purpose": "qualification",
         "campaign_root": str(root),
+        "runtime_release": {
+            "path": str(release_manifest),
+            "sha256": MODULE.sha256(release_manifest),
+            "release_root": str(release_root),
+            "purpose": release["purpose"],
+            "source_commit": release["source_commit"],
+            "source_dirty": release["source_dirty"],
+        },
+        "python_environment": {
+            "path": str(python_report),
+            "sha256": MODULE.sha256(python_report),
+            "python": sys.executable,
+            "python_version": ".".join(
+                str(item) for item in sys.version_info[:3]
+            ),
+            "requirements_sha256": MODULE.sha256(requirements),
+        },
         "independent_chain_authorization": independent_authorization,
         "production_authorization": None,
         "model": {
@@ -123,6 +174,9 @@ def make_campaign(
             "max_model_attempts": 5,
             "max_cpu_attempts": 3,
             "lease_seconds": 60,
+            "rolling_retirement": True,
+            "preserve_restart_every_segments": 30,
+            "max_unretired_segments_per_chain": 2,
         },
         "chains": chains,
         "controller": {
@@ -137,12 +191,35 @@ def make_campaign(
 
 
 def reconcile(path: Path, scheduler: FakeSlurm):
+    campaign = json.loads(path.read_text())
     return MODULE.reconcile(
         campaign_path=path,
-        repo_root=ROOT,
+        repo_root=Path(campaign["runtime_release"]["release_root"]),
         scheduler=scheduler,
         execute=True,
     )
+
+
+def execute_cpu_retirements(state: dict) -> None:
+    batch = state["cpu_batch"]
+    assert batch is not None
+    for index, task in enumerate(batch["tasks"]):
+        assert task["kind"] in {"segment_retirement", "restart_retirement"}
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "orchestration/retire_campaign_artifacts.py"),
+                "--task-file",
+                batch["task_file"],
+                "--expected-sha256",
+                batch["task_sha256"],
+                "--index",
+                str(index),
+            ],
+            text=True,
+            capture_output=True,
+        )
+        assert result.returncode == 0, result.stderr + result.stdout
 
 
 def test_preempted_model_retries_in_a_new_attempt_and_publishes_exact_union(tmp_path):
@@ -169,6 +246,8 @@ def test_preempted_model_retries_in_a_new_attempt_and_publishes_exact_union(tmp_
     run_dir.mkdir(parents=True)
     source = run_dir / "output.nc"
     source.write_bytes(b"model output")
+    restart = run_dir / "restart.nc"
+    restart.write_bytes(b"restart")
     completion = run_dir / "model_chunk_completion.json"
     publish_json(
         completion,
@@ -181,9 +260,18 @@ def test_preempted_model_retries_in_a_new_attempt_and_publishes_exact_union(tmp_
                     "2020-01-01T00:00:00",
                     "2020-01-01T01:00:00",
                 ],
-                "files": [{"path": str(source)}],
+                "files": [
+                    {
+                        "path": str(source),
+                        "size_bytes": source.stat().st_size,
+                        "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+                    }
+                ],
             },
-            "restart": {"path": str(run_dir / "restart.nc"), "sha256": "unused"},
+            "restart": {
+                "path": str(restart),
+                "sha256": hashlib.sha256(restart.read_bytes()).hexdigest(),
+            },
         },
     )
     solver = run_dir / "scientific_validation/solver_log_diagnostics.json"
@@ -200,10 +288,27 @@ def test_preempted_model_retries_in_a_new_attempt_and_publishes_exact_union(tmp_
     target.parent.mkdir(parents=True)
     target.write_bytes(source.read_bytes())
     Path(f"{target}.ready").touch()
-    publish_json(Path(f"{target}.compression.json"), {"status": "PASS"})
+    publish_json(
+        Path(f"{target}.compression.json"),
+        {
+            "status": "PASS",
+            "source": str(source.resolve()),
+            "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+            "target": str(target.resolve()),
+            "target_sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
+        },
+    )
 
     state, _actions = reconcile(campaign_path, scheduler)
+    assert state["cpu_batch"]["tasks"][0]["kind"] == "segment_retirement"
+    execute_cpu_retirements(state)
+    state, _actions = reconcile(campaign_path, scheduler)
+    assert state["cpu_batch"]["tasks"][0]["kind"] == "restart_retirement"
+    execute_cpu_retirements(state)
+    state, _actions = reconcile(campaign_path, scheduler)
     assert state["status"] == "COMPLETE"
+    assert not source.exists()
+    assert restart.exists()
     campaign_completion = Path(state["completion_report"])
     assert Path(f"{campaign_completion}.ready").is_file()
     payload = json.loads(campaign_completion.read_text())
@@ -222,6 +327,34 @@ def test_model_concurrency_is_bounded_globally_across_chains(tmp_path):
     )
     assert active == 2
     assert sum("--nodes=4" in command for command in scheduler.commands) == 2
+
+
+def test_empty_cluster_can_fill_all_eleven_four_node_slots_without_overqueue(
+    tmp_path,
+):
+    campaign_path = make_campaign(tmp_path, chain_count=12, model_slots=11)
+    scheduler = FakeSlurm()
+    state, actions = reconcile(campaign_path, scheduler)
+    model_actions = [
+        action for action in actions if action["action"] == "SUBMIT_MODEL"
+    ]
+    assert len(model_actions) == 11
+    assert len(scheduler.commands) == 11
+    assert all("--nodes=4" in command for command in scheduler.commands)
+
+    for job_id in MODULE.job_ids(state):
+        scheduler.records[job_id] = {"state": "PENDING", "exit_code": "0:0"}
+    for _ in range(3):
+        state, actions = reconcile(campaign_path, scheduler)
+        assert not [
+            action for action in actions if action["action"] == "SUBMIT_MODEL"
+        ]
+    assert len(scheduler.commands) == 11
+    assert sum(
+        len(segment["attempts"])
+        for chain in state["chains"].values()
+        for segment in chain["segments"]
+    ) == 11
 
 
 def test_forcing_uses_one_globally_throttled_cpu_array(tmp_path):
@@ -254,6 +387,24 @@ def test_slurm_query_aggregates_array_elements(monkeypatch):
     states = MODULE.Slurm().query(["123", "124"])
     assert states["123"]["state"] == "PREEMPTED"
     assert states["124"]["state"] == "COMPLETED"
+
+
+def test_hard_kill_exit_signal_is_retryable_without_a_signal_report(tmp_path):
+    attempt = {"run_dir": str(tmp_path)}
+    assert (
+        MODULE.classify_attempt_terminal(
+            attempt,
+            {"state": "FAILED", "exit_code": "0:9"},
+        )
+        == "RETRYABLE"
+    )
+    assert (
+        MODULE.classify_attempt_terminal(
+            attempt,
+            {"state": "FAILED", "exit_code": "1:0"},
+        )
+        == "TERMINAL_FAILURE"
+    )
 
 
 def test_zero_capacity_pauses_new_submissions(tmp_path):

@@ -10,6 +10,7 @@ import json
 import os
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 import uuid
@@ -17,6 +18,18 @@ from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterator
+
+try:
+    from runtime_contract import (
+        validate_python_environment,
+        validate_runtime_release,
+    )
+except ModuleNotFoundError:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from runtime_contract import (
+        validate_python_environment,
+        validate_runtime_release,
+    )
 
 ACTIVE_STATES = {
     "CONFIGURING",
@@ -88,6 +101,15 @@ def parse_exit_code(value: str | None) -> int | None:
         return None
     try:
         return int(value.split(":", 1)[0])
+    except ValueError:
+        return None
+
+
+def parse_exit_signal(value: str | None) -> int | None:
+    if not value or ":" not in value:
+        return None
+    try:
+        return int(value.split(":", 1)[1])
     except ValueError:
         return None
 
@@ -293,6 +315,47 @@ def validate_campaign_authorizations(campaign: dict[str, Any]) -> None:
             raise ValueError("production authorization is no longer accepted")
 
 
+def validate_campaign_runtime(
+    campaign: dict[str, Any],
+    repo_root: Path,
+) -> None:
+    evidence = campaign.get("runtime_release")
+    if not evidence:
+        raise ValueError("campaign lacks a frozen runtime release")
+    path = Path(evidence["path"])
+    if sha256(path) != evidence["sha256"]:
+        raise ValueError("runtime release manifest changed")
+    payload = validate_runtime_release(
+        path,
+        expected_root=repo_root,
+        production=campaign.get("purpose", "qualification") == "production",
+    )
+    if (
+        payload["release_root"] != evidence["release_root"]
+        or payload["source_commit"] != evidence["source_commit"]
+        or payload["source_dirty"] != evidence["source_dirty"]
+    ):
+        raise ValueError("runtime release evidence changed")
+    python_evidence = campaign.get("python_environment")
+    if not python_evidence:
+        raise ValueError("campaign lacks a frozen Python environment")
+    python_report = Path(python_evidence["path"])
+    if sha256(python_report) != python_evidence["sha256"]:
+        raise ValueError("Python environment report changed")
+    python_payload = validate_python_environment(
+        python_report,
+        path,
+        smoke=False,
+    )
+    if (
+        python_payload["python"] != python_evidence["python"]
+        or python_payload["python_version"] != python_evidence["python_version"]
+        or python_payload["requirements_sha256"]
+        != python_evidence["requirements_sha256"]
+    ):
+        raise ValueError("Python environment evidence changed")
+
+
 def new_state(campaign_path: Path, campaign: dict[str, Any]) -> dict[str, Any]:
     chains: dict[str, Any] = {}
     for chain in campaign["chains"]:
@@ -305,6 +368,9 @@ def new_state(campaign_path: Path, campaign: dict[str, Any]) -> dict[str, Any]:
                     "model_completion": None,
                     "solver_report": None,
                     "compression_complete": False,
+                    "segment_retirement": None,
+                    "restart_retirement": None,
+                    "lifecycle_complete": False,
                     "cpu_failures": {},
                     "terminal_error": None,
                 }
@@ -337,6 +403,11 @@ def load_or_create_state(
         state = load_json(state_path)
         if state.get("campaign_sha256") != sha256(campaign_path):
             raise ValueError("controller state belongs to a different campaign plan")
+        for chain in state.get("chains", {}).values():
+            for segment in chain.get("segments", []):
+                segment.setdefault("segment_retirement", None)
+                segment.setdefault("restart_retirement", None)
+                segment.setdefault("lifecycle_complete", False)
         return state
     state = new_state(campaign_path, campaign)
     write_json_atomic(state_path, state)
@@ -459,6 +530,131 @@ def compression_tasks(
     return tasks
 
 
+def segment_retirement_task(
+    campaign: dict[str, Any],
+    chain_id: str,
+    segment: dict[str, Any],
+    runtime: dict[str, Any],
+    index: int,
+) -> dict[str, Any] | None:
+    if (
+        completion_report(runtime) is None
+        or not runtime.get("solver_report")
+        or not runtime.get("compression_complete")
+    ):
+        return None
+    compressions = []
+    for item in compression_tasks(chain_id, segment, runtime):
+        compressions.append(
+            {
+                "source": item["source"],
+                "target": item["target"],
+                "report": f"{item['target']}.compression.json",
+            }
+        )
+    successful_attempt = runtime["attempts"][-1]
+    obsolete = [
+        attempt["attempt_dir"]
+        for attempt in runtime["attempts"][:-1]
+        if attempt.get("status")
+        not in {"SUBMITTING", "SUBMITTED", "RUNNING", "PUBLISHED"}
+    ]
+    return {
+        "kind": "segment_retirement",
+        "task_id": f"{chain_id}:{segment['segment_id']}:segment-retirement",
+        "chain_id": chain_id,
+        "segment_id": segment["segment_id"],
+        "segment_index": index,
+        "campaign_root": campaign["campaign_root"],
+        "plan": segment["plan"],
+        "forcing_publication": segment["forcing_publication"],
+        "model_completion": runtime["model_completion"],
+        "successful_attempt_id": successful_attempt["attempt_id"],
+        "compressions": compressions,
+        "obsolete_attempt_dirs": obsolete,
+        "report": str(
+            Path(
+                segment.get(
+                    "lifecycle_root",
+                    Path(segment["attempt_root"]).parent / "lifecycle",
+                )
+            )
+            / "segment_retirement.json"
+        ),
+    }
+
+
+def preserve_restart(
+    campaign: dict[str, Any],
+    segment: dict[str, Any],
+    *,
+    final: bool,
+) -> bool:
+    if final:
+        return True
+    interval = int(
+        campaign["policy"].get("preserve_restart_every_segments", 30)
+    )
+    return interval > 0 and int(segment["sequence"]) % interval == 0
+
+
+def restart_retirement_task(
+    campaign: dict[str, Any],
+    state: dict[str, Any],
+    chain: dict[str, Any],
+    index: int,
+) -> dict[str, Any] | None:
+    segment = chain["segments"][index]
+    runtime = runtime_segment(state, chain["chain_id"], index)
+    if completion_report(runtime) is None or runtime["status"] != "COMPLETE":
+        return None
+    final = index == len(chain["segments"]) - 1
+    successor_path = None
+    if not final:
+        successor = runtime_segment(state, chain["chain_id"], index + 1)
+        if completion_report(successor) is None or successor["status"] != "COMPLETE":
+            return None
+        successor_path = successor["model_completion"]
+    return {
+        "kind": "restart_retirement",
+        "task_id": (
+            f"{chain['chain_id']}:{segment['segment_id']}:restart-retirement"
+        ),
+        "chain_id": chain["chain_id"],
+        "segment_id": segment["segment_id"],
+        "segment_index": index,
+        "campaign_root": campaign["campaign_root"],
+        "previous_completion": runtime["model_completion"],
+        "next_completion": successor_path,
+        "preserve": preserve_restart(campaign, segment, final=final),
+        "report": str(
+            Path(
+                segment.get(
+                    "lifecycle_root",
+                    Path(segment["attempt_root"]).parent / "lifecycle",
+                )
+            )
+            / "restart_retirement.json"
+        ),
+    }
+
+
+def retirement_task_ready(task: dict[str, Any]) -> bool:
+    try:
+        report = Path(task["report"])
+        if not report.is_file() or not Path(f"{report}.ready").is_file():
+            return False
+        payload = load_json(report)
+        return (
+            payload.get("status") == "PASS"
+            and payload.get("task_id") == task["task_id"]
+            and payload.get("task_sha256") == json_payload_sha256(task)
+            and payload.get("action") in {"PRESERVED", "RETIRED"}
+        )
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return False
+
+
 def task_ready(task: dict[str, Any], campaign: dict[str, Any]) -> bool:
     try:
         kind = task["kind"]
@@ -495,6 +691,8 @@ def task_ready(task: dict[str, Any], campaign: dict[str, Any]) -> bool:
                 and report.is_file()
                 and load_json(report).get("status") == "PASS"
             )
+        if kind in {"segment_retirement", "restart_retirement"}:
+            return retirement_task_ready(task)
         raise ValueError(f"unsupported task kind: {kind}")
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
         return False
@@ -583,11 +781,14 @@ def classify_attempt_terminal(
 ) -> str:
     scheduler_state = normalized_state(scheduler_record["state"])
     exit_code = parse_exit_code(scheduler_record.get("exit_code"))
+    exit_signal = parse_exit_signal(scheduler_record.get("exit_code"))
     interruption = Path(attempt["run_dir"]) / "attempt_interrupted.json"
     if scheduler_state in RETRYABLE_STATES:
         return "RETRYABLE"
     if scheduler_state == "FAILED" and (
-        exit_code == PREEMPTED_EXIT_CODE or interruption.is_file()
+        exit_code == PREEMPTED_EXIT_CODE
+        or exit_signal in {9, 15}
+        or interruption.is_file()
     ):
         return "RETRYABLE"
     if scheduler_state == SUCCESS_STATE:
@@ -690,6 +891,36 @@ def refresh_solver_and_compression(
             tasks = compression_tasks(chain_id, segment, runtime)
             runtime["compression_complete"] = bool(tasks) and all(
                 task_ready(task, campaign) for task in tasks
+            )
+
+
+def refresh_lifecycle(
+    campaign: dict[str, Any],
+    state: dict[str, Any],
+) -> None:
+    for chain in campaign["chains"]:
+        chain_id = chain["chain_id"]
+        for index, segment in enumerate(chain["segments"]):
+            runtime = runtime_segment(state, chain_id, index)
+            segment_task = segment_retirement_task(
+                campaign, chain_id, segment, runtime, index
+            )
+            runtime["segment_retirement"] = (
+                segment_task["report"]
+                if segment_task and retirement_task_ready(segment_task)
+                else None
+            )
+            restart_task = restart_retirement_task(
+                campaign, state, chain, index
+            )
+            runtime["restart_retirement"] = (
+                restart_task["report"]
+                if restart_task and retirement_task_ready(restart_task)
+                else None
+            )
+            runtime["lifecycle_complete"] = bool(
+                runtime.get("segment_retirement")
+                and runtime.get("restart_retirement")
             )
 
 
@@ -831,6 +1062,47 @@ def pending_cpu_tasks(
     if solver_tasks:
         return solver_tasks
 
+    compression = []
+    for chain in campaign["chains"]:
+        chain_id = chain["chain_id"]
+        for index, segment in enumerate(chain["segments"]):
+            runtime = runtime_segment(state, chain_id, index)
+            if runtime["compression_complete"] or completion_report(runtime) is None:
+                continue
+            for task in compression_tasks(chain_id, segment, runtime):
+                task["segment_index"] = index
+                if not task_ready(task, campaign):
+                    compression.append(task)
+    if compression:
+        return compression[:1000]
+
+    segment_retirements = []
+    for chain in campaign["chains"]:
+        chain_id = chain["chain_id"]
+        for index, segment in enumerate(chain["segments"]):
+            runtime = runtime_segment(state, chain_id, index)
+            if runtime.get("segment_retirement"):
+                continue
+            task = segment_retirement_task(
+                campaign, chain_id, segment, runtime, index
+            )
+            if task and not task_ready(task, campaign):
+                segment_retirements.append(task)
+    if segment_retirements:
+        return segment_retirements[:1000]
+
+    restart_retirements = []
+    for chain in campaign["chains"]:
+        for index, _segment in enumerate(chain["segments"]):
+            runtime = runtime_segment(state, chain["chain_id"], index)
+            if runtime.get("restart_retirement"):
+                continue
+            task = restart_retirement_task(campaign, state, chain, index)
+            if task and not task_ready(task, campaign):
+                restart_retirements.append(task)
+    if restart_retirements:
+        return restart_retirements[:1000]
+
     finalizers = []
     for chain_id, index, segment, _runtime in eligible_prefetch_segments(
         campaign, state
@@ -873,19 +1145,7 @@ def pending_cpu_tasks(
             )
     if forcing:
         return forcing[:1000]
-
-    compression = []
-    for chain in campaign["chains"]:
-        chain_id = chain["chain_id"]
-        for index, segment in enumerate(chain["segments"]):
-            runtime = runtime_segment(state, chain_id, index)
-            if runtime["compression_complete"] or completion_report(runtime) is None:
-                continue
-            for task in compression_tasks(chain_id, segment, runtime):
-                task["segment_index"] = index
-                if not task_ready(task, campaign):
-                    compression.append(task)
-    return compression[:1000]
+    return []
 
 
 def shell_export(exports: dict[str, str]) -> str:
@@ -967,6 +1227,7 @@ def model_submission_command(
         "HICAR_PREEMPTION_HELPER": str(
             (repo_root / "orchestration/preemption.py").resolve()
         ),
+        "HICAR_VALIDATION_PYTHON": campaign["python_environment"]["python"],
     }
     if model.get("build_root"):
         exports["HICAR_MULTILEVEL_BUILD"] = model["build_root"]
@@ -1018,6 +1279,16 @@ def submit_ready_models(
     for chain_id, index in frontier_indices(campaign, state).items():
         if slots <= 0:
             break
+        unretired = sum(
+            1
+            for candidate in state["chains"][chain_id]["segments"]
+            if completion_report(candidate) is not None
+            and not candidate.get("segment_retirement")
+        )
+        if unretired >= int(
+            campaign["policy"].get("max_unretired_segments_per_chain", 2)
+        ):
+            continue
         segment = spec_segment(campaign, chain_id, index)
         runtime = runtime_segment(state, chain_id, index)
         if runtime["terminal_error"] or completion_report(runtime) is not None:
@@ -1112,7 +1383,7 @@ def submit_cpu_batch(
         "--no-requeue",
         f"--array=0-{len(tasks) - 1}%{int(state['capacity']['cpu_slots'])}",
         f"--job-name={job_name}",
-        f"--export={shell_export({'REPO_ROOT': str(repo_root), 'HICAR_CAMPAIGN_CPU_TASK_FILE': str(task_file), 'HICAR_CAMPAIGN_CPU_TASK_SHA256': task_sha256})}",
+        f"--export={shell_export({'REPO_ROOT': str(repo_root), 'HICAR_CAMPAIGN_CPU_TASK_FILE': str(task_file), 'HICAR_CAMPAIGN_CPU_TASK_SHA256': task_sha256, 'HICAR_VALIDATION_PYTHON': campaign['python_environment']['python']})}",
         str(script),
     ]
     actions.append(
@@ -1200,6 +1471,18 @@ def exact_chain_output_times(
                     "report_sha256": sha256(compression_path),
                 }
             )
+        segment_retirement = Path(runtime["segment_retirement"])
+        restart_retirement = Path(runtime["restart_retirement"])
+        for path, label in (
+            (segment_retirement, "segment retirement"),
+            (restart_retirement, "restart retirement"),
+        ):
+            lifecycle = published_json(path, label)
+            if (
+                lifecycle.get("status") != "PASS"
+                or lifecycle.get("action") not in {"PRESERVED", "RETIRED"}
+            ):
+                raise ValueError(f"{label} is not complete: {path}")
         evidence.append(
             {
                 "segment_id": segment["segment_id"],
@@ -1210,6 +1493,10 @@ def exact_chain_output_times(
                 "solver_report": str(solver_path),
                 "solver_report_sha256": sha256(solver_path),
                 "compressed": compressed,
+                "segment_retirement": str(segment_retirement),
+                "segment_retirement_sha256": sha256(segment_retirement),
+                "restart_retirement": str(restart_retirement),
+                "restart_retirement_sha256": sha256(restart_retirement),
             }
         )
         previous_end = segment["end"]
@@ -1291,7 +1578,11 @@ def update_campaign_status(
                 blocked.append(
                     f"{chain_id}/{segment['segment_id']}: {runtime['terminal_error']}"
                 )
-            if runtime["status"] != "COMPLETE" or not runtime["compression_complete"]:
+            if (
+                runtime["status"] != "COMPLETE"
+                or not runtime["compression_complete"]
+                or not runtime.get("lifecycle_complete")
+            ):
                 complete = False
     if blocked:
         state["status"] = "BLOCKED"
@@ -1323,6 +1614,7 @@ def reconcile(
     if campaign.get("model", {}).get("partition") != "preemptible":
         raise ValueError("campaign heavy-model partition must be preemptible")
     validate_campaign_authorizations(campaign)
+    validate_campaign_runtime(campaign, repo_root)
     state_path, lease_path = campaign_paths(campaign)
     actions: list[dict[str, Any]] = []
     with lease(lease_path, int(campaign["policy"]["lease_seconds"])):
@@ -1335,6 +1627,7 @@ def reconcile(
             campaign, state, scheduler_states, scheduler, execute
         )
         refresh_solver_and_compression(campaign, state)
+        refresh_lifecycle(campaign, state)
         update_campaign_status(campaign, state)
         if state["status"] == "ACTIVE":
             submit_ready_models(
@@ -1461,6 +1754,7 @@ def main() -> int:
         return 0
     if args.command == "init":
         validate_campaign_authorizations(campaign)
+        validate_campaign_runtime(campaign, args.repo_root.resolve())
         with lease(lease_path, int(campaign["policy"]["lease_seconds"])):
             state = load_or_create_state(campaign_path, campaign, state_path)
         print_summary(state)

@@ -15,6 +15,11 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from runtime_contract import (
+    validate_python_environment,
+    validate_runtime_release,
+)
+
 TIME_FORMAT = "%Y-%m-%dT%H:%M:%S"
 COMMIT = re.compile(r"^[0-9a-f]{40}$")
 SLURM_TIME = re.compile(r"^(?:(\d+)-)?(\d{1,2}):([0-5]\d):([0-5]\d)$")
@@ -229,6 +234,9 @@ def build_campaign(
         )
     if not 1 <= cpu_slots <= 2:
         raise ValueError("policy.cpu_slots must be within 1..2")
+    rolling_retirement = policy.get("rolling_retirement", True)
+    if not isinstance(rolling_retirement, bool):
+        raise ValueError("policy.rolling_retirement must be boolean")
     policy.update(
         {
             "segment_hours": segment_hours,
@@ -241,6 +249,13 @@ def build_campaign(
             "max_model_attempts": int(policy.get("max_model_attempts", 5)),
             "max_cpu_attempts": int(policy.get("max_cpu_attempts", 3)),
             "lease_seconds": int(policy.get("lease_seconds", 300)),
+            "rolling_retirement": rolling_retirement,
+            "preserve_restart_every_segments": int(
+                policy.get("preserve_restart_every_segments", 30)
+            ),
+            "max_unretired_segments_per_chain": int(
+                policy.get("max_unretired_segments_per_chain", 2)
+            ),
         }
     )
     if policy["max_model_attempts"] < 1 or policy["max_cpu_attempts"] < 1:
@@ -249,9 +264,54 @@ def build_campaign(
         raise ValueError("prefetch_segments_per_chain must be non-negative")
     if policy["lease_seconds"] < 60:
         raise ValueError("lease_seconds must be at least 60")
+    if not policy["rolling_retirement"]:
+        raise ValueError(
+            "pre-emptible campaigns require policy.rolling_retirement=true"
+        )
+    if policy["preserve_restart_every_segments"] < 0:
+        raise ValueError(
+            "preserve_restart_every_segments must be non-negative"
+        )
+    if policy["max_unretired_segments_per_chain"] < 1:
+        raise ValueError(
+            "max_unretired_segments_per_chain must be positive"
+        )
 
     purpose = definition.get("purpose", "qualification")
     production_authorization = require_production_authorization(definition)
+    runtime_value = definition.get("runtime_release")
+    if not runtime_value:
+        raise ValueError("campaign definition requires runtime_release")
+    runtime_path = Path(runtime_value).resolve()
+    runtime_payload = validate_runtime_release(
+        runtime_path,
+        expected_root=repo_root,
+        production=purpose == "production",
+    )
+    runtime_release = {
+        "path": str(runtime_path),
+        "sha256": sha256(runtime_path),
+        "release_root": runtime_payload["release_root"],
+        "purpose": runtime_payload["purpose"],
+        "source_commit": runtime_payload["source_commit"],
+        "source_dirty": runtime_payload["source_dirty"],
+    }
+    python_value = definition.get("python_environment")
+    if not python_value:
+        raise ValueError("campaign definition requires python_environment")
+    python_path = Path(python_value).resolve()
+    python_payload = validate_python_environment(
+        python_path,
+        runtime_path,
+        smoke=True,
+    )
+    python_environment = {
+        "path": str(python_path),
+        "sha256": sha256(python_path),
+        "python": python_payload["python"],
+        "python_version": python_payload["python_version"],
+        "requirements_sha256": python_payload["requirements_sha256"],
+    }
     authorization = require_independent_chain_authorization(definition, len(chains))
     chunk_planner = (
         repo_root
@@ -318,6 +378,7 @@ def build_campaign(
                     ),
                     "attempt_root": str(segment_root / "attempts"),
                     "compressed_root": str(segment_root / "compressed"),
+                    "lifecycle_root": str(segment_root / "lifecycle"),
                     "rea_l_land_initialization": bool(
                         sequence == 1 and chain.get("rea_l_land_initialization", True)
                     ),
@@ -334,6 +395,8 @@ def build_campaign(
         "campaign_root": str(campaign_root),
         "definition": str(definition_path.resolve()),
         "definition_sha256": sha256(definition_path),
+        "runtime_release": runtime_release,
+        "python_environment": python_environment,
         "independent_chain_authorization": authorization,
         "production_authorization": production_authorization,
         "model": model,

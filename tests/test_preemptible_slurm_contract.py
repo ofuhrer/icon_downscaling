@@ -28,3 +28,15 @@ def test_cpu_pool_stays_on_bounded_postprocessing_partition():
     ).read_text()
     assert "#SBATCH --partition=pp-short" in worker
     assert "#SBATCH --no-requeue" in worker
+
+
+def test_recovery_probe_is_engineering_only_and_uses_the_signal_guard():
+    probe = (
+        SCRIPTS / "run_preemptible_recovery_probe_balfrin.sbatch"
+    ).read_text()
+    assert "#SBATCH --partition=preemptible" in probe
+    assert "#SBATCH --no-requeue" in probe
+    assert "Engineering-only" in probe
+    assert 'helper" run' in probe
+    assert "model_chunk_completion.json.ready" in probe
+    assert "HICAR_gpu" not in probe

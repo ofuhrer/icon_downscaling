@@ -272,8 +272,27 @@ It is non-promoting legacy evidence, not an active source branch.
 - Streaming and archive contract:
   `case_studies/swiss_200m/streaming/README.md`.
 - Pre-emption-safe controller:
-  `orchestration/README.md`. It is engineering-only until a controlled
-  cancellation drill and scientific source qualification pass.
+  `orchestration/README.md`. The controller now requires a checksum-bound
+  immutable runtime release and a separately published pinned Python
+  environment; automatically journals and retires verified raw output,
+  forcing, failed attempts, and superseded restarts; preserves periodic/final
+  checkpoints; caps unretired per-chain backlog; and counts pending jobs
+  against the global 44-node capacity.
+  Live engineering drill jobs `4951109`--`4951111` passed both graceful
+  cancellation and true hard-kill recovery: SIGTERM exited `75:0` with an
+  interruption report, SIGKILL exited `0:9` without cleanup, and the
+  controller created a third immutable retry before capacity was paused.
+  The non-promoting report is
+  `/scratch/mch/olifu/icon_hicar/engineering/preemption-recovery-20260727-v4/preemption_recovery_engineering.json`,
+  SHA-256
+  `2530af3f9f8e5e5507579e0babb6e1e4ad132c9d76e11be0bac2d31594b12d86`.
+  It binds engineering runtime release `preemption-engineering-20260727-v5`
+  (manifest SHA-256
+  `a441de9d926662fc13f6f5d1e6e6b398b53dc31bd6c8bffdb8a703ce1739c4ea`)
+  and Python-environment report SHA-256
+  `d163de3316e9eb9202f75e198bddd2b562e8bbc61c407093341345aa31c84021`.
+  It is explicitly engineering-only and does not change any scientific or
+  production authorization.
 - Wind-climatology engineering pathway:
   `case_studies/swiss_200m/wind_climatology/PRODUCT_CONTRACT.md`.
 
@@ -354,6 +373,16 @@ from `externals/fieldextra.lock`.
 - Clean GitHub clone with initialized HICAR submodule: portable suite and
   repository checks PASS at coordinator `482b1f4`.
 - Public coordinator CI run `30245948287`: PASS.
+- Current pre-emption-focused suite: `26 passed`, including eleven-slot
+  empty-capacity submission, full-cluster pending-job backpressure,
+  interruption-resumable retirement, immutable runtime/Python publications,
+  and SIGKILL retry classification.
+- Current portable coordinator suite: `276 passed`. A whole-workspace run has
+  the same `276` coordinator passes with `11` opt-in HICAR
+  source-contract failures because the local submodule is intentionally on
+  clean production-performance base `d6c52a54`, which does not contain the
+  V29 water/metadata and restart-initialization source line those tests
+  inspect. No pre-emption test failed.
 - Against the exact V29 source, `7/11` opt-in HICAR source-contract tests
   pass: all restart-initialization and water-budget contracts pass. The four
   remaining tests describe the separate wind-climatology/CF-metadata source

@@ -1,0 +1,41 @@
+#!/bin/bash -l
+# Engineering-only signal/retry probe. It never runs HICAR or publishes science.
+#SBATCH --job-name=hicar-preempt-probe
+#SBATCH --partition=preemptible
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --gres=gpu:4
+#SBATCH --time=00:10:00
+#SBATCH --exclusive
+#SBATCH --no-requeue
+
+set -euo pipefail
+[ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
+module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
+
+repo_root=${REPO_ROOT:?Set REPO_ROOT to the immutable runtime release}
+python=${HICAR_VALIDATION_PYTHON:-$SCRATCH/icon_hicar/venv_static/bin/python}
+helper=${HICAR_PREEMPTION_HELPER:-$repo_root/orchestration/preemption.py}
+attempt_id=${STREAM_ATTEMPT_ID:?Set STREAM_ATTEMPT_ID}
+run=${STREAM_RUN_DIR:?Set STREAM_RUN_DIR}
+sleep_seconds=${HICAR_PREEMPTION_PROBE_SLEEP_SECONDS:-600}
+
+case "$sleep_seconds" in
+  ''|*[!0-9]*) echo "probe sleep must be an integer" >&2; exit 2 ;;
+esac
+test "$sleep_seconds" -ge 60 || {
+  echo "probe sleep must be at least 60 seconds" >&2
+  exit 2
+}
+for path in "$python" "$helper"; do
+  test -e "$path" || { echo "missing recovery probe input: $path" >&2; exit 2; }
+done
+mkdir -p "$run"
+
+exec "$python" "$helper" run \
+  --attempt-id "$attempt_id" \
+  --report "$run/attempt_interrupted.json" \
+  --completion-marker "$run/model_chunk_completion.json.ready" \
+  --log "$run/probe.out" \
+  -- "$python" -c "import time; time.sleep($sleep_seconds)"

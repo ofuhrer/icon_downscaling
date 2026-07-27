@@ -71,6 +71,16 @@ Capacity limits are global, not per chain. Against 44 GPU nodes, four-node
 array capped at two active jobs rather than multiplying producers by the
 number of model chains.
 
+Run campaigns only from a checksum-bound immutable runtime release and a
+separately published Python environment tied to that release. Keep
+compression and journaled retirement ahead of further prefetch; cap the
+number of completed-but-unretired segments per chain. Retire forcing/raw
+output only after compression and solver publications pass, and retire a
+restart only after its adjacent successor passes. Preserve periodic and final
+checkpoints. The controlled SIGTERM/SIGKILL probe under `orchestration/`
+qualifies scheduler/controller recovery only; its report must remain
+non-promoting and cannot qualify HICAR science.
+
 ## SSH behavior
 
 Use `ssh balfrin`. If a connection is refused or closes unexpectedly, wait

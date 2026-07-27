@@ -20,6 +20,7 @@ module load nvhpc/24.5 cray-mpich-nvhpc/8.1.30 cuda/12.3.0-gcc \
   hdf5/1.14.3-nvhpc fftw/3.3.10-gcc
 
 plan=${STREAM_PLAN:?Set STREAM_PLAN to a published chunk_plan.json}
+repo_root=${REPO_ROOT:-$SCRATCH/icon_hicar}
 root=${HICAR_MULTILEVEL_ROOT:-$SCRATCH/icon_hicar/HICAR}
 case_root=${HICAR_SWISS_CASE:-$SCRATCH/icon_hicar/case_studies/swiss_200m}
 case_name=$(basename "$case_root")
@@ -27,11 +28,11 @@ build=${HICAR_MULTILEVEL_BUILD:-$root/build_gpu_nccl}
 exe="$build/HICAR_gpu"
 static_file=${HICAR_STATIC_FILE:-$case_root/static/domain_static_${case_name}.nc}
 static_basename=$(basename "${static_file%.nc}")
-renderer="$case_root/scripts/render_hicar_namelist.py"
-validator=${HICAR_STREAM_VALIDATOR:-$SCRATCH/icon_hicar/case_studies/swiss_200m/streaming/validate_model_chunk.py}
-wind_reducer=${HICAR_WIND_REDUCER:-$SCRATCH/icon_hicar/scripts/reduce_hicar_wind_climatology.py}
+renderer=${HICAR_NAMELIST_RENDERER:-$repo_root/case_studies/swiss_200m/scripts/render_hicar_namelist.py}
+validator=${HICAR_STREAM_VALIDATOR:-$repo_root/case_studies/swiss_200m/streaming/validate_model_chunk.py}
+wind_reducer=${HICAR_WIND_REDUCER:-$repo_root/scripts/reduce_hicar_wind_climatology.py}
 python=${HICAR_VALIDATION_PYTHON:-$SCRATCH/icon_hicar/venv_static/bin/python}
-wrapper=${HICAR_GPU_WRAPPER:-$case_root/scripts/gpu_rank_wrapper.sh}
+wrapper=${HICAR_GPU_WRAPPER:-$repo_root/case_studies/swiss_200m/scripts/gpu_rank_wrapper.sh}
 
 IFS=$'\t' read -r chunk_id chunk_root start end hours forcing_list < <(
   "$python" - "$plan" <<'PY'
@@ -51,7 +52,7 @@ run=${STREAM_RUN_DIR:-$case_root/runs/stream_${chunk_id}_${SLURM_JOB_ID:?}}
 restart_dir=${STREAM_RESTART_DIR:-$run/restart}
 restart_input_file=${STREAM_RESTART_INPUT_FILE:-}
 restart_input_report=${STREAM_RESTART_INPUT_REPORT:-}
-restart_input_validator=${HICAR_RESTART_INPUT_VALIDATOR:-$case_root/validation/validate_published_restart_input.py}
+restart_input_validator=${HICAR_RESTART_INPUT_VALIDATOR:-$repo_root/case_studies/swiss_200m/validation/validate_published_restart_input.py}
 forcing_publication="$chunk_root/forcing_publication.json"
 restart_file="$restart_dir/${static_basename}_${end_file}.nc"
 report="$run/model_chunk_completion.json"

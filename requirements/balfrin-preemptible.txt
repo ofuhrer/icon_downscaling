@@ -1,0 +1,6 @@
+# Direct runtime dependencies for the Balfrin pre-emptible workflow.
+numpy==2.3.4
+netCDF4==1.7.4
+scipy==1.17.1
+pyproj==3.7.2
+PyYAML==6.0.3

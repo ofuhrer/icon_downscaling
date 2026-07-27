@@ -36,8 +36,11 @@ intent, and atomic submission receipts. A controller crash between `sbatch`
 and receipt publication is reconciled by job name before the same intent may
 be submitted again. Scheduler `COMPLETED` without a validated ready marker is
 a failure, not success. `PREEMPTED`, `CANCELLED`, `NODE_FAIL`, `BOOT_FAIL`, or
-exit 75 are retryable only within the configured attempt budget; scientific
-or unexplained model failures block the campaign.
+exit 75 are retryable only within the configured attempt budget. A true hard
+kill appears on Balfrin as `FAILED` with Slurm exit status `0:9`; `SIGKILL`
+and externally delivered `SIGTERM` are also retryable without requiring a
+signal-time report. `OUT_OF_MEMORY`, `TIMEOUT`, application exit failures,
+scientific failures, and unexplained failures still block the campaign.
 
 ## Elastic capacity
 
@@ -68,6 +71,23 @@ Forcing, finalization, solver audits, and compression use one campaign-wide
 stage initially placed in `preemptible`; post-processing stays on the bounded
 CPU partition.
 
+## Runtime release and Python environment
+
+Campaigns do not execute from a mutable repository checkout. Build a
+checksum-bound runtime stage with `prepare_runtime_release.py`, deploy it to a
+new absolute Balfrin release directory, and validate
+`runtime_release.json.ready`. An engineering release may record dirty source;
+a production release refuses any changed required runtime file.
+
+The runtime Python environment is a separate publication. Submit
+`bootstrap_preemptible_python_balfrin.sbatch` on `pp-short` against the
+deployed release. It installs the exact direct versions in
+`requirements/balfrin-preemptible.txt`, runs import and package checks, and
+publishes a report binding the interpreter, resolved packages, requirements
+and runtime release. The planner and every controller reconciliation recheck
+both publications. Model and CPU jobs receive the frozen interpreter path
+explicitly rather than relying on shell activation.
+
 ## Planning and launch
 
 Definitions use absolute Balfrin paths:
@@ -78,6 +98,8 @@ Definitions use absolute Balfrin paths:
   "purpose": "qualification",
   "campaign_id": "swiss-200m-example",
   "campaign_root": "/scratch/USER/icon_hicar/campaigns/example",
+  "runtime_release": "/scratch/USER/icon_hicar/runtime/releases/release-id/runtime_release.json",
+  "python_environment": "/scratch/USER/icon_hicar/runtime/python_environment-release-id.json",
   "model": {
     "expected_hicar_commit": "0000000000000000000000000000000000000000",
     "case_root": "/scratch/USER/icon_hicar/case_studies/swiss_200m",
@@ -95,7 +117,10 @@ Definitions use absolute Balfrin paths:
     "cpu_slots": 2,
     "prefetch_segments_per_chain": 1,
     "max_model_attempts": 5,
-    "max_cpu_attempts": 3
+    "max_cpu_attempts": 3,
+    "rolling_retirement": true,
+    "preserve_restart_every_segments": 30,
+    "max_unretired_segments_per_chain": 2
   },
   "chains": [
     {
@@ -117,18 +142,21 @@ bypassing the current scientific hold.
 Prepare, inspect without submission, then launch the lightweight watcher:
 
 ```bash
-python orchestration/prepare_preemptible_campaign.py \
+RELEASE=/absolute/path/to/immutable/runtime-release
+PYTHON=/absolute/path/to/published/venv/bin/python
+
+"$PYTHON" "$RELEASE/orchestration/prepare_preemptible_campaign.py" \
   --definition /absolute/path/campaign_definition.json \
   --output /absolute/path/campaign_plan.json \
-  --repo-root /absolute/path/icon_hicar
+  --repo-root "$RELEASE"
 
-python orchestration/preemptible_campaign.py reconcile \
+"$PYTHON" "$RELEASE/orchestration/preemptible_campaign.py" reconcile \
   --campaign /absolute/path/campaign_plan.json \
-  --repo-root /absolute/path/icon_hicar
+  --repo-root "$RELEASE"
 
 sbatch --no-requeue \
-  --export=ALL,REPO_ROOT=/absolute/path/icon_hicar,HICAR_CAMPAIGN_PLAN=/absolute/path/campaign_plan.json \
-  case_studies/swiss_200m/scripts/watch_preemptible_campaign_balfrin.sbatch
+  --export=ALL,REPO_ROOT="$RELEASE",HICAR_VALIDATION_PYTHON="$PYTHON",HICAR_CAMPAIGN_PLAN=/absolute/path/campaign_plan.json \
+  "$RELEASE/case_studies/swiss_200m/scripts/watch_preemptible_campaign_balfrin.sbatch"
 ```
 
 The watcher runs on `pp-long` and submits one `afterany` successor before it
@@ -140,18 +168,42 @@ external reconciler without relying on Slurm requeue.
 
 Every model output file listed by every successful attempt is compressed and
 validated; the earlier month workflow's first-file-only compression shortcut
-is not used. Campaign completion is published only after:
+is not used. A journal is written before deletion begins, so a killed
+retirement task can resume when some targets are already absent. After
+compression and solver validation the lifecycle worker:
 
-- every forcing and model publication is PASS;
+- removes verified raw history and forcing payloads;
+- removes unpublished failed-attempt directories;
+- withdraws forcing ready markers before deleting forcing;
+- retires a restart only after the adjacent successor is published and
+  solver-valid; and
+- preserves the final restart plus the configured periodic checkpoints.
+
+The controller gives compression and retirement priority over additional
+forcing production and stops a chain from advancing when its configured
+unretired-segment backlog is full. Campaign completion is published only
+after:
+
+- every model publication is PASS;
 - every segment's solver audit is PASS;
 - every listed compressed file is published PASS; and
+- every segment and restart retirement publication is PASS; and
 - each chain's concatenated output times are exact, unique, ordered, and
   gap-free from the declared start through end.
 
 The resulting `campaign_completion.json.ready` binds the segment completion,
-solver, and compression reports by SHA-256. Source output, forcing, and
-restart retirement are intentionally not automatic in this first
-pre-emptible controller. They remain governed by the existing hash-checked
-retirement tools and the approved archive contract; capacity planning must
-allow for the rolling workspace until that destructive lifecycle is integrated
-and interruption-tested.
+solver, compression, segment-retirement, and restart-retirement reports by
+SHA-256. Durable transfer remains governed by the separately approved archive
+contract; rolling scratch retirement is not durable archiving.
+
+## Engineering cancellation qualification
+
+`qualify_preemptible_recovery.py` runs a one-node sleep probe, never HICAR. It
+verifies the real Balfrin paths for a graceful `SIGTERM`, a true `SIGKILL`
+without signal-time cleanup, and creation of a third immutable retry. It
+pauses campaign capacity and cancels the final probe job before publishing
+`preemption_recovery_engineering.json.ready`.
+
+This report is always `ENGINEERING_ONLY`, `promotion_eligible=false`, and
+`scientific_authorization=false`. It qualifies scheduler/controller recovery;
+it cannot qualify HICAR restart physics or authorize a scientific campaign.

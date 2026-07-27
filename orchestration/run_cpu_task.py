@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import sys
 import tempfile
 from pathlib import Path
 
@@ -94,6 +95,24 @@ def main() -> int:
                 "OUTPUT_INDEX": "0",
                 "COMPRESSED_OUTPUT_DIR": task["target_dir"],
             },
+        )
+    if kind in {"segment_retirement", "restart_retirement"}:
+        script = repo_root / "orchestration/retire_campaign_artifacts.py"
+        if not script.is_file():
+            raise SystemExit(f"missing retirement worker: {script}")
+        os.execve(
+            sys.executable,
+            [
+                sys.executable,
+                str(script),
+                "--task-file",
+                str(args.task_file),
+                "--expected-sha256",
+                args.expected_sha256,
+                "--index",
+                str(index),
+            ],
+            os.environ.copy(),
         )
     raise SystemExit(f"unsupported campaign CPU task kind: {kind}")
 
