@@ -85,6 +85,7 @@ def test_authorized_month_has_five_segments_and_restart_overlap(tmp_path):
         "validation/month_source_qualification.json"
     )
     assert report["source_qualification_sha256"] is None
+    assert report["source_qualification_mode"] == "OUTPUT_DIAGNOSTIC_ONLY"
     assert report["declared_spinup_days"] == 7
     assert report["retained_days"] == 24
     assert report["expected_unique_output_records"] == 249

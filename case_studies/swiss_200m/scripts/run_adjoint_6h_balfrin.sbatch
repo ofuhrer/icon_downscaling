@@ -21,7 +21,7 @@ module load nvhpc/24.5 cray-mpich-nvhpc/8.1.30 cuda/12.3.0-gcc \
   netcdf-c/4.9.2-nvhpc netcdf-fortran/4.6.1-nvhpc \
   hdf5/1.14.3-nvhpc fftw/3.3.10-gcc
 
-root=${HICAR_MULTILEVEL_ROOT:-$SCRATCH/icon_hicar/HICAR-wind-galerkin-multilevel}
+root=${HICAR_MULTILEVEL_ROOT:-$SCRATCH/icon_hicar/HICAR}
 case_root=${HICAR_SWISS_CASE:-$SCRATCH/icon_hicar/case_studies/swiss_200m}
 build=${HICAR_MULTILEVEL_BUILD:-$root/build_gpu_nccl}
 exe="$build/HICAR_gpu"

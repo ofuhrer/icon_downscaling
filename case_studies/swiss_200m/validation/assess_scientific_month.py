@@ -12,7 +12,11 @@ import sys
 from tempfile import NamedTemporaryFile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from month_source_contract import validate_month_source_qualification
+from month_source_contract import (
+    OUTPUT_DIAGNOSTIC_ONLY,
+    SCIENTIFIC_BASELINE_TRANSITION,
+    validate_month_source_qualification,
+)
 
 
 CORE_STATION_METRICS = (
@@ -237,10 +241,14 @@ def assess(month: dict, scientific: dict) -> tuple[dict, bool]:
             required=required_status,
         )
 
+    source_qualification_mode = (
+        month.get("source_qualification_mode") or OUTPUT_DIAGNOSTIC_ONLY
+    )
     source_qualification_failures = validate_month_source_qualification(
         source_qualification,
         expected_child_commit=month.get("expected_hicar_commit"),
         required_parent_commit=month.get("required_parent_hicar_commit"),
+        qualification_mode=source_qualification_mode,
     )
     source_qualification_path = Path(month["source_qualification_report"])
     observed_source_qualification_sha256 = None
@@ -251,11 +259,16 @@ def assess(month: dict, scientific: dict) -> tuple[dict, bool]:
             source_qualification_path.read_bytes()
         ).hexdigest()
     screen(
-        "month_source_output_diagnostic_only",
+        (
+            "month_source_scientific_baseline_transition"
+            if source_qualification_mode == SCIENTIFIC_BASELINE_TRANSITION
+            else "month_source_output_diagnostic_only"
+        ),
         not source_qualification_failures
         and observed_source_qualification_sha256
         == month.get("source_qualification_sha256"),
         failures=source_qualification_failures,
+        qualification_mode=source_qualification_mode,
         observed_sha256=observed_source_qualification_sha256,
         required_sha256=month.get("source_qualification_sha256"),
         child_commit=source_qualification.get("child_commit"),

@@ -86,10 +86,12 @@ validation costs within the allocation envelope. Both model completions must
 also pass the production-provenance contract that binds the clean source
 commit, executable, static domain, forcing publication, chunk plan, and model
 log by SHA-256, and both segments must share one source/executable/static
-identity. The plan, submitter, runner, and final assessor independently pin
-that source to the repaired HICAR commit declared in
-`config/engineering_capacity_gate.json`; a merely clean but older checkout
-cannot enter the 16-node gate.
+identity. The config deliberately does not pin a historical commit. Planning
+requires `HICAR_MONTH_SOURCE_QUALIFICATION` to name the published, passing
+source qualification selected for the 200 m month; the plan freezes its
+commit, mode, parent, path, and checksum. The plan, submitter, runner, and
+final assessor revalidate that identity, so an older clean checkout or a
+capacity result from another HICAR baseline cannot enter scientific scaling.
 The submitter also checks the provenance semantics of the 100 m runner, shared
 model validator, and capacity assessor, then records checksums for the entire
 referenced Slurm stack plus those critical Python files in its preview and
@@ -102,6 +104,24 @@ long-duration drift, or a production campaign. The raw
 `scripts/swiss_100m_gpu_capacity.sbatch` remains only historical scaffolding
 for the July attempts that stopped before model initialization because of
 launcher/forcing-list defects.
+
+The next gate is frozen separately in
+`config/scientific_scaling_gate.json`. It cannot start until both the 200 m
+month publishes `GO_ANNUAL_CYCLE` and the capacity gate publishes
+`QUALIFIED_100M_ENGINEERING_CAPACITY_ONLY`. It repeats the 72-hour winter and summer
+events at 100 m and 200 m with identical forcing and observation samples,
+requires production water/energy and hour-48 restart-continuity gates, and
+compares the two resolutions with paired 24-hour block-bootstrap uncertainty.
+At least two terrain-sensitive metric families must improve in median, one
+must have a positive 95% lower confidence bound, and no family may degrade by
+more than five percent. A pass authorizes only a 31-day 100 m month pilot; an
+annual or 20-year 100 m campaign remains forbidden. Validate the contract
+before planning with:
+
+```bash
+python case_studies/swiss_100m/validation/validate_scientific_scaling_gate.py \
+  case_studies/swiss_100m/config/scientific_scaling_gate.json
+```
 
 The case is deliberately not runnable until the REA-L source-data access and
 coverage gates are satisfied; it must never substitute placeholder terrain or

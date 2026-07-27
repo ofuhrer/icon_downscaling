@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "archive_id": "icon-downscaling-legacy-balfrin-root-patch-v1",
+  "archive_root": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1",
+  "manifest": "/store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-legacy-balfrin-root-patch-v1.json",
+  "provenance": {
+    "base_commit": "86c9a87e362edaa48860bba7738dc5ed7cf9c44b",
+    "classification": "LEGACY_UNCLASSIFIED_STREAMING_AND_ADVECTION_DIRTY_PATCH",
+    "apply_check": "PASS",
+    "selection_policy": "Preserve the previously unrecorded Balfrin root-checkout changes before cleaning that shared legacy checkout. This patch is not a production candidate and is superseded for active work by the explicit HICAR refs in project state."
+  },
+  "files": [
+    {
+      "id": "hicar-legacy-balfrin-root-dirty-patch",
+      "source": "/scratch/mch/olifu/icon_hicar/recovery_staging/legacy-root-dirty-86c9a87e/hicar-balfrin-root-dirty-after-86c9a87e.patch",
+      "destination": "source/hicar-balfrin-root-dirty-after-86c9a87e.patch",
+      "classification": "LEGACY_UNCLASSIFIED_NON_PROMOTING_SOURCE_PATCH",
+      "expected_sha256": "dbec40233ff87cdae0b02c55d63c61019fcc84982344aa7d0cdbb36aba1a5a8e"
+    }
+  ]
+}

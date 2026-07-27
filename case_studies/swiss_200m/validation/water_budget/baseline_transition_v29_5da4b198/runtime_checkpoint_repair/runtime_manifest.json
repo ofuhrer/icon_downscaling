@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "status": "FROZEN",
+  "purpose": "Replay the summer restart-checkpoint audit after job 4949566 failed pre-validation because its frozen runtime omitted the leaf checkpoint validator.",
+  "supersedes_failed_validator_job": "4949566",
+  "model_rerun_required": false,
+  "files": [
+    {
+      "path": "case_studies/swiss_200m/scripts/validate_event_restart_checkpoints_balfrin.sbatch",
+      "sha256": "015b40432d0b49b2e90fdeda7d96b1fd75a2264253e4675d548d3c065a60b0fb"
+    },
+    {
+      "path": "case_studies/swiss_200m/validation/validate_event_restart_checkpoints.py",
+      "sha256": "52aee19d6f5c34cf7e8110691bae9f223b77bb52b305033997399be9f5317f45"
+    },
+    {
+      "path": "case_studies/swiss_200m/validation/validate_restart_checkpoint.py",
+      "sha256": "0f6084e9391e4dee78aca41060cef1149d982f0d42ef8477064fdfc80385085f"
+    }
+  ],
+  "authorization": {
+    "validator_replay_only": true,
+    "winter_event": false,
+    "restart_overlap": false,
+    "month_compute": false,
+    "annual_cycle": false,
+    "twenty_year_200m_production": false,
+    "hundred_meter_scientific_production": false
+  }
+}

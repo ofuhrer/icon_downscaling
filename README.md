@@ -52,8 +52,7 @@ validation reports are.
 | `scripts/` | Reusable source, forcing, static-domain, and wind-product tools |
 | `case_studies/` | Self-contained domain configuration, Slurm stages, and validation |
 | `tests/` | Coordinator regression and contract tests |
-| `validation/` | Small cross-case runtime probes and rank-layout helpers |
-| `orchestration/` | Reserved design boundary for future stateful campaign control |
+| `orchestration/` | Stateful pre-emptible campaign planning and reconciliation |
 | `recovery/` | Source-protection and rebuild-critical artifact inventory |
 | `HICAR/` | Pinned HICAR fork submodule |
 | `externals/` | Locked metadata for optional external source references |
@@ -131,10 +130,12 @@ by the local Python environment.
 Ready markers are publication guarantees: write to a temporary path, validate
 the finished product, atomically rename it, and create `<file>.ready` last.
 
-Current long Slurm chains use fixed run directories and do not yet implement
-requeue/signal recovery or a stateful retry lease. They must not be described
-as pre-emption-safe. The future controller boundary and its non-goals are
-documented in [`orchestration/README.md`](orchestration/README.md).
+Legacy long Slurm chains use fixed run directories and must not be described
+as pre-emption-safe. The separate short-slice controller uses immutable
+attempts, signal-aware failure classification, external retry state, and
+globally bounded model/CPU pools. Its operating contract and current
+non-destructive lifecycle boundary are documented in
+[`orchestration/README.md`](orchestration/README.md).
 
 ## External source policy
 
@@ -201,18 +202,21 @@ This portable suite is required to pass against the pinned, reachable HICAR
 submodule. Its compression test requires `nccopy` from the NetCDF command-line
 tools (`netcdf-bin` on Debian and Ubuntu).
 
-Two source-coupled test files describe newer HICAR metadata and restart
-contracts under active development; run them only against the matching HICAR
-candidate worktree:
+Two source-coupled test files describe the union of newer HICAR metadata,
+wind-output, water-budget, and restart contracts under active development.
+Run them only when integrating the corresponding HICAR source lines:
 
 ```bash
 make test-hicar-contract
 make test-all
 ```
 
-They are intentionally not part of public coordinator CI until the matching
-HICAR implementation is committed, pushed, and qualified. A local dirty HICAR
-tree must never be smuggled into the outer repository through passing tests.
+They are intentionally not part of public coordinator CI. The current V29
+warm-bias source satisfies the restart and water-budget subset but not the
+separate wind-output/CF-metadata subset; no production claim follows from the
+union suite until those lines are deliberately merged and requalified. A
+local dirty HICAR tree must never be smuggled into the outer repository
+through passing tests.
 
 Run the repository-level syntax and whitespace checks with:
 

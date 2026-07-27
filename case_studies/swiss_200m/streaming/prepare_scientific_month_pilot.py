@@ -196,6 +196,10 @@ def main() -> int:
     required_parent_commit = configuration.get(
         "month_required_parent_hicar_commit"
     )
+    source_qualification_mode = (
+        configuration.get("month_source_qualification_mode")
+        or "OUTPUT_DIAGNOSTIC_ONLY"
+    )
     source_qualification = Path(
         configuration["month_source_qualification_report"]
     )
@@ -360,6 +364,7 @@ def main() -> int:
         "retained_days": retained_days,
         "expected_hicar_commit": expected_month_commit,
         "required_parent_hicar_commit": required_parent_commit,
+        "source_qualification_mode": source_qualification_mode,
         "source_qualification_report": str(source_qualification),
         "source_qualification_sha256": source_qualification_sha256,
         "output_profile": configuration["output_profile"],
@@ -431,7 +436,10 @@ def main() -> int:
             "at least 24 hours of post-boundary segmented-versus-uninterrupted trajectory equivalence",
             "retained-period water, energy, soil, snow, canopy, and near-surface trend diagnostics",
             "production cumulative water observables and exact restart continuity",
-            "output-diagnostic-only child-source qualification against the preserved event parent",
+            (
+                "checksum-frozen month-source qualification in the explicitly "
+                f"selected {source_qualification_mode} mode"
+            ),
             "side-by-side HICAR and REA-L SwissMetNet metrics",
             "31 TabsD days, 30 complete RhiresD windows, and July SIS diagnostics",
             "measured forcing overlap, restart, output, compression, and archive costs",

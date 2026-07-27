@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "status": "PASS",
+  "classification": "IMMUTABLE_TRANSITION_EVENT_RUNTIME",
+  "candidate_commit": "5da4b1980497f20468e6e4b5b4c4a584849c3454",
+  "root": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/baseline_transition_v29_5da4b198/runtime",
+  "files": [
+    {
+      "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/baseline_transition_v29_5da4b198/runtime/run_rea_l_stream_chunk_balfrin.sbatch",
+      "sha256": "718578fe844fc01cb98879ca1ebb089ca097f7a5f18dc2466b74d806410df40c"
+    },
+    {
+      "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/baseline_transition_v29_5da4b198/runtime/validate_model_chunk.py",
+      "sha256": "00a13990942e7b4e6d0ca582bd6648288165cc25f2a093b8fd8d43489189a940"
+    },
+    {
+      "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/baseline_transition_v29_5da4b198/runtime/validate_scientific_event_balfrin.sbatch",
+      "sha256": "1a6aeefba24cefe4420fc94f1469b1c7387cf9dc3f2f69812614573b8bdda55f"
+    },
+    {
+      "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/baseline_transition_v29_5da4b198/runtime/evaluate_scientific_event.py",
+      "sha256": "9234bed50368772e1f3a560b99fe4355c3ac24d8234548b4ff7013a9a78ec82d"
+    },
+    {
+      "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/baseline_transition_v29_5da4b198/runtime/compare_hicar_to_rea_l_surface.py",
+      "sha256": "ae270cc29bb283c36db80c62a944b00739f68de30fbb737c5b3635769f88438e"
+    },
+    {
+      "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/baseline_transition_v29_5da4b198/runtime/validate_solver_event_balfrin.sbatch",
+      "sha256": "ef3a954b20b1b9846c57c211f0c366799275269c11328e5f1287f96f876e8f0a"
+    },
+    {
+      "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/baseline_transition_v29_5da4b198/runtime/evaluate_hicar_solver_log.py",
+      "sha256": "0a3874a4d606deae9a0d15c686f98dbf9a33ee9dd17d1d9ee0f3d9e1e5c5f0c6"
+    },
+    {
+      "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/baseline_transition_v29_5da4b198/runtime/validate_event_restart_checkpoints_balfrin.sbatch",
+      "sha256": "015b40432d0b49b2e90fdeda7d96b1fd75a2264253e4675d548d3c065a60b0fb"
+    },
+    {
+      "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/baseline_transition_v29_5da4b198/runtime/validate_event_restart_checkpoints.py",
+      "sha256": "52aee19d6f5c34cf7e8110691bae9f223b77bb52b305033997399be9f5317f45"
+    },
+    {
+      "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/baseline_transition_v29_5da4b198/runtime/validate_smn_event_balfrin.sbatch",
+      "sha256": "72edc60da99b2eeb7abea470db71167aea62bd4260cd60374b3b33037d6e7013"
+    },
+    {
+      "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/baseline_transition_v29_5da4b198/runtime/compare_hicar_rea_l_to_smn.py",
+      "sha256": "5046ab60747e7a9bee1ba52a5472bf8c31fd959671f1d2eb533e69c35a5efac6"
+    },
+    {
+      "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/baseline_transition_v29_5da4b198/runtime/validate_ogd_grid_event_balfrin.sbatch",
+      "sha256": "38bdc2afb2230fdde32d9753698ef703d6a6a1b0fdd33dd389a41f624e68a342"
+    },
+    {
+      "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/baseline_transition_v29_5da4b198/runtime/compare_hicar_rea_l_to_ogd_grids.py",
+      "sha256": "018d797db81a38e3091d965d30ff38747e25fb4e743f8d3afbdaa81aaca2876b"
+    },
+    {
+      "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/baseline_transition_v29_5da4b198/runtime/submit_scientific_baseline_transition_balfrin.sh",
+      "sha256": "1d53d3ac54b53aba96c89e0d7457aa6608d8d47449eee64a2865e4a785aa61ab"
+    }
+  ],
+  "authorization": {
+    "month_compute": false,
+    "annual_cycle": false,
+    "twenty_year_200m_production": false
+  }
+}

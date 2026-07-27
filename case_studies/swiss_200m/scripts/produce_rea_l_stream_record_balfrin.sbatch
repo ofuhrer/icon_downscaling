@@ -64,7 +64,7 @@ report="$base.validation.json"
 manifest="$base.manifest.json"
 mkdir -p "$final_dir" "$chunk_root/work" "$chunk_root/cache"
 
-if test -s "$final" && test -f "$ready" && test -s "$report" && test -s "$manifest"; then
+verify_stream_publication() {
   "$python" - "$final" "$report" "$manifest" "$valid_time" <<'PY'
 import hashlib
 import json
@@ -81,15 +81,33 @@ if manifest.get("valid_time") != expected_time:
 if manifest.get("forcing_sha256") != digest:
     raise SystemExit("existing stream publication hash mismatch")
 PY
+}
+
+if test -f "$ready"; then
+  test -s "$final" && test -s "$report" && test -s "$manifest" || {
+    echo "ready marker exists for an incomplete stream publication: $ready" >&2
+    exit 2
+  }
+  verify_stream_publication
   echo "stream record already published and verified: $final"
   exit 0
 fi
-for path in "$final" "$ready" "$report" "$manifest"; do
-  test ! -e "$path" || {
-    echo "incomplete publication exists and requires operator review: $path" >&2
-    exit 2
-  }
-done
+if test -s "$final" && test -s "$report" && test -s "$manifest"; then
+  verify_stream_publication
+  touch "$ready"
+  echo "recovered stream publication marker: $final"
+  exit 0
+fi
+if test -e "$final" || test -e "$report" || test -e "$manifest"; then
+  recovery="$chunk_root/recovery/record_${index}_$(date -u +%Y%m%dT%H%M%S)_${SLURM_JOB_ID:-$$}"
+  mkdir -p "$recovery"
+  for path in "$final" "$report" "$manifest"; do
+    if test -e "$path"; then
+      mv "$path" "$recovery/"
+    fi
+  done
+  echo "quarantined incomplete stream publication under $recovery"
+fi
 
 work=$(mktemp -d "$chunk_root/work/record_${index}.XXXXXX")
 partial=""
@@ -112,6 +130,14 @@ static_ready="$static.ready"
 static_manifest="$static_dir/static_manifest.json"
 lock="$static_dir/.produce.lock"
 mkdir -p "$static_dir"
+static_lock_stale_seconds=${STREAM_STATIC_LOCK_STALE_SECONDS:-3700}
+case "$static_lock_stale_seconds" in
+  ''|*[!0-9]*) echo "STREAM_STATIC_LOCK_STALE_SECONDS must be an integer" >&2; exit 2 ;;
+esac
+test "$static_lock_stale_seconds" -ge 3700 || {
+  echo "STREAM_STATIC_LOCK_STALE_SECONDS must be at least 3700" >&2
+  exit 2
+}
 
 publish_static() {
   local partial="$static.partial.${SLURM_JOB_ID}"
@@ -171,10 +197,43 @@ PY
   touch "$static_ready"
 }
 
+acquire_static_lock() {
+  local attempt lock_epoch now stale
+  for attempt in 1 2; do
+    if mkdir "$lock" 2>/dev/null; then
+      "$python" - "$lock/owner.json" <<PY
+import json
+import os
+import pathlib
+import socket
+from datetime import datetime, timezone
+
+path = pathlib.Path("$lock/owner.json")
+path.write_text(json.dumps({
+    "created_at": datetime.now(timezone.utc).isoformat(),
+    "hostname": socket.gethostname(),
+    "pid": os.getpid(),
+    "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
+}, indent=2, sort_keys=True) + "\\n")
+PY
+      return 0
+    fi
+    lock_epoch=$(stat -c %Y "$lock" 2>/dev/null || echo 0)
+    now=$(date +%s)
+    if test "$lock_epoch" -gt 0 &&
+       test $((now - lock_epoch)) -gt "$static_lock_stale_seconds"; then
+      stale="$static_dir/.produce.lock.stale.${SLURM_JOB_ID:-$$}.${now}"
+      mv "$lock" "$stale" 2>/dev/null || true
+    fi
+  done
+  return 1
+}
+
 if ! test -s "$static" || ! test -f "$static_ready" || ! test -s "$static_manifest"; then
-  if mkdir "$lock" 2>/dev/null; then
-    trap 'rmdir "$lock" 2>/dev/null || true; cleanup' EXIT
+  if acquire_static_lock; then
+    trap 'rm -f "$lock/owner.json"; rmdir "$lock" 2>/dev/null || true; cleanup' EXIT
     publish_static
+    rm -f "$lock/owner.json"
     rmdir "$lock"
     trap cleanup EXIT
   else

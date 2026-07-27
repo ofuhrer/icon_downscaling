@@ -42,6 +42,8 @@ markers when payloads move within that namespace.
 - GPU debugging: `debug`.
 - Short GPU development/CI/benchmarks: `short`.
 - Longer GPU runs: `normal`.
+- Cancellation-tolerant opportunistic GPU work: `preemptible`.
+- Non-pre-empting priority-zero overflow: `lowprio`.
 - Short CPU/post-processing: `pp-short`.
 - Longer CPU/post-processing: `pp-long`.
 - Do not run CPU-only work on GPU nodes.
@@ -53,11 +55,27 @@ Before substantial work, inspect partition limits and current
 cluster/operations state. Use exclusive allocation when exact NUMA/GPU binding
 is required.
 
+Balfrin `preemptible` uses cancellation pre-emption: the job receives
+`SIGTERM` and about 60 seconds of grace, then is killed. `lowprio` has
+pre-emption disabled and may instead wait behind higher-priority work. A
+global `JobRequeue=1` setting is not application resume. Submit pre-emptible
+HICAR attempts with `--no-requeue`, immutable attempt directories, an
+external reconciler, and a non-success exit unless a validator-published
+completion marker already exists. Signal-time checkpoint publication is best
+effort only; hard-kill recovery must use the last previously published,
+checksum-bound restart.
+
+Capacity limits are global, not per chain. Against 44 GPU nodes, four-node
+200 m attempts permit at most 11 concurrent independent chains; provisional
+16-node 100 m attempts permit at most two. Keep `pp-short` work in one global
+array capped at two active jobs rather than multiplying producers by the
+number of model chains.
+
 ## SSH behavior
 
-Use `ssh balfrin`. If a connection is refused or closes unexpectedly, retry up
-to two times with a short pause. If passwordless access still fails, stop and
-ask the user to restore the signed key; do not invent SSH workarounds.
+Use `ssh balfrin`. If a connection is refused or closes unexpectedly, wait
+one to two minutes and retry. Stop only if that retry also fails, then ask the
+user to restore passwordless access; do not invent SSH workarounds.
 
 ## Operational discipline
 
@@ -70,3 +88,37 @@ ask the user to restore the signed key; do not invent SSH workarounds.
   long workflows.
 - Query current Confluence/Rovo guidance when behavior depends on operational
   Balfrin configuration.
+
+## End-of-investigation cleanup
+
+Treat cleanup as a publication workflow, not an ad hoc recursive delete:
+
+1. List every active/held job with `squeue` and inspect dependencies with
+   `scontrol show job`. Cancel obsolete held or dependency-impossible jobs
+   before removing their scripts or working directories.
+2. Prove every local-only HICAR commit is reachable from an intentionally
+   named remote ref or a checksum-verified Git bundle under the durable root.
+   Preserve dirty work as a binary patch and verify its SHA-256 and apply
+   check before restoring the checkout.
+3. Archive the selected scientific history, configuration, logs, and
+   canonical reports with `scripts/archive_recovery_plan.py`. Use an explicit
+   source-controlled plan, publish through a partial name, hash the source and
+   copy, create data/report ready markers last, and independently read back
+   the manifest.
+4. Retain only inputs whose regeneration is expensive and the smallest
+   trajectory needed for the next bounded diagnosis. Build trees, duplicate
+   source clones, superseded restart payloads, raw failed experiments, and
+   transient logs are regenerable scratch.
+5. Dry-run exact top-level targets. Resolve paths under
+   `$SCRATCH/icon_hicar`, reject anything outside that root, and never use an
+   unresolved glob or the scratch root itself as a deletion target. Remove
+   experiment clones and build directories only when no live job references
+   them.
+6. Re-list jobs, retained paths, Git refs, and durable manifests after
+   deletion. Record counts and retained exceptions in `memory/project-state.md`
+   or a compact cleanup record, not a command transcript.
+
+For a failed seasonal gate, preserve its diagnostic history before deleting
+large restart payloads. A passed checkpoint-inventory report is sufficient to
+record what existed; it is not a reason to retain every restart when no
+continuation is authorized.

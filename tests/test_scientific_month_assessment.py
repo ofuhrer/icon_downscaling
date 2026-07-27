@@ -401,6 +401,91 @@ def test_passing_month_with_approved_archive_authorizes_annual_cycle(tmp_path):
     assert report["authorization"]["twenty_year_200m_production"] is False
 
 
+def test_passing_month_accepts_frozen_scientific_baseline_transition(
+    tmp_path,
+):
+    month, scientific = fixture(tmp_path)
+    source_path = Path(month["source_qualification_report"])
+    transition_source = {
+        "schema_version": 1,
+        "status": "PASS",
+        "qualification_mode": "SCIENTIFIC_BASELINE_TRANSITION",
+        "change_scope": "SCIENTIFIC_BASELINE_TRANSITION",
+        "child_commit": month["expected_hicar_commit"],
+        "parent_commit": month["required_parent_hicar_commit"],
+        "previous_scientific_baseline_commit": "f" * 40,
+        "evidence": {
+            "baseline_transition": {
+                "status": "PASS",
+                "artifact_sha256": "1" * 64,
+                "report_status": "PASS",
+                "decision": "NOMINATE_V29_FOR_CANONICAL_MONTH_SOURCE",
+                "candidate_commit": month["expected_hicar_commit"],
+                "event_names": ["summer", "winter"],
+                "event_statuses": {
+                    "summer": "PASS",
+                    "winter": "PASS",
+                },
+                "restart_trajectory_status": "PASS",
+                "restart_trajectory_fields": [
+                    "precipitation",
+                    "runoff_surface_cumulative",
+                    "runoff_subsurface_cumulative",
+                    "evaporation_net_cumulative",
+                ],
+                "paired_total_runoff_kg_m2": 0.5,
+            },
+            "assessment_contract": {
+                "status": "PASS",
+                "artifact_sha256": "2" * 64,
+                "contract_status": "FROZEN",
+                "candidate_commit": month["expected_hicar_commit"],
+                "candidate_parent_commit": month[
+                    "required_parent_hicar_commit"
+                ],
+            },
+            "transition_plan": {
+                "status": "PASS",
+                "artifact_sha256": "3" * 64,
+                "plan_status": "PLANNED",
+                "candidate_commit": month["expected_hicar_commit"],
+                "candidate_parent_commit": month[
+                    "required_parent_hicar_commit"
+                ],
+                "preserved_event_commit": "f" * 40,
+            },
+            "candidate_source_bundle": {
+                "status": "PASS",
+                "artifact_sha256": "4" * 64,
+                "source_commit": month["expected_hicar_commit"],
+            },
+        },
+        "authorization": {
+            "month_source": True,
+            "month_compute": False,
+            "annual_cycle": False,
+            "twenty_year_200m_production": False,
+            "hundred_meter_scientific_production": False,
+        },
+    }
+    source_path.write_text(json.dumps(transition_source))
+    month["source_qualification_mode"] = "SCIENTIFIC_BASELINE_TRANSITION"
+    month["source_qualification_sha256"] = hashlib.sha256(
+        source_path.read_bytes()
+    ).hexdigest()
+
+    report, complete = MODULE.assess(month, scientific)
+
+    assert complete is True
+    assert report["decision"] == "GO_ANNUAL_CYCLE"
+    source_screen = next(
+        screen
+        for screen in report["screens"]
+        if screen["id"] == "month_source_scientific_baseline_transition"
+    )
+    assert source_screen["passed"] is True
+
+
 def test_month_without_frozen_model_provenance_cannot_authorize_annual(tmp_path):
     month, scientific = fixture(tmp_path)
     model_path = Path(month["segments"][0]["model_completion_report"])

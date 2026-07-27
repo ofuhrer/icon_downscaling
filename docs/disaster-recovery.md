@@ -95,6 +95,33 @@ the v2 candidate is a failed national comparison and
 `518cc10bac88e1eae9acec6329f866516c7f4dd0` is classified
 `UNQUALIFIED_BRIDGE_FAIL`.
 
+The current clean handoff adds two directly reachable HICAR refs:
+
+- `codex/restart-noahmp-state-v26` at `246c8992...` is the qualified bounded
+  restart baseline;
+- `codex/v29-summer-warm-bias` at `5da4b198...` is explicitly unqualified
+  after the frozen summer temperature gate failed.
+
+The latter also remains protected by the verified
+`hicar-water-budget-v29-5da4b198.bundle`. Its selected 25-record summer
+history, exact configuration/log, and independent scientific reports are
+published in
+`manifests/archive-v29-summer-handoff-v1.json` (SHA-256
+`e32284b286ef7d2f482b57412ec912ad4f5764a5bc4ff5680a4bdc9336c9aedc`).
+Independent readback job `4950163` verified all 13 files and
+16,349,047,095 bytes. The three large restart payloads are intentionally not
+part of that handoff because the failed summer gate authorizes no
+continuation.
+
+Cleanup also found an unclassified dirty patch in the legacy Balfrin root
+HICAR checkout. It is preserved, rather than silently discarded, as
+`source/hicar-balfrin-root-dirty-after-86c9a87e.patch` with SHA-256
+`dbec40233ff87cdae0b02c55d63c61019fcc84982344aa7d0cdbb36aba1a5a8e`.
+Manifest `archive-legacy-balfrin-root-patch-v1.json` (SHA-256
+`d1c6c308e62163c03d5e7022ee0eb34c94c456a777ffe2f009921ddf72380b40`)
+and independent readback job `4950168` pass. This is legacy non-promoting
+evidence; do not treat it as a candidate branch.
+
 The source-controlled selections are
 `recovery/archive_plan_foundation_v1.json` and
 `recovery/archive_plan_qualification_reports_v1.json`. Publish them only
@@ -108,6 +135,16 @@ module use /mch-environment/v8/modules
 module load python/3.11.7
 make recovery-archive-verify
 ```
+
+The completed selective scratch retirement is recorded in
+`recovery/cleanup_handoff_v29.json`. It is not a full-deletion authorization:
+it proves the V26/V29 source protection, V29 selected-history readback,
+retired branch set, exact cleanup jobs, and post-cleanup retained classes.
+The retained Swiss forcing/static/source inputs remain in scratch because
+they are expensive and still useful. Run `make recovery-audit` on Balfrin,
+where `/store_new` is mounted, before ever deleting those last copies; the
+unresolved annual archive contract must continue to make that audit fail
+closed.
 
 Routine forcing and model-output caches remain intentionally excluded. The
 authoritative REA-L fields remain in institutional FDB; the archive instead

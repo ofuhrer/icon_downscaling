@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "status": "PASS",
+  "classification": "IMMUTABLE_TRANSITION_RESTART_OVERLAP_RUNTIME",
+  "candidate_commit": "5da4b1980497f20468e6e4b5b4c4a584849c3454",
+  "root": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/baseline_transition_v29_5da4b198/runtime_overlap",
+  "files": [
+    {
+      "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/baseline_transition_v29_5da4b198/runtime_overlap/run_rea_l_stream_chunk_balfrin.sbatch",
+      "sha256": "de417fbd4a192d7d9bb98f4efcaef8d676502342dfc8fb643b310792b077e273"
+    },
+    {
+      "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/baseline_transition_v29_5da4b198/runtime_overlap/validate_model_chunk.py",
+      "sha256": "00a13990942e7b4e6d0ca582bd6648288165cc25f2a093b8fd8d43489189a940"
+    },
+    {
+      "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/baseline_transition_v29_5da4b198/runtime_overlap/validate_published_restart_input.py",
+      "sha256": "a08edbaf1681b6cc3b6500ab59022a4085e05e19c683ef21374c55e42360d9db"
+    },
+    {
+      "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/baseline_transition_v29_5da4b198/runtime_overlap/compare_event_restart_trajectory_balfrin.sbatch",
+      "sha256": "25ace4f20f2e425093a662aa8801cc7a3d2cc814564dfbddd0416011eb70447f"
+    },
+    {
+      "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/baseline_transition_v29_5da4b198/runtime_overlap/compare_segmented_to_uninterrupted.py",
+      "sha256": "27b54267ce819aa80bcb1629ad73aecc72c2abe2759bf7a79a45d26331e95325"
+    },
+    {
+      "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/baseline_transition_v29_5da4b198/runtime_overlap/submit_scientific_baseline_transition_overlap_balfrin.sh",
+      "sha256": "35a372f33945839794ff5cc20e7e9b3da9467aedae8881c83d8d312c3d9fa320"
+    }
+  ],
+  "authorization": {
+    "month_compute": false,
+    "annual_cycle": false,
+    "twenty_year_200m_production": false
+  }
+}

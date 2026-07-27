@@ -11,7 +11,17 @@ import math
 import os
 from pathlib import Path
 import re
+import sys
 from tempfile import NamedTemporaryFile
+
+sys.path.insert(
+    0,
+    str(Path(__file__).resolve().parents[2] / "swiss_200m" / "validation"),
+)
+from month_source_contract import (  # noqa: E402
+    OUTPUT_DIAGNOSTIC_ONLY,
+    require_published_source_qualification,
+)
 
 
 TIMER = re.compile(
@@ -257,10 +267,36 @@ def main() -> int:
             failures.append(
                 "paired-event assessment does not verify the required authorization"
             )
-    expected_commit = config["case"]["expected_hicar_commit"]
+    expected_commit = plan.get("expected_hicar_commit")
     expected_static_sha256 = config["case"]["static_sha256"]
-    if plan.get("expected_hicar_commit") != expected_commit:
-        failures.append("capacity plan source commit differs from the frozen config")
+    if config["case"].get("expected_hicar_commit") is not None:
+        failures.append(
+            "capacity config incorrectly pins a source instead of using "
+            "the month-source qualification"
+        )
+    source_qualification_path = Path(
+        plan.get("source_qualification_report", "")
+    )
+    source_mode = (
+        plan.get("source_qualification_mode") or OUTPUT_DIAGNOSTIC_ONLY
+    )
+    _, source_failures = require_published_source_qualification(
+        source_qualification_path,
+        expected_child_commit=expected_commit,
+        required_parent_commit=plan.get("required_parent_hicar_commit"),
+        qualification_mode=source_mode,
+    )
+    failures.extend(
+        f"capacity source qualification: {failure}"
+        for failure in source_failures
+    )
+    if (
+        not source_qualification_path.is_file()
+        or not plan.get("source_qualification_sha256")
+        or sha256(source_qualification_path)
+        != plan["source_qualification_sha256"]
+    ):
+        failures.append("capacity source qualification is not checksum-frozen")
     static_path = Path(plan.get("static_file", ""))
     actual_static_sha256 = (
         sha256(static_path) if static_path.is_file() else None
@@ -476,6 +512,13 @@ def main() -> int:
         ),
         "plan": str(args.plan.resolve()),
         "event_decision": plan.get("event_decision"),
+        "expected_hicar_commit": expected_commit,
+        "source_qualification": {
+            "path": str(source_qualification_path),
+            "sha256": plan.get("source_qualification_sha256"),
+            "mode": source_mode,
+            "parent_commit": plan.get("required_parent_hicar_commit"),
+        },
         "geometry": geometry,
         "segments": segment_results,
         "combined_output_times": combined_times,

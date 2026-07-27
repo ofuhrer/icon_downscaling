@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "candidate_commit": "5da4b1980497f20468e6e4b5b4c4a584849c3454",
+  "event": "summer",
+  "period": {
+    "start": "2020-07-01T00:00:00",
+    "end": "2020-07-04T00:00:00",
+    "output_interval_seconds": 10800,
+    "output_record_count": 25
+  },
+  "decision": "HOLD_AND_DIAGNOSE",
+  "status": "FAIL",
+  "reason": "The model and all engineering, provenance, solver, checkpoint, water, energy, wind, pressure, and precipitation gates passed, but both pre-frozen independent temperature-degradation screens failed.",
+  "balfrin": {
+    "run_dir": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/runs/science_summer_baseline_v29_5da4b198_20200701_00_20200704_00",
+    "assessment_path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/baseline_transition_v29_5da4b198/summer_transition_event_assessment.json",
+    "assessment_sha256": "d758f25227136294e6274de293daf4090c02c566bd1fdc0f40f0f816769b5785",
+    "model_job": {
+      "job_id": 4949561,
+      "state": "COMPLETED",
+      "elapsed": "04:49:49"
+    },
+    "validator_jobs": {
+      "scientific_budget_and_source": 4949562,
+      "solver": 4949563,
+      "swissmetnet": 4949564,
+      "ogd": 4949565,
+      "original_checkpoint_wrapper_failure": 4949566,
+      "checkpoint_validator_only_replay": 4950083,
+      "replacement_event_assessor": 4950108
+    }
+  },
+  "validator_outcomes": {
+    "model": "PASS",
+    "source_and_provenance": "PASS",
+    "solver_and_conservation": "PASS",
+    "restart_checkpoints": "PASS_AFTER_VALIDATOR_ONLY_REPLAY",
+    "physical_water_and_energy": "PASS",
+    "swissmetnet_report": "PASS",
+    "ogd_report": "PASS",
+    "frozen_transition_assessment": "FAIL"
+  },
+  "checkpoint_evidence": {
+    "original_failure_class": "FROZEN_RUNTIME_MISSING_TRANSITIVE_PYTHON_LEAF",
+    "model_or_checkpoint_failure": false,
+    "repair_runtime": "runtime_checkpoint_repair/runtime_manifest.json",
+    "repair_required_model_rerun": false,
+    "required_boundaries_hours": [
+      24,
+      48,
+      72
+    ],
+    "observed_boundaries_hours": [
+      24,
+      48,
+      72
+    ],
+    "checkpoint_bytes_each": 43479462490,
+    "report_sha256": "43c7270508ecaa3abc9a883fbd9d86eff7eb3bdce94e4c804cfc968c567b2e01"
+  },
+  "passed_science_metrics": {
+    "water_budget": {
+      "mode": "production_cumulative",
+      "production_eligible": true,
+      "active_soil_interior_residual_kg_m2": 0.0034503775298677652,
+      "maximum_absolute_residual_kg_m2": 5.0,
+      "runoff_kg_m2": 0.3494012755597756
+    },
+    "interior_surface_energy_closure_mae_w_m2": 1.8390171884919275,
+    "maximum_surface_energy_closure_mae_w_m2": 10.0,
+    "station_wind_vector_rmse_m_s": {
+      "hicar": 3.3520652263549757,
+      "rea_l": 2.3689557204328717,
+      "maximum_hicar": 5.368955720432872
+    },
+    "station_precipitation_interval_rmse_kg_m2": {
+      "hicar": 2.5507339095664503,
+      "rea_l": 1.3980030163639603,
+      "maximum_hicar": 3.39800301636396
+    },
+    "rhiresd_precipitation_rmse_kg_m2": {
+      "hicar": 11.828391244698922,
+      "rea_l": 6.071512951065895,
+      "maximum_hicar": 12.14302590213179
+    }
+  },
+  "failed_science_metrics": {
+    "station_temperature_2m_height_adjusted_k": {
+      "hicar_bias": 3.6627154753903888,
+      "hicar_rmse": 5.12017361193946,
+      "rea_l_rmse": 1.4350351369583427,
+      "maximum_hicar_rmse": 3.4350351369583425,
+      "pair_count": 3716
+    },
+    "tabsd_temperature_k": {
+      "hicar_bias": 3.3817704257,
+      "hicar_rmse": 4.365324040318033,
+      "rea_l_rmse": 1.0247152923056873,
+      "maximum_hicar_rmse": 3.0247152923056873,
+      "elevation_bias_k": {
+        "lt_500m": 1.7276,
+        "500_1000m": 3.8086,
+        "1000_1500m": 4.6383,
+        "1500_2000m": 4.6683,
+        "2000_3000m": 2.8494,
+        "ge_3000m": -0.9763
+      }
+    }
+  },
+  "secondary_diagnostics": {
+    "station_relative_humidity_bias_percentage_points": -14.311836809501719,
+    "station_global_shortwave_bias_w_m2": 28.312768759261395,
+    "station_precipitation_interval_bias_kg_m2": -0.6757565624719798,
+    "interpretation": "The warm signal is broad, interior, and strongest in the 1000-2000 m bands. The concurrent dry, high-shortwave, and near-zero modeled station precipitation diagnostics are hypotheses for a future bounded diagnosis, not an established causal attribution."
+  },
+  "authorization": {
+    "winter_event": false,
+    "summer_restart_overlap": false,
+    "paired_transition_assessment": false,
+    "month_compute": false,
+    "annual_cycle": false,
+    "twenty_year_200m_production": false,
+    "one_hundred_metre_science": false
+  },
+  "stopping_rule": "Stop at this completed seasonal-event gate. Do not submit winter, overlap, month, annual, twenty-year, or 100 m simulations from V29. Any future work starts with a bounded diagnosis of the warm/dry surface-state and flux evolution using the preserved 72-hour output."
+}

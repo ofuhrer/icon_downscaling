@@ -15,6 +15,8 @@ ASSESSOR = (
 BASE_CONFIG = (
     ROOT / "case_studies/swiss_100m/config/engineering_capacity_gate.json"
 )
+CHILD = "a" * 40
+PARENT = "b" * 40
 
 
 def publish(path: Path, payload: dict) -> None:
@@ -25,6 +27,66 @@ def publish(path: Path, payload: dict) -> None:
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def source_qualification() -> dict:
+    return {
+        "schema_version": 1,
+        "status": "PASS",
+        "change_scope": "OUTPUT_DIAGNOSTIC_ONLY",
+        "child_commit": CHILD,
+        "parent_commit": PARENT,
+        "parent_ancestry": {
+            "status": "PASS",
+            "parent_is_ancestor": True,
+            "merge_base": PARENT,
+        },
+        "evidence": {
+            "clean_target_build": {
+                "status": "PASS",
+                "artifact_sha256": "1" * 64,
+                "source_tree_clean": True,
+                "source_commit": CHILD,
+                "target": "HICAR",
+            },
+            "restart_continuity": {
+                "status": "PASS",
+                "artifact_sha256": "2" * 64,
+                "source_commit": CHILD,
+                "nonzero_runoff_observed": True,
+                "compared_fields": [
+                    "precipitation",
+                    "runoff_surface_cumulative",
+                    "runoff_subsurface_cumulative",
+                    "evaporation_net_cumulative",
+                ],
+            },
+            "representative_bridge_run": {
+                "status": "PASS",
+                "artifact_sha256": "3" * 64,
+                "source_commit": CHILD,
+                "completion_status": "PASS",
+            },
+            "national_short_run": {
+                "status": "PASS",
+                "artifact_sha256": "4" * 64,
+                "source_commit": CHILD,
+                "completion_status": "PASS",
+            },
+            "preexisting_field_equivalence": {
+                "status": "PASS",
+                "artifact_sha256": "5" * 64,
+                "compared_field_count": 20,
+                "mismatch_count": 0,
+            },
+            "solver_gate_equivalence": {
+                "status": "PASS",
+                "artifact_sha256": "6" * 64,
+                "compared_gate_count": 8,
+                "mismatch_count": 0,
+            },
+        },
+    }
 
 
 def write_memory(directory: Path, low_gpu: bool = False) -> None:
@@ -50,7 +112,6 @@ def build_fixture(tmp_path: Path, low_gpu: bool = False) -> tuple[Path, Path, li
     static.write_bytes(b"national-static")
     static_digest = sha256(static)
     config_payload = json.loads(BASE_CONFIG.read_text())
-    config_payload["case"]["expected_hicar_commit"] = "a" * 40
     config_payload["case"]["static_sha256"] = static_digest
     config.write_text(json.dumps(config_payload))
     geometry = tmp_path / "geometry.json"
@@ -73,6 +134,8 @@ def build_fixture(tmp_path: Path, low_gpu: bool = False) -> tuple[Path, Path, li
             "decision": "GO_MONTH_AND_100M_CAPACITY_GATE",
         },
     )
+    qualification = tmp_path / "source_qualification.json"
+    publish(qualification, source_qualification())
     segments = []
     time_sets = [
         [
@@ -171,6 +234,10 @@ def build_fixture(tmp_path: Path, low_gpu: bool = False) -> tuple[Path, Path, li
             "event_assessment_sha256": sha256(event),
             "event_decision": "GO_MONTH_AND_100M_CAPACITY_GATE",
             "expected_hicar_commit": "a" * 40,
+            "source_qualification_report": str(qualification),
+            "source_qualification_sha256": sha256(qualification),
+            "source_qualification_mode": "OUTPUT_DIAGNOSTIC_ONLY",
+            "required_parent_hicar_commit": PARENT,
             "geometry_report": str(geometry),
             "geometry_report_sha256": sha256(geometry),
             "static_file": str(static),
@@ -344,7 +411,7 @@ def test_capacity_assessor_rejects_insufficient_gpu_headroom(tmp_path):
     assert "GPUs have less than 15% headroom" in result.stdout
 
 
-def test_capacity_assessor_rejects_plan_identity_rewritten_away_from_config(
+def test_capacity_assessor_rejects_plan_identity_rewritten_away_from_source_gate(
     tmp_path,
 ):
     plan, accounting, jobs = build_fixture(tmp_path)
@@ -375,7 +442,9 @@ def test_capacity_assessor_rejects_plan_identity_rewritten_away_from_config(
     )
 
     assert result.returncode == 1
-    assert "source commit differs from the frozen config" in result.stdout
+    assert "source qualification child commit does not match month plan" in (
+        result.stdout
+    )
 
 
 def test_capacity_assessor_rejects_gpu_samples_from_wrong_node_topology(

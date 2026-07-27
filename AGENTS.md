@@ -16,7 +16,9 @@ The workflow must cover source-data discovery, structured forcing conversion, st
 - Durable online root: `/store_new/mch/msopr/olifu/icon_downscaling`
 - HICAR remote: `git@github.com:ofuhrer/HICAR.git`
 - Production-performance branch: `feature/icon_downscaling`
-- Retired solver-research and experiment history: `archives/`
+- Retired solver-research source: checksum-bound bundles and manifests under
+  `recovery/` and the durable online root; do not recreate active branches or
+  scratch worktrees for it.
 
 Use `memory/project-state.md` for current milestones, validated artifacts, and unresolved constraints. Do not add dated investigation diaries.
 

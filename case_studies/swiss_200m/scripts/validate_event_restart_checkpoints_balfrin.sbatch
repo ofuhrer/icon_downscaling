@@ -14,7 +14,7 @@ module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
 
 repo_root=${REPO_ROOT:-$SCRATCH/icon_hicar}
 python=${HICAR_VALIDATION_PYTHON:-$repo_root/venv_static/bin/python}
-validator=$repo_root/case_studies/swiss_200m/validation/validate_event_restart_checkpoints.py
+validator=${HICAR_RESTART_CHECKPOINT_VALIDATOR:-$repo_root/case_studies/swiss_200m/validation/validate_event_restart_checkpoints.py}
 run=${EVENT_RUN_DIR:?Set EVENT_RUN_DIR}
 static_basename=${HICAR_STATIC_BASENAME:?Set HICAR_STATIC_BASENAME}
 start=${EVENT_START:?Set EVENT_START}

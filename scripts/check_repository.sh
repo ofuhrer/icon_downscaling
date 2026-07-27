@@ -31,7 +31,9 @@ cd "$REPO_ROOT"
 
 python_files=()
 while IFS= read -r -d '' path; do
-  python_files+=("$path")
+  if [ -f "$path" ]; then
+    python_files+=("$path")
+  fi
 done < <(git ls-files -z -- '*.py')
 
 if [ "${#python_files[@]}" -gt 0 ]; then
@@ -40,7 +42,9 @@ fi
 
 shell_files=()
 while IFS= read -r -d '' path; do
-  shell_files+=("$path")
+  if [ -f "$path" ]; then
+    shell_files+=("$path")
+  fi
 done < <(git ls-files -z -- '*.sh' '*.sbatch')
 
 for path in "${shell_files[@]}"; do

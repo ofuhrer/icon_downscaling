@@ -9,7 +9,17 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import sys
 from tempfile import NamedTemporaryFile
+
+sys.path.insert(
+    0,
+    str(Path(__file__).resolve().parents[2] / "swiss_200m" / "validation"),
+)
+from month_source_contract import (  # noqa: E402
+    OUTPUT_DIAGNOSTIC_ONLY,
+    require_published_source_qualification,
+)
 
 
 TIME_FORMAT = "%Y-%m-%dT%H:%M:%S"
@@ -177,6 +187,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--gate-config", type=Path, required=True)
     parser.add_argument("--event-assessment", type=Path, required=True)
+    parser.add_argument("--source-qualification", type=Path, required=True)
     parser.add_argument("--geometry-report", type=Path, required=True)
     parser.add_argument("--static-file", type=Path, required=True)
     parser.add_argument("--static-manifest", type=Path, required=True)
@@ -186,6 +197,7 @@ def main() -> int:
 
     for path, label in (
         (args.event_assessment, "paired-event assessment"),
+        (args.source_qualification, "month-source qualification"),
         (args.geometry_report, "100 m geometry report"),
         (args.static_file, "100 m static file"),
     ):
@@ -206,6 +218,31 @@ def main() -> int:
         )
     ):
         raise SystemExit("paired-event assessment does not authorize the 100 m gate")
+    source_qualification = load_json(args.source_qualification)
+    source_mode = (
+        source_qualification.get("qualification_mode")
+        or source_qualification.get("change_scope")
+        or OUTPUT_DIAGNOSTIC_ONLY
+    )
+    allowed_modes = set(
+        config["authorization"]["allowed_month_source_qualification_modes"]
+    )
+    if source_mode not in allowed_modes:
+        raise SystemExit(
+            f"month-source qualification mode is not allowed: {source_mode}"
+        )
+    expected_commit = source_qualification.get("child_commit")
+    required_parent = source_qualification.get("parent_commit")
+    _, source_failures = require_published_source_qualification(
+        args.source_qualification,
+        expected_child_commit=expected_commit,
+        required_parent_commit=required_parent,
+        qualification_mode=source_mode,
+    )
+    if source_failures:
+        raise SystemExit(
+            "month-source qualification failed: " + "; ".join(source_failures)
+        )
     static_digest = sha256(args.static_file)
     expected_digest = config["case"]["static_sha256"]
     if (
@@ -262,7 +299,11 @@ def main() -> int:
         "event_assessment": str(args.event_assessment.resolve()),
         "event_assessment_sha256": sha256(args.event_assessment),
         "event_decision": assessment["decision"],
-        "expected_hicar_commit": config["case"]["expected_hicar_commit"],
+        "expected_hicar_commit": expected_commit,
+        "source_qualification_report": str(args.source_qualification.resolve()),
+        "source_qualification_sha256": sha256(args.source_qualification),
+        "source_qualification_mode": source_mode,
+        "required_parent_hicar_commit": required_parent,
         "geometry_report": str(args.geometry_report.resolve()),
         "geometry_report_sha256": sha256(args.geometry_report),
         "static_file": str(args.static_file.resolve()),

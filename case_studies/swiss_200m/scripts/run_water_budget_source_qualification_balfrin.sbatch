@@ -3,7 +3,7 @@
 # The three model integrations share one four-node allocation and frozen forcing.
 # CPU-heavy NetCDF comparison is deliberately left to a dependent pp-short job.
 #SBATCH --job-name=hicar-water-budget-national
-#SBATCH --partition=short
+#SBATCH --partition=normal
 #SBATCH --nodes=4
 #SBATCH --ntasks-per-node=5
 #SBATCH --cpus-per-task=1
@@ -24,8 +24,8 @@ module load nvhpc/24.5 cray-mpich-nvhpc/8.1.30 cuda/12.3.0-gcc \
   hdf5/1.14.3-nvhpc fftw/3.3.10-gcc
 
 case_root=${HICAR_SWISS_CASE:-${SCRATCH:?}/icon_hicar/case_studies/swiss_200m}
-parent_root=${HICAR_WATER_BUDGET_PARENT_ROOT:-${SCRATCH}/icon_hicar/HICAR-radiation-cloud-fraction}
-child_root=${HICAR_WATER_BUDGET_CHILD_ROOT:-${SCRATCH}/icon_hicar/HICAR-water-budget-p0}
+parent_root=${HICAR_WATER_BUDGET_PARENT_ROOT:?Set HICAR_WATER_BUDGET_PARENT_ROOT}
+child_root=${HICAR_WATER_BUDGET_CHILD_ROOT:?Set HICAR_WATER_BUDGET_CHILD_ROOT}
 parent_build=${HICAR_WATER_BUDGET_PARENT_BUILD:-${parent_root}/build_gpu_nccl}
 child_build=${HICAR_WATER_BUDGET_CHILD_BUILD:-${child_root}/build_gpu_nccl_water_budget_p0}
 parent_commit=${HICAR_WATER_BUDGET_PARENT_COMMIT:?Set HICAR_WATER_BUDGET_PARENT_COMMIT}
@@ -169,7 +169,7 @@ render_case \
   "$run_root/parent/output" \
   "$run_root/parent/restart" \
   "$base_plan" "$forcing_list" \
-  "2020-07-01 00:00:00" "2020-07-01 02:00:00" 2
+  "2020-07-01 00:00:00" "2020-07-01 02:00:00" 1
 
 strip_water_budget_diagnostics() {
   "$python" - "$1" <<'PY'

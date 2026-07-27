@@ -9,7 +9,17 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 from tempfile import NamedTemporaryFile
+
+sys.path.insert(
+    0,
+    str(Path(__file__).resolve().parents[2] / "swiss_200m" / "validation"),
+)
+from month_source_contract import (  # noqa: E402
+    OUTPUT_DIAGNOSTIC_ONLY,
+    require_published_source_qualification,
+)
 
 
 def load_json(path: Path) -> dict:
@@ -47,6 +57,13 @@ def validate_runtime_stack(
         case_root / "validation/assess_engineering_capacity_gate.py": (
             "production provenance is not PASS",
             "do not share one source, executable, and static identity",
+            "capacity source qualification is not checksum-frozen",
+        ),
+        repo_root
+        / "case_studies/swiss_200m/validation/month_source_contract.py": (
+            "OUTPUT_DIAGNOSTIC_ONLY",
+            "SCIENTIFIC_BASELINE_TRANSITION",
+            "nonzero runoff",
         ),
     }
     critical = {path.resolve(): tokens for path, tokens in critical.items()}
@@ -292,6 +309,31 @@ def main() -> int:
     expected_commit = plan.get("expected_hicar_commit")
     if not expected_commit:
         raise SystemExit("capacity plan does not freeze an expected HICAR commit")
+    source_qualification_path = Path(
+        plan.get("source_qualification_report", "")
+    )
+    source_mode = (
+        plan.get("source_qualification_mode") or OUTPUT_DIAGNOSTIC_ONLY
+    )
+    _, source_failures = require_published_source_qualification(
+        source_qualification_path,
+        expected_child_commit=expected_commit,
+        required_parent_commit=plan.get("required_parent_hicar_commit"),
+        qualification_mode=source_mode,
+    )
+    if source_failures:
+        raise SystemExit(
+            "capacity source qualification failed: "
+            + "; ".join(source_failures)
+        )
+    if (
+        not plan.get("source_qualification_sha256")
+        or sha256(source_qualification_path)
+        != plan["source_qualification_sha256"]
+    ):
+        raise SystemExit(
+            "capacity source qualification changed after planning"
+        )
     source_commit = subprocess.run(
         ["git", "-C", str(args.hicar_root.resolve()), "rev-parse", "HEAD"],
         check=True,

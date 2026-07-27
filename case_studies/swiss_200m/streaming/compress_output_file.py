@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+from datetime import UTC, datetime
 from pathlib import Path
 import subprocess
 from tempfile import NamedTemporaryFile
@@ -51,6 +52,30 @@ def write_json_atomic(path: Path, payload: dict) -> None:
     os.replace(temporary, path)
 
 
+def verify_publication(source: Path, target: Path, report_path: Path) -> bool:
+    try:
+        report = json.loads(report_path.read_text())
+        return (
+            target.is_file()
+            and report.get("status") == "PASS"
+            and report.get("source_sha256") == file_sha256(source)
+            and report.get("target_sha256") == file_sha256(target)
+        )
+    except (OSError, ValueError, json.JSONDecodeError):
+        return False
+
+
+def quarantine_incomplete(target: Path, report: Path) -> None:
+    artifacts = [path for path in (target, report) if path.exists()]
+    if not artifacts:
+        return
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
+    recovery = target.parent / "recovery" / f"{target.name}.{stamp}"
+    recovery.mkdir(parents=True, exist_ok=False)
+    for artifact in artifacts:
+        os.replace(artifact, recovery / artifact.name)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", required=True, type=Path)
@@ -64,17 +89,17 @@ def main() -> int:
     if not args.source.is_file() or args.source.stat().st_size == 0:
         raise SystemExit(f"source is missing or empty: {args.source}")
     ready = Path(f"{args.target}.ready")
-    if args.target.exists() or ready.exists() or args.report.exists():
-        if args.target.is_file() and ready.is_file() and args.report.is_file():
-            report = json.loads(args.report.read_text())
-            if (
-                report.get("status") == "PASS"
-                and report.get("source_sha256") == file_sha256(args.source)
-                and report.get("target_sha256") == file_sha256(args.target)
-            ):
-                print(f"already published and verified: {args.target}")
-                return 0
-        raise SystemExit("refusing to replace an incomplete or non-identical publication")
+    if ready.exists():
+        if verify_publication(args.source, args.target, args.report):
+            print(f"already published and verified: {args.target}")
+            return 0
+        raise SystemExit("ready marker exists for an invalid compressed publication")
+    if args.target.exists() or args.report.exists():
+        if verify_publication(args.source, args.target, args.report):
+            ready.touch()
+            print(f"recovered publication marker: {args.target}")
+            return 0
+        quarantine_incomplete(args.target, args.report)
 
     args.target.parent.mkdir(parents=True, exist_ok=True)
     partial = args.target.with_name(

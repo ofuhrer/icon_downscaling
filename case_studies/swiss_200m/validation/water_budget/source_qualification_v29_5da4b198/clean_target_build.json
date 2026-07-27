@@ -1,0 +1,25 @@
+{
+  "build_log": {
+    "path": "/scratch/mch/olifu/icon_hicar/hicar_build_4949264.out",
+    "sha256": "2c4d298a71bbd73ad1909e67590932d05ab692c8609ea29311fa6fdb209d0f38"
+  },
+  "build_script": {
+    "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/scripts/build_hicar_balfrin.sbatch",
+    "sha256": "991249e6abc408e19dea3dafd2a8cbd4a3d9f81111ed0a7d1474c9b5f8341871"
+  },
+  "executable": {
+    "path": "/scratch/mch/olifu/icon_hicar/build-water-budget-v29-5da4b198-gpu-nccl/HICAR_gpu",
+    "sha256": "2feabf5000ea7d4b3ffb98a0e41f5747ae449a514c93b7528c71024e9fd09e5a"
+  },
+  "job_id": "4949264",
+  "parent_commit": "246c8992564ad3e89f49546776ae31ad8a1ce239",
+  "schema_version": 1,
+  "source_commit": "5da4b1980497f20468e6e4b5b4c4a584849c3454",
+  "source_tree_clean": true,
+  "status": "PASS",
+  "target": "Balfrin NVHPC 24.5 OpenACC/NCCL release HICAR and HICAR-tester",
+  "tester": {
+    "path": "/scratch/mch/olifu/icon_hicar/build-water-budget-v29-5da4b198-gpu-nccl/tests/HICAR-tester",
+    "sha256": "51ff24bd7cc4602f64521d4cf600076ed9aa8d27e67cd7a66eb468413888131d"
+  }
+}

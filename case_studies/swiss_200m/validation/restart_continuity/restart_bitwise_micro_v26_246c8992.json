@@ -1,0 +1,53 @@
+{
+  "build_provenance": {
+    "bytes": 7727,
+    "path": "/scratch/mch/olifu/icon_hicar/build-restart-noahmp-state-v26-246c8992-cpu/hicar_build_provenance.txt",
+    "sha256": "44bb03ff9c0eb71df0a0f48f66b1aee40ee297a2390a6e550109deb2e3839962"
+  },
+  "continuous_output": {
+    "bytes": 654714824,
+    "path": "/scratch/mch/olifu/icon_hicar/HICAR-restart-noahmp-state-v26-246c8992-cpu-src/tests/Test_Cases/output/Repro_Restart_continuous_backup/Gaudergrat_250m_2017-02-14_00-00-00.nc",
+    "sha256": "4aee74248c28a4a3ceed1fcd4ad102a916179ac1d87fbd86c20febb396de275c"
+  },
+  "different_variable_count": 0,
+  "different_variables": [],
+  "exact_compare_exit_code": 0,
+  "exact_compare_log": {
+    "bytes": 22283,
+    "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/restart_continuity/restart_bitwise_micro_v26_246c8992.exact_compare.log",
+    "sha256": "b782a743ed419948c06da30b85c0f72deb28d2b68a6f99779735e9d12223b5f4"
+  },
+  "executable": {
+    "bytes": 14756856,
+    "path": "/scratch/mch/olifu/icon_hicar/build-restart-noahmp-state-v26-246c8992-cpu/HICAR",
+    "sha256": "959cf0632abac2c133d263f0ee3751aeb17e664d8f59fab79ae3564fc4763f2a"
+  },
+  "hicar_commit": "246c8992564ad3e89f49546776ae31ad8a1ce239",
+  "limitations": [
+    "This is not a Swiss-national or production-cadence qualification.",
+    "Restart-only fields require the later endpoint-restart comparison gate."
+  ],
+  "model_test_log": {
+    "bytes": 32570,
+    "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/restart_continuity/restart_bitwise_micro_v26_246c8992.model_test.log",
+    "sha256": "8a8913661b65ad25fa0d0dd724ca998eac7d8382dfbbeb804eaa90b9341d0b03"
+  },
+  "restarted_output": {
+    "bytes": 654714824,
+    "path": "/scratch/mch/olifu/icon_hicar/HICAR-restart-noahmp-state-v26-246c8992-cpu-src/tests/Test_Cases/output/Repro_Restart/Gaudergrat_250m_2017-02-14_00-00-00.nc",
+    "sha256": "727add7c17f618b94103afafb68ca426027b0008fc3f2065aef98af03a83c43a"
+  },
+  "schema": "hicar_restart_bitwise_micro_v1",
+  "scope": "Ten-minute bundled Alpine whole-model screen; five-minute restart; bitwise final history-state comparison.",
+  "status": "PASS",
+  "tester": {
+    "bytes": 15960008,
+    "path": "/scratch/mch/olifu/icon_hicar/build-restart-noahmp-state-v26-246c8992-cpu/tests/HICAR-tester",
+    "sha256": "3d332bdcdb3bd62bf910b4528d7337d3b8e6bc6f510f56490f58b9653dc45751"
+  },
+  "unit_test_log": {
+    "bytes": 4010,
+    "path": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/restart_continuity/restart_bitwise_micro_v26_246c8992.unit_test.log",
+    "sha256": "400485a9e779c63cce9e212f360b676f3e5602f43a6844c68adc762b136f8ab3"
+  }
+}

@@ -5,6 +5,9 @@ ROOT = Path(__file__).resolve().parents[1]
 METADATA_SOURCE = ROOT / "HICAR" / "src" / "io" / "default_output_metadata.F90"
 OUTPUT_SOURCE = ROOT / "HICAR" / "src" / "io" / "output_obj.F90"
 LSM_SOURCE = ROOT / "HICAR" / "src" / "physics" / "lsm_driver.F90"
+WATER_BUDGET_SOURCE = (
+    ROOT / "HICAR" / "src" / "physics" / "water_budget_diagnostics.F90"
+)
 CONSTANTS_SOURCE = ROOT / "HICAR" / "src" / "constants" / "icar_constants.F90"
 
 
@@ -91,6 +94,7 @@ def test_runoff_snapshot_metadata_is_a_soil_step_amount_not_a_rate() -> None:
 def test_cumulative_water_observables_are_restart_persistent_and_no_reset() -> None:
     metadata = METADATA_SOURCE.read_text()
     lsm = LSM_SOURCE.read_text()
+    diagnostics = WATER_BUDGET_SOURCE.read_text()
     constants = CONSTANTS_SOURCE.read_text()
     names = (
         "runoff_surface_cumulative",
@@ -105,17 +109,14 @@ def test_cumulative_water_observables_are_restart_persistent_and_no_reset() -> N
             "cumulative since simulation start; no output reset; "
             "restart-persistent"
         ) in metadata
-        assert lsm.count(f"kVARS%{name}") >= 3
+        assert lsm.count(f"kVARS%{name}") >= 2
+        assert diagnostics.count(f"kVARS%{name}") >= 1
 
     snow_call = lsm.index("call snow_model(domain, options, dt")
-    accumulation = lsm.index(
-        "runoff_surface_cumulative(i,j) = "
-        "runoff_surface_cumulative(i,j)",
-        snow_call,
-    )
+    accumulation = lsm.index("call accumulate_water_budget(", snow_call)
     precip_tracking = lsm.index("lsm_last_precip(i,j) = precipitation(i,j)")
     assert snow_call < accumulation < precip_tracking
-    accumulation_block = lsm[snow_call:precip_tracking]
+    accumulation_block = diagnostics
     assert "if (land_mask(i,j) == real(kLC_LAND)) then" in accumulation_block
     assert "if (runoff_surface_step(i,j) >= 0.0) then" in accumulation_block
     assert "if (runoff_subsurface_step(i,j) >= 0.0) then" in accumulation_block

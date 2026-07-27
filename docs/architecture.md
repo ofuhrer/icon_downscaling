@@ -29,11 +29,12 @@ are explicit and it does not embed one case's acceptance decision.
 configuration. Python validators that implement a case's scientific contract
 stay with that case.
 
-`orchestration/` is reserved for future campaign-control contracts and a
-stateful retry/lease controller. It must not absorb scientific validators,
-Slurm scripts, or model logic. The current long-running DAGs have no
-requeue/signal recovery and use fixed run directories that reject partial
-outputs, so they are not pre-emption-safe.
+`orchestration/` contains the stateful retry/lease controller for the
+short-slice pre-emptible workflow. It owns attempt identity, scheduler
+reconciliation, capacity limits, and final coverage publication. It does not
+absorb scientific validators, case Slurm scripts, or model logic. Legacy
+long-running DAGs still have no requeue/signal recovery and remain outside
+this pre-emption-safe path.
 
 ### Case studies
 
@@ -174,10 +175,9 @@ the matching HICAR implementation is committed, pushed, and qualified. HICAR
 build, MPI, GPU, and physical regression gates remain target-stack workflows
 documented by the case and runtime procedures.
 
-## Future orchestration boundary
+## Pre-emptible orchestration boundary
 
-A future controller may coordinate long campaign segments only after its
-contract defines:
+The implemented controller coordinates short campaign segments with:
 
 - durable segment identity and immutable attempt identity;
 - exclusive leases with expiry and ownership checks outside the Slurm job;
@@ -187,14 +187,14 @@ contract defines:
 - retry classification that distinguishes infrastructure pre-emption from
   deterministic model or scientific failure;
 - restart selection from validator-published, checksum-bound checkpoints;
-- idempotent publication and retirement across termination at every boundary;
+- idempotent publication recovery across termination at every boundary;
 - bounded retries and an explicit terminal blocked state.
 
-Slurm requeue is not itself resume. A controller must never manufacture ready
-markers, reuse partial fixed-directory output, weaken a scientific gate, or
-infer success from scheduler completion alone. Until the controller and its
-negative-path tests exist, campaign recovery remains an explicit operator
-workflow.
+Slurm requeue is not itself resume. The controller never reuses a partial
+attempt directory, weakens a scientific gate, or infers success from scheduler
+completion alone. A missing ready marker may be recovered only by revalidating
+the complete payload and its hashes. Otherwise the incomplete artifact is
+quarantined and work is repeated.
 
 On Balfrin, `preemptible` currently uses cancellation pre-emption with
 `SIGTERM` and a 60-second grace period, while `lowprio` has priority zero and
@@ -204,3 +204,15 @@ already been published, or an `afterok` dependency could release an incomplete
 successor. Signal-driven safe-stop is best effort only: restart payloads are
 roughly 42 GB at 200 m and about four times larger at 100 m. Hard-kill recovery
 must select the last already-closed, validator-published checkpoint.
+
+Heavy HICAR attempts are the only jobs initially assigned to `preemptible`.
+The lightweight persistent watcher uses `pp-long`; one campaign-wide CPU
+array uses `pp-short` with a maximum of two active tasks. The model-slot limit
+is node-aware against a 44-node budget and may be changed at runtime, including
+zero to pause submissions. Parallelism is allowed only across independently
+authorized restart chains.
+
+This first controller deliberately does not automate destructive forcing,
+restart, or raw-output retirement. Existing hash-checked retirement tools and
+the archive contract remain the lifecycle authority until their destructive
+steps have the same interruption-recovery coverage as publication and retry.

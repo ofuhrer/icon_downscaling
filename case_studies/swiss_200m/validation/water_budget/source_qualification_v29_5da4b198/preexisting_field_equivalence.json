@@ -1,0 +1,187 @@
+{
+  "candidate": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/national_source_qualification_v29_5da4b198/child_continuous/output/domain_static_swiss_200m_rea_l_20200701_0000_2020-07-01_00-00-00.nc",
+  "candidate_only_fields": [
+    "evaporation_net_cumulative",
+    "runoff_subsurface_cumulative",
+    "runoff_surface_cumulative"
+  ],
+  "compared_field_count": 32,
+  "compared_fields": [
+    "albedo",
+    "canopy_water",
+    "emiss",
+    "graupel",
+    "hfgs",
+    "hfls",
+    "hfss",
+    "hus2m",
+    "lat",
+    "lon",
+    "lwtr",
+    "precipitation",
+    "psfc",
+    "rlus",
+    "rsds",
+    "runoff_subsurface",
+    "runoff_surface",
+    "snow_height",
+    "snowfall",
+    "soil_column_total_water",
+    "soil_temperature",
+    "soil_water_content",
+    "storage_gw",
+    "swet",
+    "taix",
+    "time",
+    "tsfe",
+    "u10m",
+    "v10m",
+    "water_aquifer",
+    "wetland_h20_store",
+    "z"
+  ],
+  "mismatch_count": 23,
+  "mismatches": [
+    {
+      "chunk": "(1, slice(None, None, None), slice(None, None, None))",
+      "kind": "data",
+      "max_abs_difference": 7.348344661295414e-05,
+      "variable": "precipitation"
+    },
+    {
+      "chunk": "(2, slice(None, None, None), slice(None, None, None))",
+      "kind": "data",
+      "max_abs_difference": 1.6442314176856598e-10,
+      "variable": "snowfall"
+    },
+    {
+      "chunk": "(1, slice(None, None, None), slice(None, None, None))",
+      "kind": "data",
+      "max_abs_difference": 8.40093994140625,
+      "variable": "lwtr"
+    },
+    {
+      "chunk": "(1, slice(None, None, None), slice(None, None, None))",
+      "kind": "data",
+      "max_abs_difference": 0.0007908583065727726,
+      "variable": "canopy_water"
+    },
+    {
+      "chunk": "(1, slice(None, None, None), slice(None, None, None))",
+      "kind": "data",
+      "max_abs_difference": 1.960059642791748,
+      "variable": "hfss"
+    },
+    {
+      "chunk": "(1, slice(None, None, None), slice(None, None, None))",
+      "kind": "data",
+      "max_abs_difference": 2.5132174491882324,
+      "variable": "hfls"
+    },
+    {
+      "chunk": "(1, slice(None, None, None), slice(None, None, None))",
+      "kind": "data",
+      "max_abs_difference": 0.022068023681640625,
+      "variable": "u10m"
+    },
+    {
+      "chunk": "(1, slice(None, None, None), slice(None, None, None))",
+      "kind": "data",
+      "max_abs_difference": 0.015645623207092285,
+      "variable": "v10m"
+    },
+    {
+      "chunk": "(1, slice(None, None, None), slice(None, None, None))",
+      "kind": "data",
+      "max_abs_difference": 0.29583740234375,
+      "variable": "taix"
+    },
+    {
+      "chunk": "(1, slice(None, None, None), slice(None, None, None))",
+      "kind": "data",
+      "max_abs_difference": 0.0001909872516989708,
+      "variable": "hus2m"
+    },
+    {
+      "chunk": "(1, slice(None, None, None), slice(None, None, None))",
+      "kind": "data",
+      "max_abs_difference": 3.1441650390625,
+      "variable": "rlus"
+    },
+    {
+      "chunk": "(1, slice(None, None, None), slice(None, None, None))",
+      "kind": "data",
+      "max_abs_difference": 3.6031951904296875,
+      "variable": "hfgs"
+    },
+    {
+      "chunk": "(1, slice(None, None, None), slice(None, None, None))",
+      "kind": "data",
+      "max_abs_difference": 8.853385224938393e-06,
+      "variable": "runoff_surface"
+    },
+    {
+      "chunk": "(1, slice(None, None, None), slice(None, None, None))",
+      "kind": "data",
+      "max_abs_difference": 3.576301969587803e-05,
+      "variable": "runoff_subsurface"
+    },
+    {
+      "chunk": "(1, slice(None, None, None), slice(None, None, None))",
+      "kind": "data",
+      "max_abs_difference": 0.00018310546875,
+      "variable": "soil_column_total_water"
+    },
+    {
+      "chunk": "(2, slice(None, None, None), slice(None, None, None))",
+      "kind": "data",
+      "max_abs_difference": 0.00048828125,
+      "variable": "water_aquifer"
+    },
+    {
+      "chunk": "(2, slice(None, None, None), slice(None, None, None))",
+      "kind": "data",
+      "max_abs_difference": 0.00048828125,
+      "variable": "storage_gw"
+    },
+    {
+      "chunk": "(1, 0, slice(None, None, None), slice(None, None, None))",
+      "kind": "data",
+      "max_abs_difference": 1.519918441772461e-06,
+      "variable": "soil_water_content"
+    },
+    {
+      "chunk": "(1, 0, slice(None, None, None), slice(None, None, None))",
+      "kind": "data",
+      "max_abs_difference": 0.0108642578125,
+      "variable": "soil_temperature"
+    },
+    {
+      "chunk": "(1, slice(None, None, None), slice(None, None, None))",
+      "kind": "data",
+      "max_abs_difference": 0.64031982421875,
+      "variable": "tsfe"
+    },
+    {
+      "chunk": "(1, slice(None, None, None), slice(None, None, None))",
+      "kind": "data",
+      "max_abs_difference": 5.364418029785156e-07,
+      "variable": "emiss"
+    },
+    {
+      "chunk": "(1, slice(None, None, None), slice(None, None, None))",
+      "kind": "data",
+      "max_abs_difference": 6.341934204101562e-05,
+      "variable": "swet"
+    },
+    {
+      "chunk": "(1, slice(None, None, None), slice(None, None, None))",
+      "kind": "data",
+      "max_abs_difference": 3.4142285585403442e-06,
+      "variable": "snow_height"
+    }
+  ],
+  "reference": "/scratch/mch/olifu/icon_hicar/case_studies/swiss_200m/validation/water_budget/national_source_qualification_v29_5da4b198/parent/output/domain_static_swiss_200m_rea_l_20200701_0000_2020-07-01_00-00-00.nc",
+  "schema_version": 1,
+  "status": "FAIL"
+}

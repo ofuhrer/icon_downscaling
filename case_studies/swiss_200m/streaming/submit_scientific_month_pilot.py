@@ -17,6 +17,7 @@ sys.path.insert(
     str(Path(__file__).resolve().parents[1] / "validation"),
 )
 from month_source_contract import (  # noqa: E402
+    OUTPUT_DIAGNOSTIC_ONLY,
     require_published_source_qualification,
 )
 
@@ -706,11 +707,15 @@ def main() -> int:
     if not expected_commit:
         raise SystemExit("month plan does not freeze an expected HICAR commit")
     source_qualification_path = Path(plan.get("source_qualification_report", ""))
+    source_qualification_mode = (
+        plan.get("source_qualification_mode") or OUTPUT_DIAGNOSTIC_ONLY
+    )
     source_qualification, source_failures = (
         require_published_source_qualification(
             source_qualification_path,
             expected_child_commit=expected_commit,
             required_parent_commit=plan.get("required_parent_hicar_commit"),
+            qualification_mode=source_qualification_mode,
         )
     )
     if source_failures:
@@ -772,6 +777,7 @@ def main() -> int:
                     "source_qualification": {
                         "path": str(source_qualification_path.resolve()),
                         "sha256": frozen_source_qualification_sha256,
+                        "qualification_mode": source_qualification_mode,
                         "child_commit": source_qualification["child_commit"],
                         "parent_commit": source_qualification["parent_commit"],
                     },
@@ -800,6 +806,7 @@ def main() -> int:
         "source_qualification": {
             "path": str(source_qualification_path.resolve()),
             "sha256": frozen_source_qualification_sha256,
+            "qualification_mode": source_qualification_mode,
             "child_commit": source_qualification["child_commit"],
             "parent_commit": source_qualification["parent_commit"],
         },

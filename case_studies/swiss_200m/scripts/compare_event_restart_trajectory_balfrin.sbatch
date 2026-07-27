@@ -14,7 +14,7 @@ module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
 
 repo_root=${REPO_ROOT:-$SCRATCH/icon_hicar}
 python=${HICAR_VALIDATION_PYTHON:-$repo_root/venv_static/bin/python}
-comparator=$repo_root/case_studies/swiss_200m/streaming/compare_segmented_to_uninterrupted.py
+comparator=${HICAR_RESTART_TRAJECTORY_COMPARATOR:-$repo_root/case_studies/swiss_200m/streaming/compare_segmented_to_uninterrupted.py}
 scientific_plan=${SCIENTIFIC_PILOT_PLAN:-$repo_root/case_studies/swiss_200m/config/scientific_pilot_plan.json}
 restarted=${RESTARTED_COMPLETION:?Set RESTARTED_COMPLETION}
 continuous=${CONTINUOUS_COMPLETION:?Set CONTINUOUS_COMPLETION}

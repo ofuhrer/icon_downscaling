@@ -1,0 +1,177 @@
+{
+  "schema_version": 1,
+  "status": "FROZEN_BEFORE_100M_SCIENTIFIC_EXECUTION",
+  "purpose": "Decide whether moving from the qualified Swiss 200 m baseline to 100 m is scientifically justified and numerically stable. Passing the engineering-capacity gate alone is insufficient.",
+  "prerequisites": {
+    "required_200m_month_decision": "GO_ANNUAL_CYCLE",
+    "required_100m_capacity_decision": "QUALIFIED_100M_ENGINEERING_CAPACITY_ONLY",
+    "required_200m_source_qualification_status": "PASS",
+    "required_100m_hicar_commit": "same as the qualified 200 m month source",
+    "required_forcing": "identical REA-L valid times and variables at both resolutions",
+    "required_observations": "identical SwissMetNet and OGD samples at both resolutions"
+  },
+  "paired_event_design": {
+    "events": [
+      {
+        "name": "winter",
+        "start": "2020-01-15T00:00:00",
+        "duration_hours": 72
+      },
+      {
+        "name": "summer",
+        "start": "2020-07-01T00:00:00",
+        "duration_hours": 72
+      }
+    ],
+    "resolutions_m": [
+      100,
+      200
+    ],
+    "output_interval_seconds": 10800,
+    "restart_boundary_hours": [
+      24,
+      48,
+      72
+    ],
+    "restart_overlap": {
+      "restart_at_hour": 48,
+      "comparison_end_hour": 72,
+      "expected_records": 8,
+      "required_fields": [
+        "precipitation",
+        "psfc",
+        "taix",
+        "hus2m",
+        "u10m",
+        "v10m",
+        "rsds",
+        "lwtr",
+        "rlus",
+        "hfgs",
+        "emiss",
+        "snowfall",
+        "graupel",
+        "hfss",
+        "hfls",
+        "tsfe",
+        "albedo",
+        "canopy_water",
+        "swet",
+        "snow_height",
+        "soil_column_total_water",
+        "soil_water_content",
+        "soil_temperature",
+        "runoff_surface_cumulative",
+        "runoff_subsurface_cumulative",
+        "evaporation_net_cumulative",
+        "water_aquifer",
+        "wetland_h20_store"
+      ]
+    },
+    "land_initialization": "resolution-matched REA-L-derived land and snow state using the same valid time and semantics",
+    "static_identity": "each resolution uses one checksum-frozen static domain; the 100 m terrain filter and boundary-relaxation identity are frozen before execution"
+  },
+  "mandatory_numerical_and_physical_gates": {
+    "required_report_status": "PASS",
+    "required_reports_per_event_and_resolution": [
+      "model_chunk_completion.json",
+      "scientific_validation/restart_checkpoint_diagnostics.json",
+      "scientific_validation/solver_log_diagnostics.json",
+      "scientific_validation/scientific_event_diagnostics.json",
+      "scientific_validation/rea_l_source_comparison.json",
+      "scientific_validation/swissmetnet_comparison.json",
+      "scientific_validation/ogd_grid_comparison.json"
+    ],
+    "maximum_adjoint_conservation": 0.00002,
+    "maximum_active_soil_interior_water_residual_kg_m2_per_event": 5.0,
+    "maximum_interior_surface_energy_mean_absolute_residual_w_m2": 10.0,
+    "required_water_budget_mode": "production_cumulative",
+    "required_zero_cumulative_decrease_fields": [
+      "precipitation",
+      "runoff_surface_cumulative",
+      "runoff_subsurface_cumulative"
+    ],
+    "required_nonzero_paired_runoff": true,
+    "minimum_memory_headroom_fraction_every_gpu": 0.15,
+    "minimum_memory_headroom_fraction_every_node": 0.15,
+    "required_restart_trajectory_status": "PASS",
+    "maximum_restart_fraction_outside_frozen_tolerances": 0.0,
+    "maximum_duplicate_or_missing_output_times": 0
+  },
+  "matched_scientific_comparison": {
+    "sampling": "Use the intersection of valid 100 m, 200 m, REA-L, SwissMetNet, and OGD samples. Scores from different samples cannot be compared.",
+    "uncertainty": {
+      "method": "paired block bootstrap",
+      "minimum_block_hours": 24,
+      "confidence_level": 0.95,
+      "minimum_resamples": 1000
+    },
+    "catastrophic_non_degradation_relative_to_200m": {
+      "temperature_2m_height_adjusted_rmse_k_additive": 0.5,
+      "relative_humidity_2m_rmse_percent_additive": 5.0,
+      "surface_pressure_height_adjusted_rmse_pa_additive": 100.0,
+      "wind_vector_rmse_m_s_additive": 1.0,
+      "precipitation_interval_rmse_rule": "100 m RMSE <= max(1.25 * 200 m RMSE, 200 m RMSE + 0.5 kg m-2)",
+      "tabsd_temperature_rmse_k_additive": 0.5,
+      "rhiresd_precipitation_rmse_rule": "100 m RMSE <= max(1.25 * 200 m RMSE, 200 m RMSE + 0.5 kg m-2)"
+    },
+    "terrain_sensitive_skill_families": {
+      "families": [
+        "temperature",
+        "precipitation",
+        "wind",
+        "snow"
+      ],
+      "required_strata": [
+        "elevation_1500_2000m",
+        "elevation_2000_3000m",
+        "elevation_ge_3000m",
+        "valley",
+        "ridge",
+        "slope_ge_20deg"
+      ],
+      "skill_definition": "1 - error_metric_100m / error_metric_200m on identical samples; lower error is better",
+      "minimum_families_with_positive_median_skill": 2,
+      "minimum_families_with_positive_95_percent_lower_confidence_bound": 1,
+      "maximum_allowed_family_median_skill_degradation": -0.05,
+      "interpretation": "At least two terrain-sensitive families must improve in median, one improvement must be robust at 95 percent confidence, and no family may degrade by more than five percent."
+    },
+    "spatial_consistency": {
+      "required_checks": [
+        "conservative aggregation of 100 m precipitation to the 200 m grid",
+        "area-weighted aggregation of 100 m surface fluxes to the 200 m grid",
+        "bilinear aggregation of 100 m thermodynamic and wind fields to the 200 m grid",
+        "slope, elevation, valley, ridge, land-cover, and boundary-distance stratification",
+        "two-gridpoint and four-gridpoint noise diagnostics for winds, precipitation, temperature, and surface fluxes"
+      ],
+      "failure_condition": "Any coherent grid-scale checkerboard, boundary imprint inside the active 10 km interior, or unphysical terrain-locked extreme without observational or process support is STOP_AND_REDESIGN."
+    }
+  },
+  "decisions": {
+    "pass": "GO_100M_MONTH_PILOT",
+    "single_event_or_metric_failure": "HOLD_100M_AND_DIAGNOSE",
+    "systematic_numerical_or_physical_failure": "STOP_100M_AND_REDESIGN"
+  },
+  "authorization": {
+    "on_pass": {
+      "hundred_meter_month_pilot": true,
+      "hundred_meter_annual_cycle": false,
+      "hundred_meter_twenty_year_production": false
+    },
+    "interpretation": "A pass authorizes only a separately planned 31-day 100 m month pilot. It does not authorize an annual or 20-year 100 m campaign."
+  },
+  "follow_on_month_gate": {
+    "duration_days": 31,
+    "declared_spinup_days": 7,
+    "minimum_retained_days": 21,
+    "minimum_post_restart_overlap_hours": 24,
+    "requirements": [
+      "Every 100 m segment, solver, compression, provenance, restart, water, energy, observation, and OGD report passes.",
+      "No unexplained post-spinup monotonic drift occurs in soil water, snow, canopy water, surface energy, or near-surface climate.",
+      "The paired 100 m versus 200 m scientific comparison repeats on the retained month with the same frozen skill rules.",
+      "Measured compute, forcing, restart, output, validation, and durable-storage costs fit an approved 100 m annual envelope."
+    ],
+    "pass_decision": "GO_100M_ANNUAL_CYCLE",
+    "interpretation": "Only a passing 100 m annual cycle under predeclared application-quality and archive contracts may later authorize 100 m production."
+  }
+}

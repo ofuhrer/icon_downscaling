@@ -1,0 +1,1501 @@
+#!/usr/bin/env python3
+"""Reconcile short, immutable HICAR attempts on Balfrin preemptible."""
+
+from __future__ import annotations
+
+import argparse
+import fcntl
+import hashlib
+import json
+import os
+import socket
+import subprocess
+import tempfile
+import time
+import uuid
+from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import Any, Iterator
+
+ACTIVE_STATES = {
+    "CONFIGURING",
+    "PENDING",
+    "REQUEUED",
+    "RUNNING",
+    "SUSPENDED",
+    "COMPLETING",
+}
+RETRYABLE_STATES = {
+    "BOOT_FAIL",
+    "CANCELLED",
+    "NODE_FAIL",
+    "PREEMPTED",
+}
+SUCCESS_STATE = "COMPLETED"
+PREEMPTED_EXIT_CODE = 75
+SUBMISSION_RECOVERY_SECONDS = 300
+
+
+def utc_now() -> str:
+    return datetime.now(UTC).isoformat()
+
+
+def sha256(path: Path) -> str:
+    hasher = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(8 * 1024 * 1024), b""):
+            hasher.update(block)
+    return hasher.hexdigest()
+
+
+def load_json(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text())
+
+
+def write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        delete=False,
+    ) as stream:
+        json.dump(payload, stream, indent=2, sort_keys=True)
+        stream.write("\n")
+        temporary = Path(stream.name)
+    os.replace(temporary, path)
+
+
+def json_payload_sha256(payload: dict[str, Any]) -> str:
+    content = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    return hashlib.sha256(content.encode()).hexdigest()
+
+
+def published_json(path: Path, label: str) -> dict[str, Any]:
+    if not path.is_file() or not Path(f"{path}.ready").is_file():
+        raise ValueError(f"{label} is not published: {path}")
+    return load_json(path)
+
+
+def normalized_state(value: str) -> str:
+    return value.strip().split()[0].split("+")[0].upper()
+
+
+def parse_exit_code(value: str | None) -> int | None:
+    if not value:
+        return None
+    try:
+        return int(value.split(":", 1)[0])
+    except ValueError:
+        return None
+
+
+def event(state: dict[str, Any], kind: str, **details: Any) -> None:
+    state.setdefault("events", []).append(
+        {"time": utc_now(), "kind": kind, **details}
+    )
+    state["events"] = state["events"][-500:]
+
+
+@contextmanager
+def lease(path: Path, seconds: int) -> Iterator[None]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    token = uuid.uuid4().hex
+    payload = {
+        "token": token,
+        "hostname": socket.gethostname(),
+        "pid": os.getpid(),
+        "acquired_at": utc_now(),
+        "expires_epoch": time.time() + seconds,
+    }
+    descriptor = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError as exc:
+        os.close(descriptor)
+        try:
+            existing = load_json(path)
+        except (OSError, ValueError, json.JSONDecodeError):
+            existing = {}
+        raise RuntimeError(
+            "campaign controller lease is active: "
+            f"{existing.get('hostname', 'unknown')} "
+            f"pid={existing.get('pid', 'unknown')}"
+        ) from exc
+    stream = os.fdopen(descriptor, "r+", encoding="utf-8")
+    stream.seek(0)
+    stream.truncate()
+    json.dump(payload, stream, indent=2, sort_keys=True)
+    stream.write("\n")
+    stream.flush()
+    os.fsync(stream.fileno())
+    try:
+        yield
+    finally:
+        fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+        stream.close()
+
+
+class Slurm:
+    def query(self, job_ids: list[str]) -> dict[str, dict[str, str]]:
+        numeric = sorted({job_id for job_id in job_ids if job_id.isdigit()})
+        if not numeric:
+            return {}
+        result = subprocess.run(
+            [
+                "sacct",
+                "-n",
+                "-X",
+                "-P",
+                "-j",
+                ",".join(numeric),
+                "--format=JobIDRaw,State,ExitCode",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        grouped: dict[str, list[dict[str, str]]] = {
+            job_id: [] for job_id in numeric
+        }
+        for line in result.stdout.splitlines():
+            fields = line.split("|")
+            if len(fields) < 3:
+                continue
+            job_id, scheduler_state, exit_code = fields[:3]
+            for parent in numeric:
+                if job_id == parent or job_id.startswith(f"{parent}_"):
+                    grouped[parent].append(
+                        {
+                            "state": normalized_state(scheduler_state),
+                            "exit_code": exit_code,
+                        }
+                    )
+                    break
+        states: dict[str, dict[str, str]] = {}
+        terminal_priority = [
+            "OUT_OF_MEMORY",
+            "TIMEOUT",
+            "FAILED",
+            "CANCELLED",
+            "PREEMPTED",
+            "NODE_FAIL",
+            "BOOT_FAIL",
+        ]
+        for parent, records in grouped.items():
+            if not records:
+                continue
+            active = [record for record in records if record["state"] in ACTIVE_STATES]
+            if active:
+                running = next(
+                    (record for record in active if record["state"] == "RUNNING"),
+                    active[0],
+                )
+                states[parent] = running
+                continue
+            selected = None
+            for scheduler_state in terminal_priority:
+                selected = next(
+                    (
+                        record
+                        for record in records
+                        if record["state"] == scheduler_state
+                    ),
+                    None,
+                )
+                if selected is not None:
+                    break
+            states[parent] = selected or records[0]
+        return states
+
+    def find_job(self, job_name: str) -> list[str]:
+        found: set[str] = set()
+        for command in (
+            ["squeue", "-h", "-n", job_name, "-o", "%A"],
+            [
+                "sacct",
+                "-n",
+                "-X",
+                "-S",
+                "now-7days",
+                "--name",
+                job_name,
+                "--format=JobIDRaw",
+            ],
+        ):
+            result = subprocess.run(
+                command,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode:
+                continue
+            for line in result.stdout.splitlines():
+                value = line.strip().split(".")[0]
+                if value.isdigit():
+                    found.add(value)
+        return sorted(found)
+
+    def submit(self, arguments: list[str]) -> str:
+        result = subprocess.run(
+            arguments,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        job_id = result.stdout.strip().split(";", 1)[0]
+        if not job_id.isdigit():
+            raise RuntimeError(f"sbatch returned an invalid job id: {result.stdout!r}")
+        return job_id
+
+
+def campaign_paths(campaign: dict[str, Any]) -> tuple[Path, Path]:
+    controller = campaign["controller"]
+    return Path(controller["state"]), Path(controller["lease"])
+
+
+def validate_campaign_authorizations(campaign: dict[str, Any]) -> None:
+    if len(campaign["chains"]) > 1:
+        evidence = campaign.get("independent_chain_authorization")
+        if not evidence:
+            raise ValueError("independent chains lack frozen authorization")
+        path = Path(evidence["path"])
+        authorization = published_json(path, "independent-chain authorization")
+        if sha256(path) != evidence["sha256"]:
+            raise ValueError("independent-chain authorization changed")
+        if authorization.get("decision") not in {
+            "AUTHORIZED",
+            "GO_INDEPENDENT_CHAINS",
+            "GO_20_YEAR_200M_PRODUCTION",
+        }:
+            raise ValueError("independent-chain authorization is no longer accepted")
+    if campaign.get("purpose", "qualification") == "production":
+        evidence = campaign.get("production_authorization")
+        if not evidence:
+            raise ValueError("production campaign lacks frozen authorization")
+        path = Path(evidence["path"])
+        authorization = published_json(path, "production authorization")
+        if sha256(path) != evidence["sha256"]:
+            raise ValueError("production authorization changed")
+        if not (
+            authorization.get("assessment_status") == "COMPLETE"
+            and authorization.get("decision") == "GO_20_YEAR_200M_PRODUCTION"
+            and authorization.get("authorization", {}).get(
+                "twenty_year_200m_production"
+            )
+        ):
+            raise ValueError("production authorization is no longer accepted")
+
+
+def new_state(campaign_path: Path, campaign: dict[str, Any]) -> dict[str, Any]:
+    chains: dict[str, Any] = {}
+    for chain in campaign["chains"]:
+        chains[chain["chain_id"]] = {
+            "segments": [
+                {
+                    "segment_id": segment["segment_id"],
+                    "status": "WAITING_FORCING",
+                    "attempts": [],
+                    "model_completion": None,
+                    "solver_report": None,
+                    "compression_complete": False,
+                    "cpu_failures": {},
+                    "terminal_error": None,
+                }
+                for segment in chain["segments"]
+            ]
+        }
+    return {
+        "schema_version": 1,
+        "campaign_id": campaign["campaign_id"],
+        "campaign": str(campaign_path.resolve()),
+        "campaign_sha256": sha256(campaign_path),
+        "status": "ACTIVE",
+        "capacity": {
+            "model_slots": campaign["policy"]["model_slots"],
+            "cpu_slots": campaign["policy"]["cpu_slots"],
+        },
+        "chains": chains,
+        "cpu_batch": None,
+        "events": [{"time": utc_now(), "kind": "STATE_INITIALIZED"}],
+        "updated_at": utc_now(),
+    }
+
+
+def load_or_create_state(
+    campaign_path: Path,
+    campaign: dict[str, Any],
+    state_path: Path,
+) -> dict[str, Any]:
+    if state_path.is_file():
+        state = load_json(state_path)
+        if state.get("campaign_sha256") != sha256(campaign_path):
+            raise ValueError("controller state belongs to a different campaign plan")
+        return state
+    state = new_state(campaign_path, campaign)
+    write_json_atomic(state_path, state)
+    return state
+
+
+def spec_segment(
+    campaign: dict[str, Any],
+    chain_id: str,
+    index: int,
+) -> dict[str, Any]:
+    for chain in campaign["chains"]:
+        if chain["chain_id"] == chain_id:
+            return chain["segments"][index]
+    raise KeyError(chain_id)
+
+
+def runtime_segment(
+    state: dict[str, Any],
+    chain_id: str,
+    index: int,
+) -> dict[str, Any]:
+    return state["chains"][chain_id]["segments"][index]
+
+
+def forcing_publication_passes(segment: dict[str, Any]) -> bool:
+    path = Path(segment["forcing_publication"])
+    if not path.is_file() or not Path(f"{path}.ready").is_file():
+        return False
+    try:
+        return load_json(path).get("status") == "PASS"
+    except (OSError, ValueError, json.JSONDecodeError):
+        return False
+
+
+def missing_forcing_records(segment: dict[str, Any]) -> list[int]:
+    plan = load_json(Path(segment["plan"]))
+    missing = []
+    for index, record in enumerate(plan["records"]):
+        forcing = Path(record["forcing_file"])
+        base = Path(str(forcing)[:-3]) if str(forcing).endswith(".nc") else forcing
+        validation = Path(f"{base}.validation.json")
+        manifest_path = Path(f"{base}.manifest.json")
+        try:
+            manifest = load_json(manifest_path)
+            record_passes = (
+                forcing.is_file()
+                and Path(f"{forcing}.ready").is_file()
+                and validation.is_file()
+                and load_json(validation).get("status") == "PASS"
+                and manifest.get("status") == "PASS"
+                and manifest.get("valid_time") == record["valid_time"]
+                and manifest.get("forcing_sha256") == sha256(forcing)
+            )
+        except (OSError, KeyError, ValueError, json.JSONDecodeError):
+            record_passes = False
+        if not record_passes:
+            missing.append(index)
+    return missing
+
+
+def completion_report(runtime: dict[str, Any]) -> dict[str, Any] | None:
+    value = runtime.get("model_completion")
+    if not value:
+        return None
+    path = Path(value)
+    if not path.is_file() or not Path(f"{path}.ready").is_file():
+        return None
+    try:
+        report = load_json(path)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return None
+    return report if report.get("status") == "PASS" else None
+
+
+def solver_report_path(attempt: dict[str, Any]) -> Path:
+    return (
+        Path(attempt["run_dir"])
+        / "scientific_validation"
+        / "solver_log_diagnostics.json"
+    )
+
+
+def solver_report_passes(attempt: dict[str, Any]) -> bool:
+    path = solver_report_path(attempt)
+    if not path.is_file() or not Path(f"{path}.ready").is_file():
+        return False
+    try:
+        return load_json(path).get("status") == "PASS"
+    except (OSError, ValueError, json.JSONDecodeError):
+        return False
+
+
+def compression_tasks(
+    chain_id: str,
+    segment: dict[str, Any],
+    runtime: dict[str, Any],
+) -> list[dict[str, Any]]:
+    report = completion_report(runtime)
+    if report is None:
+        return []
+    attempt = runtime["attempts"][-1]
+    target_dir = (
+        Path(segment["compressed_root"]) / attempt["attempt_id"]
+    ).resolve()
+    tasks = []
+    for artifact in report["output"]["files"]:
+        source = Path(artifact["path"])
+        target = target_dir / source.name
+        tasks.append(
+            {
+                "kind": "compression",
+                "chain_id": chain_id,
+                "segment_id": segment["segment_id"],
+                "source": str(source),
+                "target": str(target),
+                "target_dir": str(target_dir),
+            }
+        )
+    return tasks
+
+
+def task_ready(task: dict[str, Any], campaign: dict[str, Any]) -> bool:
+    try:
+        kind = task["kind"]
+        if kind == "forcing_record":
+            segment = spec_segment(
+                campaign,
+                task["chain_id"],
+                int(task["segment_index"]),
+            )
+            return task["record_index"] not in missing_forcing_records(segment)
+        if kind == "forcing_finalize":
+            segment = spec_segment(
+                campaign,
+                task["chain_id"],
+                int(task["segment_index"]),
+            )
+            return forcing_publication_passes(segment)
+        if kind == "solver_audit":
+            path = (
+                Path(task["run_dir"])
+                / "scientific_validation/solver_log_diagnostics.json"
+            )
+            return (
+                path.is_file()
+                and Path(f"{path}.ready").is_file()
+                and load_json(path).get("status") == "PASS"
+            )
+        if kind == "compression":
+            target = Path(task["target"])
+            report = Path(f"{target}.compression.json")
+            return (
+                target.is_file()
+                and Path(f"{target}.ready").is_file()
+                and report.is_file()
+                and load_json(report).get("status") == "PASS"
+            )
+        raise ValueError(f"unsupported task kind: {kind}")
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return False
+
+
+def active_attempt(runtime: dict[str, Any]) -> dict[str, Any] | None:
+    for attempt in reversed(runtime["attempts"]):
+        if attempt["status"] in {"SUBMITTING", "SUBMITTED", "RUNNING"}:
+            return attempt
+    return None
+
+
+def job_ids(state: dict[str, Any]) -> list[str]:
+    values = []
+    for chain in state["chains"].values():
+        for segment in chain["segments"]:
+            for attempt in segment["attempts"]:
+                if (
+                    attempt.get("job_id")
+                    and attempt["status"] in {"SUBMITTING", "SUBMITTED", "RUNNING"}
+                ):
+                    values.append(str(attempt["job_id"]))
+    batch = state.get("cpu_batch")
+    if batch and batch.get("job_id"):
+        values.append(str(batch["job_id"]))
+    return values
+
+
+def read_receipt(path: Path) -> str | None:
+    if not path.is_file():
+        return None
+    try:
+        job_id = str(load_json(path)["job_id"])
+    except (OSError, KeyError, ValueError, json.JSONDecodeError):
+        return None
+    return job_id if job_id.isdigit() else None
+
+
+def write_receipt(path: Path, job_id: str, command: list[str]) -> None:
+    write_json_atomic(
+        path,
+        {
+            "schema_version": 1,
+            "status": "SUBMITTED",
+            "job_id": job_id,
+            "submitted_at": utc_now(),
+            "command": command,
+        },
+    )
+
+
+def recover_submitting_job(
+    item: dict[str, Any],
+    scheduler: Slurm,
+    allow_submit: bool,
+) -> bool:
+    if item.get("job_id"):
+        return True
+    receipt = Path(item["receipt"])
+    job_id = read_receipt(receipt)
+    if job_id is None:
+        found = scheduler.find_job(item["job_name"])
+        if len(found) > 1:
+            raise RuntimeError(
+                f"multiple Slurm jobs share submission identity {item['job_name']}"
+            )
+        if found:
+            job_id = found[0]
+            write_receipt(receipt, job_id, item["command"])
+    if job_id is None and allow_submit:
+        submitted_at = datetime.fromisoformat(item["submitted_at"])
+        age = (datetime.now(UTC) - submitted_at).total_seconds()
+        if age >= SUBMISSION_RECOVERY_SECONDS:
+            job_id = scheduler.submit(item["command"])
+            write_receipt(receipt, job_id, item["command"])
+    if job_id is None:
+        return False
+    item["job_id"] = job_id
+    item["status"] = "SUBMITTED"
+    return True
+
+
+def classify_attempt_terminal(
+    attempt: dict[str, Any],
+    scheduler_record: dict[str, str],
+) -> str:
+    scheduler_state = normalized_state(scheduler_record["state"])
+    exit_code = parse_exit_code(scheduler_record.get("exit_code"))
+    interruption = Path(attempt["run_dir"]) / "attempt_interrupted.json"
+    if scheduler_state in RETRYABLE_STATES:
+        return "RETRYABLE"
+    if scheduler_state == "FAILED" and (
+        exit_code == PREEMPTED_EXIT_CODE or interruption.is_file()
+    ):
+        return "RETRYABLE"
+    if scheduler_state == SUCCESS_STATE:
+        return "COMPLETED_WITHOUT_PUBLICATION"
+    return "TERMINAL_FAILURE"
+
+
+def refresh_model_attempts(
+    campaign: dict[str, Any],
+    state: dict[str, Any],
+    scheduler_states: dict[str, dict[str, str]],
+    scheduler: Slurm,
+    execute: bool,
+) -> None:
+    maximum = int(campaign["policy"]["max_model_attempts"])
+    for chain in campaign["chains"]:
+        chain_id = chain["chain_id"]
+        for index, segment in enumerate(chain["segments"]):
+            runtime = runtime_segment(state, chain_id, index)
+            if (
+                runtime["status"] == "COMPLETE"
+                and runtime.get("model_completion")
+            ):
+                continue
+            if not runtime["attempts"]:
+                continue
+            attempt = runtime["attempts"][-1]
+            completion = Path(attempt["run_dir"]) / "model_chunk_completion.json"
+            try:
+                completion_passes = (
+                    completion.is_file()
+                    and Path(f"{completion}.ready").is_file()
+                    and load_json(completion).get("status") == "PASS"
+                )
+            except (OSError, ValueError, json.JSONDecodeError):
+                completion_passes = False
+            if completion_passes:
+                attempt["status"] = "PUBLISHED"
+                runtime["model_completion"] = str(completion)
+                runtime["status"] = "MODEL_PUBLISHED"
+                continue
+            if attempt["status"] == "SUBMITTING":
+                recover_submitting_job(attempt, scheduler, execute)
+            job_id = attempt.get("job_id")
+            record = scheduler_states.get(str(job_id)) if job_id else None
+            if record is None:
+                continue
+            scheduler_state = normalized_state(record["state"])
+            attempt["scheduler_state"] = scheduler_state
+            attempt["scheduler_exit_code"] = record.get("exit_code")
+            if scheduler_state in ACTIVE_STATES:
+                attempt["status"] = (
+                    "RUNNING" if scheduler_state == "RUNNING" else "SUBMITTED"
+                )
+                runtime["status"] = attempt["status"]
+                continue
+            classification = classify_attempt_terminal(attempt, record)
+            previous_status = attempt["status"]
+            attempt["status"] = classification
+            if classification == "RETRYABLE" and len(runtime["attempts"]) < maximum:
+                runtime["status"] = "READY_TO_RETRY"
+                if previous_status != "RETRYABLE":
+                    event(
+                        state,
+                        "MODEL_ATTEMPT_RETRYABLE",
+                        chain_id=chain_id,
+                        segment_id=segment["segment_id"],
+                        attempt_id=attempt["attempt_id"],
+                        scheduler_state=scheduler_state,
+                    )
+            elif classification == "RETRYABLE":
+                runtime["terminal_error"] = (
+                    f"model retry budget exhausted after {maximum} attempts"
+                )
+                runtime["status"] = "BLOCKED"
+            else:
+                runtime["terminal_error"] = (
+                    f"model attempt ended as {scheduler_state} "
+                    f"without a validated completion"
+                )
+                runtime["status"] = "BLOCKED"
+
+
+def refresh_solver_and_compression(
+    campaign: dict[str, Any],
+    state: dict[str, Any],
+) -> None:
+    for chain in campaign["chains"]:
+        chain_id = chain["chain_id"]
+        for index, segment in enumerate(chain["segments"]):
+            runtime = runtime_segment(state, chain_id, index)
+            if runtime["status"] == "COMPLETE" and runtime["compression_complete"]:
+                continue
+            if completion_report(runtime) is None:
+                continue
+            attempt = runtime["attempts"][-1]
+            if solver_report_passes(attempt):
+                runtime["solver_report"] = str(solver_report_path(attempt))
+                runtime["status"] = "COMPLETE"
+            tasks = compression_tasks(chain_id, segment, runtime)
+            runtime["compression_complete"] = bool(tasks) and all(
+                task_ready(task, campaign) for task in tasks
+            )
+
+
+def refresh_cpu_batch(
+    campaign: dict[str, Any],
+    state: dict[str, Any],
+    scheduler_states: dict[str, dict[str, str]],
+    scheduler: Slurm,
+    execute: bool,
+) -> None:
+    batch = state.get("cpu_batch")
+    if not batch:
+        return
+    task_file = Path(batch["task_file"])
+    try:
+        task_file_valid = (
+            task_file.is_file()
+            and Path(f"{task_file}.ready").is_file()
+            and sha256(task_file) == batch["task_sha256"]
+        )
+    except OSError:
+        task_file_valid = False
+    if not task_file_valid:
+        for task in batch["tasks"]:
+            runtime = runtime_segment(
+                state,
+                task["chain_id"],
+                int(task["segment_index"]),
+            )
+            runtime["terminal_error"] = (
+                f"campaign CPU task publication changed: {task_file}"
+            )
+            runtime["status"] = "BLOCKED"
+        event(state, "CPU_TASK_PUBLICATION_CHANGED", batch_id=batch["batch_id"])
+        state["cpu_batch"] = None
+        return
+    if all(task_ready(task, campaign) for task in batch["tasks"]):
+        event(state, "CPU_BATCH_PUBLISHED", batch_id=batch["batch_id"])
+        state["cpu_batch"] = None
+        return
+    if batch["status"] == "SUBMITTING":
+        recover_submitting_job(batch, scheduler, execute)
+    job_id = batch.get("job_id")
+    record = scheduler_states.get(str(job_id)) if job_id else None
+    if record is None:
+        return
+    scheduler_state = normalized_state(record["state"])
+    batch["scheduler_state"] = scheduler_state
+    batch["scheduler_exit_code"] = record.get("exit_code")
+    if scheduler_state in ACTIVE_STATES:
+        batch["status"] = "RUNNING" if scheduler_state == "RUNNING" else "SUBMITTED"
+        return
+
+    retryable = scheduler_state in RETRYABLE_STATES
+    maximum = int(campaign["policy"]["max_cpu_attempts"])
+    for task in batch["tasks"]:
+        if task_ready(task, campaign):
+            continue
+        runtime = runtime_segment(
+            state,
+            task["chain_id"],
+            int(task["segment_index"]),
+        )
+        key = task["kind"]
+        failures = int(runtime["cpu_failures"].get(key, 0)) + 1
+        runtime["cpu_failures"][key] = failures
+        if not retryable or failures >= maximum:
+            runtime["terminal_error"] = (
+                f"CPU task {key} failed in scheduler state {scheduler_state}"
+            )
+            runtime["status"] = "BLOCKED"
+    event(
+        state,
+        "CPU_BATCH_TERMINAL",
+        batch_id=batch["batch_id"],
+        scheduler_state=scheduler_state,
+        retryable=retryable,
+    )
+    state["cpu_batch"] = None
+
+
+def frontier_indices(
+    campaign: dict[str, Any],
+    state: dict[str, Any],
+) -> dict[str, int]:
+    frontiers = {}
+    for chain in campaign["chains"]:
+        chain_id = chain["chain_id"]
+        for index, _segment in enumerate(chain["segments"]):
+            runtime = runtime_segment(state, chain_id, index)
+            if runtime["status"] != "COMPLETE":
+                frontiers[chain_id] = index
+                break
+    return frontiers
+
+
+def eligible_prefetch_segments(
+    campaign: dict[str, Any],
+    state: dict[str, Any],
+) -> list[tuple[str, int, dict[str, Any], dict[str, Any]]]:
+    prefetch = int(campaign["policy"]["prefetch_segments_per_chain"])
+    values = []
+    for chain_id, frontier in frontier_indices(campaign, state).items():
+        chain = next(item for item in campaign["chains"] if item["chain_id"] == chain_id)
+        for index in range(frontier, min(len(chain["segments"]), frontier + prefetch + 1)):
+            values.append(
+                (
+                    chain_id,
+                    index,
+                    chain["segments"][index],
+                    runtime_segment(state, chain_id, index),
+                )
+            )
+    return values
+
+
+def pending_cpu_tasks(
+    campaign: dict[str, Any],
+    state: dict[str, Any],
+) -> list[dict[str, Any]]:
+    solver_tasks = []
+    for chain in campaign["chains"]:
+        chain_id = chain["chain_id"]
+        for index, segment in enumerate(chain["segments"]):
+            runtime = runtime_segment(state, chain_id, index)
+            if runtime.get("solver_report") or completion_report(runtime) is None:
+                continue
+            attempt = runtime["attempts"][-1]
+            solver_tasks.append(
+                {
+                    "kind": "solver_audit",
+                    "chain_id": chain_id,
+                    "segment_id": segment["segment_id"],
+                    "segment_index": index,
+                    "plan": segment["plan"],
+                    "run_dir": attempt["run_dir"],
+                }
+            )
+    if solver_tasks:
+        return solver_tasks
+
+    finalizers = []
+    for chain_id, index, segment, _runtime in eligible_prefetch_segments(
+        campaign, state
+    ):
+        if (
+            not forcing_publication_passes(segment)
+            and not missing_forcing_records(segment)
+        ):
+            finalizers.append(
+                {
+                    "kind": "forcing_finalize",
+                    "chain_id": chain_id,
+                    "segment_id": segment["segment_id"],
+                    "segment_index": index,
+                    "plan": segment["plan"],
+                }
+            )
+    if finalizers:
+        return finalizers
+
+    forcing = []
+    model = campaign["model"]
+    for chain_id, index, segment, _runtime in eligible_prefetch_segments(
+        campaign, state
+    ):
+        if forcing_publication_passes(segment):
+            continue
+        for record_index in missing_forcing_records(segment):
+            forcing.append(
+                {
+                    "kind": "forcing_record",
+                    "chain_id": chain_id,
+                    "segment_id": segment["segment_id"],
+                    "segment_index": index,
+                    "plan": segment["plan"],
+                    "record_index": record_index,
+                    "case_root": model["case_root"],
+                    "static_file": model["static_file"],
+                }
+            )
+    if forcing:
+        return forcing[:1000]
+
+    compression = []
+    for chain in campaign["chains"]:
+        chain_id = chain["chain_id"]
+        for index, segment in enumerate(chain["segments"]):
+            runtime = runtime_segment(state, chain_id, index)
+            if runtime["compression_complete"] or completion_report(runtime) is None:
+                continue
+            for task in compression_tasks(chain_id, segment, runtime):
+                task["segment_index"] = index
+                if not task_ready(task, campaign):
+                    compression.append(task)
+    return compression[:1000]
+
+
+def shell_export(exports: dict[str, str]) -> str:
+    values = []
+    for key, value in sorted(exports.items()):
+        if any(character in value for character in ",\n\r"):
+            raise ValueError(f"Slurm export value for {key} contains a separator")
+        values.append(f"{key}={value}")
+    return "ALL," + ",".join(values)
+
+
+def submission_identity(prefix: str, token: str) -> str:
+    digest = hashlib.sha256(token.encode()).hexdigest()[:16]
+    return f"{prefix}-{digest}"
+
+
+def submit_recorded(
+    *,
+    item: dict[str, Any],
+    scheduler: Slurm,
+    state_path: Path,
+    state: dict[str, Any],
+) -> str:
+    write_json_atomic(state_path, state)
+    job_id = scheduler.submit(item["command"])
+    write_receipt(Path(item["receipt"]), job_id, item["command"])
+    item["job_id"] = job_id
+    item["status"] = "SUBMITTED"
+    write_json_atomic(state_path, state)
+    return job_id
+
+
+def previous_completion(
+    campaign: dict[str, Any],
+    state: dict[str, Any],
+    chain_id: str,
+    index: int,
+) -> tuple[Path, dict[str, Any]] | None:
+    if index == 0:
+        return None
+    previous_runtime = runtime_segment(state, chain_id, index - 1)
+    report = completion_report(previous_runtime)
+    if report is None or previous_runtime["status"] != "COMPLETE":
+        return None
+    return Path(previous_runtime["model_completion"]), report
+
+
+def model_submission_command(
+    campaign: dict[str, Any],
+    segment: dict[str, Any],
+    attempt: dict[str, Any],
+    previous: tuple[Path, dict[str, Any]] | None,
+    repo_root: Path,
+) -> list[str]:
+    model = campaign["model"]
+    script = Path(
+        model.get(
+            "script",
+            repo_root
+            / "case_studies/swiss_200m/scripts/run_rea_l_stream_chunk_balfrin.sbatch",
+        )
+    ).resolve()
+    exports = {
+        "REPO_ROOT": str(repo_root),
+        "STREAM_PLAN": segment["plan"],
+        "HICAR_MULTILEVEL_ROOT": model["hicar_root"],
+        "HICAR_SWISS_CASE": model["case_root"],
+        "HICAR_STATIC_FILE": model["static_file"],
+        "HICAR_EXPECTED_COMMIT": model["expected_hicar_commit"],
+        "STREAM_OUTPUT_INTERVAL": str(model["output_interval_seconds"]),
+        "STREAM_OUTPUT_PROFILE": model["output_profile"],
+        "STREAM_REA_L_LAND_INITIALIZATION": (
+            "1" if segment["rea_l_land_initialization"] else "0"
+        ),
+        "STREAM_RUN_DIR": attempt["run_dir"],
+        "STREAM_RESTART_DIR": attempt["restart_dir"],
+        "STREAM_PREEMPTIBLE_ATTEMPT": "1",
+        "STREAM_ATTEMPT_ID": attempt["attempt_id"],
+        "HICAR_PREEMPTION_HELPER": str(
+            (repo_root / "orchestration/preemption.py").resolve()
+        ),
+    }
+    if model.get("build_root"):
+        exports["HICAR_MULTILEVEL_BUILD"] = model["build_root"]
+    if previous is not None:
+        previous_path, report = previous
+        exports.update(
+            {
+                "STREAM_RESTART_FROM": segment["start"],
+                "STREAM_RESTART_INPUT_FILE": report["restart"]["path"],
+                "STREAM_RESTART_INPUT_REPORT": str(previous_path),
+            }
+        )
+    attempt_dir = Path(attempt["attempt_dir"])
+    return [
+        "sbatch",
+        "--parsable",
+        "--no-requeue",
+        "--partition=preemptible",
+        f"--nodes={int(model['nodes'])}",
+        "--ntasks-per-node=5",
+        "--cpus-per-task=1",
+        "--gres=gpu:4",
+        f"--time={model['time_limit']}",
+        "--exclusive",
+        "--signal=B:USR1@300",
+        f"--job-name={attempt['job_name']}",
+        f"--output={attempt_dir / 'slurm-%j.out'}",
+        f"--error={attempt_dir / 'slurm-%j.err'}",
+        f"--export={shell_export(exports)}",
+        str(script),
+    ]
+
+
+def submit_ready_models(
+    campaign: dict[str, Any],
+    state: dict[str, Any],
+    state_path: Path,
+    repo_root: Path,
+    scheduler: Slurm,
+    execute: bool,
+    actions: list[dict[str, Any]],
+) -> None:
+    active = 0
+    for chain in state["chains"].values():
+        for runtime in chain["segments"]:
+            if active_attempt(runtime) is not None:
+                active += 1
+    slots = max(0, int(state["capacity"]["model_slots"]) - active)
+    for chain_id, index in frontier_indices(campaign, state).items():
+        if slots <= 0:
+            break
+        segment = spec_segment(campaign, chain_id, index)
+        runtime = runtime_segment(state, chain_id, index)
+        if runtime["terminal_error"] or completion_report(runtime) is not None:
+            continue
+        if active_attempt(runtime) is not None or not forcing_publication_passes(segment):
+            continue
+        previous = previous_completion(campaign, state, chain_id, index)
+        if index > 0 and previous is None:
+            continue
+        sequence = len(runtime["attempts"]) + 1
+        attempt_id = f"a{sequence:03d}-{uuid.uuid4().hex[:8]}"
+        attempt_dir = Path(segment["attempt_root"]) / attempt_id
+        token = f"{campaign['campaign_id']}:{chain_id}:{segment['segment_id']}:{attempt_id}"
+        attempt = {
+            "attempt_id": attempt_id,
+            "attempt_dir": str(attempt_dir),
+            "run_dir": str(attempt_dir / "run"),
+            "restart_dir": str(attempt_dir / "restart"),
+            "status": "SUBMITTING",
+            "job_id": None,
+            "job_name": submission_identity("hicm", token),
+            "receipt": str(attempt_dir / "submission_receipt.json"),
+            "submitted_at": utc_now(),
+        }
+        attempt["command"] = model_submission_command(
+            campaign, segment, attempt, previous, repo_root
+        )
+        actions.append(
+            {
+                "action": "SUBMIT_MODEL",
+                "chain_id": chain_id,
+                "segment_id": segment["segment_id"],
+                "attempt_id": attempt_id,
+                "command": attempt["command"],
+            }
+        )
+        if execute:
+            attempt_dir.mkdir(parents=True, exist_ok=False)
+            runtime["attempts"].append(attempt)
+            runtime["status"] = "SUBMITTING"
+            job_id = submit_recorded(
+                item=attempt,
+                scheduler=scheduler,
+                state_path=state_path,
+                state=state,
+            )
+            event(
+                state,
+                "MODEL_ATTEMPT_SUBMITTED",
+                chain_id=chain_id,
+                segment_id=segment["segment_id"],
+                attempt_id=attempt_id,
+                job_id=job_id,
+            )
+        slots -= 1
+
+
+def submit_cpu_batch(
+    campaign: dict[str, Any],
+    state: dict[str, Any],
+    state_path: Path,
+    repo_root: Path,
+    scheduler: Slurm,
+    execute: bool,
+    actions: list[dict[str, Any]],
+) -> None:
+    if state.get("cpu_batch") or int(state["capacity"]["cpu_slots"]) == 0:
+        return
+    tasks = pending_cpu_tasks(campaign, state)
+    if not tasks:
+        return
+    batch_id = f"cpu-{uuid.uuid4().hex[:12]}"
+    task_root = Path(campaign["controller"]["cpu_task_root"])
+    task_file = task_root / f"{batch_id}.json"
+    task_payload = {
+        "schema_version": 1,
+        "campaign_id": campaign["campaign_id"],
+        "batch_id": batch_id,
+        "tasks": tasks,
+    }
+    task_sha256 = json_payload_sha256(task_payload)
+    token = f"{campaign['campaign_id']}:{batch_id}"
+    job_name = submission_identity("hicc", token)
+    script = (
+        repo_root
+        / "case_studies/swiss_200m/scripts/"
+        "run_preemptible_campaign_cpu_task_balfrin.sbatch"
+    ).resolve()
+    command = [
+        "sbatch",
+        "--parsable",
+        "--no-requeue",
+        f"--array=0-{len(tasks) - 1}%{int(state['capacity']['cpu_slots'])}",
+        f"--job-name={job_name}",
+        f"--export={shell_export({'REPO_ROOT': str(repo_root), 'HICAR_CAMPAIGN_CPU_TASK_FILE': str(task_file), 'HICAR_CAMPAIGN_CPU_TASK_SHA256': task_sha256})}",
+        str(script),
+    ]
+    actions.append(
+        {
+            "action": "SUBMIT_CPU_BATCH",
+            "batch_id": batch_id,
+            "task_kind": tasks[0]["kind"],
+            "task_count": len(tasks),
+            "command": command,
+        }
+    )
+    if not execute:
+        return
+    task_root.mkdir(parents=True, exist_ok=True)
+    write_json_atomic(task_file, task_payload)
+    if sha256(task_file) != task_sha256:
+        raise RuntimeError(f"campaign CPU task hash mismatch after write: {task_file}")
+    Path(f"{task_file}.ready").touch()
+    batch = {
+        "batch_id": batch_id,
+        "task_file": str(task_file),
+        "task_sha256": task_sha256,
+        "tasks": tasks,
+        "status": "SUBMITTING",
+        "job_id": None,
+        "job_name": job_name,
+        "receipt": str(task_root / f"{batch_id}.submission.json"),
+        "command": command,
+        "submitted_at": utc_now(),
+    }
+    state["cpu_batch"] = batch
+    job_id = submit_recorded(
+        item=batch,
+        scheduler=scheduler,
+        state_path=state_path,
+        state=state,
+    )
+    event(
+        state,
+        "CPU_BATCH_SUBMITTED",
+        batch_id=batch_id,
+        job_id=job_id,
+        task_kind=tasks[0]["kind"],
+        task_count=len(tasks),
+    )
+
+
+def exact_chain_output_times(
+    campaign: dict[str, Any],
+    state: dict[str, Any],
+    chain: dict[str, Any],
+) -> tuple[list[str], list[dict[str, Any]]]:
+    interval = timedelta(seconds=int(campaign["model"]["output_interval_seconds"]))
+    actual: list[str] = []
+    evidence: list[dict[str, Any]] = []
+    previous_end: str | None = None
+    for index, segment in enumerate(chain["segments"]):
+        if previous_end is not None and segment["start"] != previous_end:
+            raise ValueError(
+                f"campaign plan has a gap or overlap before {segment['segment_id']}"
+            )
+        runtime = runtime_segment(state, chain["chain_id"], index)
+        completion_path = Path(runtime["model_completion"])
+        completion = published_json(completion_path, "model completion")
+        if completion.get("status") != "PASS":
+            raise ValueError(f"model completion is not PASS: {completion_path}")
+        segment_times = completion.get("output", {}).get("times")
+        if not isinstance(segment_times, list) or not segment_times:
+            raise ValueError(f"model completion has no output times: {completion_path}")
+        actual.extend(str(value) for value in segment_times)
+
+        solver_path = Path(runtime["solver_report"])
+        solver = published_json(solver_path, "solver audit")
+        if solver.get("status") != "PASS":
+            raise ValueError(f"solver audit is not PASS: {solver_path}")
+        compressed = []
+        for task in compression_tasks(chain["chain_id"], segment, runtime):
+            if not task_ready(task, campaign):
+                raise ValueError(f"compressed output is not published: {task['target']}")
+            compression_path = Path(f"{task['target']}.compression.json")
+            compressed.append(
+                {
+                    "path": task["target"],
+                    "report": str(compression_path),
+                    "report_sha256": sha256(compression_path),
+                }
+            )
+        evidence.append(
+            {
+                "segment_id": segment["segment_id"],
+                "start": segment["start"],
+                "end": segment["end"],
+                "completion": str(completion_path),
+                "completion_sha256": sha256(completion_path),
+                "solver_report": str(solver_path),
+                "solver_report_sha256": sha256(solver_path),
+                "compressed": compressed,
+            }
+        )
+        previous_end = segment["end"]
+
+    start = datetime.fromisoformat(chain["segments"][0]["start"])
+    end = datetime.fromisoformat(chain["segments"][-1]["end"])
+    expected = []
+    cursor = start
+    while cursor <= end:
+        expected.append(cursor.isoformat())
+        cursor += interval
+    if actual != expected:
+        raise ValueError(
+            f"chain {chain['chain_id']} output union is not exact: "
+            f"expected {len(expected)} unique ordered times, found {len(actual)}"
+        )
+    return actual, evidence
+
+
+def publish_campaign_completion(
+    campaign: dict[str, Any],
+    state: dict[str, Any],
+) -> Path:
+    output = Path(campaign["campaign_root"]) / "campaign_completion.json"
+    marker = Path(f"{output}.ready")
+    if output.is_file() and marker.is_file():
+        existing = load_json(output)
+        if (
+            existing.get("status") != "PASS"
+            or existing.get("campaign_id") != campaign["campaign_id"]
+            or existing.get("campaign_sha256") != state["campaign_sha256"]
+        ):
+            raise ValueError(f"campaign completion conflicts with state: {output}")
+        return output
+
+    state.setdefault("completion_time", utc_now())
+    chain_reports = []
+    for chain in campaign["chains"]:
+        times, evidence = exact_chain_output_times(campaign, state, chain)
+        chain_reports.append(
+            {
+                "chain_id": chain["chain_id"],
+                "start": chain["segments"][0]["start"],
+                "end": chain["segments"][-1]["end"],
+                "output_count": len(times),
+                "output_times": times,
+                "segments": evidence,
+            }
+        )
+    payload = {
+        "schema_version": 1,
+        "status": "PASS",
+        "campaign_id": campaign["campaign_id"],
+        "campaign": state["campaign"],
+        "campaign_sha256": state["campaign_sha256"],
+        "completed_at": state["completion_time"],
+        "chains": chain_reports,
+    }
+    if output.is_file():
+        if load_json(output) != payload:
+            raise ValueError(f"refusing to replace campaign completion: {output}")
+    else:
+        write_json_atomic(output, payload)
+    marker.touch()
+    return output
+
+
+def update_campaign_status(
+    campaign: dict[str, Any],
+    state: dict[str, Any],
+) -> None:
+    blocked = []
+    complete = True
+    for chain in campaign["chains"]:
+        chain_id = chain["chain_id"]
+        for index, segment in enumerate(chain["segments"]):
+            runtime = runtime_segment(state, chain_id, index)
+            if runtime["terminal_error"]:
+                blocked.append(
+                    f"{chain_id}/{segment['segment_id']}: {runtime['terminal_error']}"
+                )
+            if runtime["status"] != "COMPLETE" or not runtime["compression_complete"]:
+                complete = False
+    if blocked:
+        state["status"] = "BLOCKED"
+        state["blockers"] = blocked
+    elif complete:
+        try:
+            completion = publish_campaign_completion(campaign, state)
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            state["status"] = "BLOCKED"
+            state["blockers"] = [f"campaign completion validation failed: {exc}"]
+        else:
+            state["status"] = "COMPLETE"
+            state["completion_report"] = str(completion)
+            state["blockers"] = []
+    else:
+        state["status"] = "ACTIVE"
+        state["blockers"] = []
+    state["updated_at"] = utc_now()
+
+
+def reconcile(
+    *,
+    campaign_path: Path,
+    repo_root: Path,
+    scheduler: Slurm,
+    execute: bool,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    campaign = published_json(campaign_path, "campaign plan")
+    if campaign.get("model", {}).get("partition") != "preemptible":
+        raise ValueError("campaign heavy-model partition must be preemptible")
+    validate_campaign_authorizations(campaign)
+    state_path, lease_path = campaign_paths(campaign)
+    actions: list[dict[str, Any]] = []
+    with lease(lease_path, int(campaign["policy"]["lease_seconds"])):
+        state = load_or_create_state(campaign_path, campaign, state_path)
+        scheduler_states = scheduler.query(job_ids(state))
+        refresh_model_attempts(
+            campaign, state, scheduler_states, scheduler, execute
+        )
+        refresh_cpu_batch(
+            campaign, state, scheduler_states, scheduler, execute
+        )
+        refresh_solver_and_compression(campaign, state)
+        update_campaign_status(campaign, state)
+        if state["status"] == "ACTIVE":
+            submit_ready_models(
+                campaign,
+                state,
+                state_path,
+                repo_root,
+                scheduler,
+                execute,
+                actions,
+            )
+            submit_cpu_batch(
+                campaign,
+                state,
+                state_path,
+                repo_root,
+                scheduler,
+                execute,
+                actions,
+            )
+        update_campaign_status(campaign, state)
+        write_json_atomic(state_path, state)
+    return state, actions
+
+
+def set_capacity(campaign_path: Path, models: int | None, cpus: int | None) -> dict[str, Any]:
+    campaign = published_json(campaign_path, "campaign plan")
+    state_path, lease_path = campaign_paths(campaign)
+    with lease(lease_path, int(campaign["policy"]["lease_seconds"])):
+        state = load_or_create_state(campaign_path, campaign, state_path)
+        if models is not None:
+            maximum = (
+                int(campaign["policy"]["model_node_budget"])
+                // int(campaign["model"]["nodes"])
+            )
+            if not 0 <= models <= maximum:
+                raise ValueError(f"--models must be within 0..{maximum}")
+            state["capacity"]["model_slots"] = models
+        if cpus is not None:
+            if not 0 <= cpus <= 2:
+                raise ValueError("--cpus must be within 0..2")
+            state["capacity"]["cpu_slots"] = cpus
+        event(
+            state,
+            "CAPACITY_UPDATED",
+            model_slots=state["capacity"]["model_slots"],
+            cpu_slots=state["capacity"]["cpu_slots"],
+        )
+        state["updated_at"] = utc_now()
+        write_json_atomic(state_path, state)
+    return state
+
+
+def print_summary(state: dict[str, Any]) -> None:
+    counts: dict[str, int] = {}
+    for chain in state["chains"].values():
+        for segment in chain["segments"]:
+            counts[segment["status"]] = counts.get(segment["status"], 0) + 1
+    print(
+        json.dumps(
+            {
+                "campaign_id": state["campaign_id"],
+                "status": state["status"],
+                "capacity": state["capacity"],
+                "segment_status_counts": counts,
+                "cpu_batch": (
+                    {
+                        "batch_id": state["cpu_batch"]["batch_id"],
+                        "status": state["cpu_batch"]["status"],
+                        "job_id": state["cpu_batch"].get("job_id"),
+                        "task_count": len(state["cpu_batch"]["tasks"]),
+                    }
+                    if state.get("cpu_batch")
+                    else None
+                ),
+                "blockers": state.get("blockers", []),
+                "updated_at": state["updated_at"],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    for name in ("init", "reconcile", "status"):
+        sub = subparsers.add_parser(name)
+        sub.add_argument("--campaign", type=Path, required=True)
+        if name in {"init", "reconcile"}:
+            sub.add_argument("--repo-root", type=Path, required=True)
+        if name == "reconcile":
+            sub.add_argument("--execute", action="store_true")
+    watch = subparsers.add_parser("watch")
+    watch.add_argument("--campaign", type=Path, required=True)
+    watch.add_argument("--repo-root", type=Path, required=True)
+    watch.add_argument("--execute", action="store_true")
+    watch.add_argument("--poll-seconds", type=int, default=60)
+    watch.add_argument("--max-seconds", type=int, default=82800)
+    capacity = subparsers.add_parser("set-capacity")
+    capacity.add_argument("--campaign", type=Path, required=True)
+    capacity.add_argument("--models", type=int)
+    capacity.add_argument("--cpus", type=int)
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    campaign_path = args.campaign.resolve()
+    if args.command == "set-capacity":
+        state = set_capacity(campaign_path, args.models, args.cpus)
+        print_summary(state)
+        return 0
+    campaign = published_json(campaign_path, "campaign plan")
+    state_path, lease_path = campaign_paths(campaign)
+    if args.command == "status":
+        if not state_path.is_file():
+            raise SystemExit("campaign state is not initialized")
+        state = load_json(state_path)
+        if state.get("campaign_sha256") != sha256(campaign_path):
+            raise SystemExit("campaign state belongs to a different campaign")
+        print_summary(state)
+        return 0
+    if args.command == "init":
+        validate_campaign_authorizations(campaign)
+        with lease(lease_path, int(campaign["policy"]["lease_seconds"])):
+            state = load_or_create_state(campaign_path, campaign, state_path)
+        print_summary(state)
+        return 0
+    if args.command == "reconcile":
+        state, actions = reconcile(
+            campaign_path=campaign_path,
+            repo_root=args.repo_root.resolve(),
+            scheduler=Slurm(),
+            execute=args.execute,
+        )
+        print(json.dumps({"actions": actions}, indent=2, sort_keys=True))
+        print_summary(state)
+        return 2 if state["status"] == "BLOCKED" else 0
+
+    if args.poll_seconds < 10:
+        raise SystemExit("--poll-seconds must be at least 10")
+    if args.max_seconds <= 0:
+        raise SystemExit("--max-seconds must be positive")
+    deadline = time.monotonic() + args.max_seconds
+    while True:
+        state, actions = reconcile(
+            campaign_path=campaign_path,
+            repo_root=args.repo_root.resolve(),
+            scheduler=Slurm(),
+            execute=args.execute,
+        )
+        print(json.dumps({"actions": actions}, indent=2, sort_keys=True))
+        print_summary(state)
+        if state["status"] in {"BLOCKED", "COMPLETE"}:
+            return 2 if state["status"] == "BLOCKED" else 0
+        if not args.execute or time.monotonic() + args.poll_seconds > deadline:
+            return 0
+        time.sleep(args.poll_seconds)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

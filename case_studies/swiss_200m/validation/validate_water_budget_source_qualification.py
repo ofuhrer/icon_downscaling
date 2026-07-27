@@ -40,12 +40,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--parent-root", required=True, type=Path)
     parser.add_argument("--child-root", required=True, type=Path)
     parser.add_argument("--child-build", required=True, type=Path)
+    parser.add_argument("--parent-commit", default=PARENT_COMMIT)
     parser.add_argument("--child-commit", required=True)
     parser.add_argument("--build-job-id", required=True)
     parser.add_argument("--build-log", required=True, type=Path)
     parser.add_argument("--build-script", required=True, type=Path)
     parser.add_argument("--bridge-job-id", required=True)
     parser.add_argument("--bridge-run", required=True, type=Path)
+    parser.add_argument("--bridge-report", type=Path)
     parser.add_argument("--restart-tolerances", required=True, type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
     return parser.parse_args()
@@ -452,11 +454,11 @@ def require_log_pass(path: Path) -> None:
 
 def main() -> int:
     args = parse_args()
-    if revision(args.parent_root) != PARENT_COMMIT:
+    if revision(args.parent_root) != args.parent_commit:
         raise SystemExit("parent source identity changed")
     if revision(args.child_root) != args.child_commit:
         raise SystemExit("child source identity changed")
-    if revision(args.child_root, "HEAD^") != PARENT_COMMIT:
+    if revision(args.child_root, "HEAD^") != args.parent_commit:
         raise SystemExit("child is not the direct output-diagnostic-only child")
     merge_base = subprocess.check_output(
         [
@@ -464,12 +466,12 @@ def main() -> int:
             "-C",
             str(args.child_root),
             "merge-base",
-            PARENT_COMMIT,
+            args.parent_commit,
             args.child_commit,
         ],
         text=True,
     ).strip()
-    if merge_base != PARENT_COMMIT:
+    if merge_base != args.parent_commit:
         raise SystemExit("parent ancestry is not proven")
 
     model_manifest = json.loads(
@@ -592,7 +594,7 @@ def main() -> int:
         "status": "PASS",
         "job_id": args.build_job_id,
         "source_commit": args.child_commit,
-        "parent_commit": PARENT_COMMIT,
+        "parent_commit": args.parent_commit,
         "source_tree_clean": git_clean(args.child_root),
         "target": "Balfrin NVHPC 24.5 OpenACC/NCCL release HICAR and HICAR-tester",
         "executable": {
@@ -616,8 +618,20 @@ def main() -> int:
         build_payload["status"] = "FAIL"
 
     bridge_log = args.bridge_run / "model.out"
+    bridge_output_dir = args.bridge_run / "output"
+    if not bridge_log.is_file():
+        bridge_log = args.bridge_run / "continuous" / "model.out"
+        bridge_output_dir = args.bridge_run / "continuous" / "output"
     require_log_pass(bridge_log)
-    bridge_output = only_file(args.bridge_run / "output", "*.nc")
+    bridge_output = only_file(bridge_output_dir, "*.nc")
+    bridge_report: dict[str, Any] | None = None
+    if args.bridge_report is not None:
+        bridge_report = json.loads(args.bridge_report.read_text(encoding="utf-8"))
+        if (
+            bridge_report.get("status") != "PASS"
+            or bridge_report.get("child_commit") != args.child_commit
+        ):
+            raise SystemExit("representative bridge report is not a child-source PASS")
     bridge_payload = {
         "schema_version": 1,
         "status": "PASS",
@@ -632,6 +646,11 @@ def main() -> int:
             "sha256": sha256(bridge_output),
         },
     }
+    if args.bridge_report is not None:
+        bridge_payload["qualification_report"] = {
+            "path": str(args.bridge_report),
+            "sha256": sha256(args.bridge_report),
+        }
 
     national_payload = {
         "schema_version": 1,
@@ -689,7 +708,7 @@ def main() -> int:
         "status": "PASS" if overall_pass else "FAIL",
         "change_scope": "OUTPUT_DIAGNOSTIC_ONLY",
         "child_commit": args.child_commit,
-        "parent_commit": PARENT_COMMIT,
+        "parent_commit": args.parent_commit,
         "parent_ancestry": {
             "status": "PASS",
             "parent_is_ancestor": True,

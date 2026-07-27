@@ -12,6 +12,24 @@ leaves operational margin, otherwise shorten the segment. Consecutive
 segments share a restart directory and run sequentially. Independent chains
 can run concurrently within partition capacity.
 
+The seven-day unit above remains the qualified stable-partition/month-DAG
+contract. Opportunistic `preemptible` execution uses the separate controller
+in `../../../orchestration/`: it replans the same restart chain into at most
+24-hour simulation slices, gives every retry a new immutable attempt
+directory, and caps wall-time at six hours. A cancelled attempt is repeated
+from the last validator-published predecessor boundary; its partial output is
+never reused. Only heavy HICAR jobs enter `preemptible`. Forcing,
+finalization, solver audits, and compression share one global `pp-short`
+array capped at two active tasks.
+
+The pre-emptible runner records scheduler signals and exits non-successfully
+unless `model_chunk_completion.json.ready` already exists. It does not claim
+that a 60-second cancellation grace can serialize a new restart. Multiple
+restart chains require frozen independent-chain authorization, and production
+mode additionally requires the published annual
+`GO_20_YEAR_200M_PRODUCTION` decision. The current restart-physics candidates
+are not made production-ready merely by this orchestration support.
+
 At each valid UTC hour, forcing comes from that date's 00 UTC REA-L-CH1 cycle
 and `step=hour`. Midnight uses the new cycle's step 0, never the previous
 cycle's step 24. The two representations differ slightly but the new-cycle

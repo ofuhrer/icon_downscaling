@@ -7,6 +7,12 @@ description: Choose and validate HICAR namelist, vertical-grid, terrain-coordina
 
 Treat configuration as an experiment hierarchy: prove numerical stability and physical plausibility on a small representative Alpine domain before increasing area or reducing `dx`.
 
+The general qualification ladder below is fail-closed. Always read
+`memory/project-state.md` before advancing it. The current V29 national
+72-hour summer event failed its frozen temperature screens with a broad warm,
+dry surface regime; therefore winter, restart-overlap, month, annual,
+20-year, and 100 m science runs are not currently permitted.
+
 ## Current production-candidate baseline
 
 For 250 m wind-focused Alpine downscaling, use this as the current production-candidate default:
@@ -231,6 +237,14 @@ production.
   and restart gates, class-aware surface water/energy diagnostics, REA-L
   source comparison, side-by-side HICAR/REA-L SwissMetNet metrics, and
   RhiresD/SIS gridded comparisons for both event seasons.
+- Freeze the event acceptance margins before model results exist. If the first
+  seasonal event fails an independent physical-skill screen, stop escalation:
+  do not submit the second season, restart overlap, month, annual, or finer
+  grid merely to average out the defect. Preserve the complete event and use
+  bounded post-processing to stratify the failure by time, elevation,
+  boundary distance, and land class. Resume compute only with a
+  mechanism-based source or configuration hypothesis; do not retune the
+  threshold after seeing the result.
 - As an early event-scale restart screen, compare an independent continuation
   from hour 48 through hour 72 against all eight subsequent three-hourly
   qualification records of the continuous summer event. Reuse the immutable

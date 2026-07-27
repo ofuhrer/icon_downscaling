@@ -20,7 +20,7 @@ module load nvhpc/24.5 cray-mpich-nvhpc/8.1.30 cuda/12.3.0-gcc \
   hdf5/1.14.3-nvhpc fftw/3.3.10-gcc
 
 plan=${STREAM_PLAN:?Set STREAM_PLAN to a published chunk_plan.json}
-root=${HICAR_MULTILEVEL_ROOT:-$SCRATCH/icon_hicar/HICAR-wind-galerkin-multilevel}
+root=${HICAR_MULTILEVEL_ROOT:-$SCRATCH/icon_hicar/HICAR}
 case_root=${HICAR_SWISS_CASE:-$SCRATCH/icon_hicar/case_studies/swiss_200m}
 case_name=$(basename "$case_root")
 build=${HICAR_MULTILEVEL_BUILD:-$root/build_gpu_nccl}
@@ -49,9 +49,16 @@ end_file=${end/T/_}
 end_file=${end_file//:/-}
 run=${STREAM_RUN_DIR:-$case_root/runs/stream_${chunk_id}_${SLURM_JOB_ID:?}}
 restart_dir=${STREAM_RESTART_DIR:-$run/restart}
+restart_input_file=${STREAM_RESTART_INPUT_FILE:-}
+restart_input_report=${STREAM_RESTART_INPUT_REPORT:-}
+restart_input_validator=${HICAR_RESTART_INPUT_VALIDATOR:-$case_root/validation/validate_published_restart_input.py}
 forcing_publication="$chunk_root/forcing_publication.json"
 restart_file="$restart_dir/${static_basename}_${end_file}.nc"
 report="$run/model_chunk_completion.json"
+preemptible_attempt=${STREAM_PREEMPTIBLE_ATTEMPT:-0}
+attempt_id=${STREAM_ATTEMPT_ID:-}
+preemption_helper=${HICAR_PREEMPTION_HELPER:-$SCRATCH/icon_hicar/orchestration/preemption.py}
+interruption_report="$run/attempt_interrupted.json"
 output_profile=${STREAM_OUTPUT_PROFILE:-routine}
 if test "$output_profile" = wind_climatology && test -z "${STREAM_OUTPUT_INTERVAL:-}"; then
   echo "wind_climatology requires an explicit STREAM_OUTPUT_INTERVAL sampling cadence" >&2
@@ -67,6 +74,21 @@ case "$output_profile" in
   routine|qualification|wind_climatology) ;;
   *) echo "unsupported STREAM_OUTPUT_PROFILE: $output_profile" >&2; exit 2 ;;
 esac
+case "$preemptible_attempt" in
+  0|false|FALSE) preemptible_attempt=0 ;;
+  1|true|TRUE) preemptible_attempt=1 ;;
+  *) echo "STREAM_PREEMPTIBLE_ATTEMPT must be true/false or 1/0" >&2; exit 2 ;;
+esac
+if test "$preemptible_attempt" -eq 1; then
+  test -n "$attempt_id" || {
+    echo "pre-emptible execution requires STREAM_ATTEMPT_ID" >&2
+    exit 2
+  }
+  test -e "$preemption_helper" || {
+    echo "missing pre-emption helper: $preemption_helper" >&2
+    exit 2
+  }
+fi
 for value_name in output_interval wind_reduction_interval; do
   value=${!value_name}
   case "$value" in
@@ -262,6 +284,38 @@ if test -n "${STREAM_RESTART_FROM:-}"; then
     exit 2
   }
   previous_file="$restart_dir/${static_basename}_${start_file}.nc"
+  if test -n "$restart_input_file"; then
+    test -s "$restart_input_file" || {
+      echo "missing explicit restart input: $restart_input_file" >&2
+      exit 2
+    }
+    test -n "$restart_input_report" || {
+      echo "STREAM_RESTART_INPUT_REPORT is required with STREAM_RESTART_INPUT_FILE" >&2
+      exit 2
+    }
+    test -s "$restart_input_report" &&
+      test -f "$restart_input_report.ready" || {
+        echo "restart input report is not published: $restart_input_report" >&2
+        exit 2
+      }
+    test -f "$restart_input_validator" || {
+      echo "missing restart input validator: $restart_input_validator" >&2
+      exit 2
+    }
+    "$python" "$restart_input_validator" \
+      --report "$restart_input_report" \
+      --restart-file "$restart_input_file" \
+      --expected-time "$start" \
+      --expected-source-commit "${HICAR_EXPECTED_COMMIT:?Set HICAR_EXPECTED_COMMIT}"
+    if test -e "$previous_file"; then
+      test "$(realpath "$previous_file")" = "$(realpath "$restart_input_file")" || {
+        echo "attempt restart staging path already targets a different file" >&2
+        exit 2
+      }
+    else
+      ln -s "$(realpath "$restart_input_file")" "$previous_file"
+    fi
+  fi
   test -s "$previous_file" || { echo "missing previous restart: $previous_file" >&2; exit 2; }
   restart_args=(--restart-from "$start_hicar")
   validator_restart_args=(--restart-continuation)
@@ -304,8 +358,19 @@ unset HICAR_WIND_OPERATOR_AUDIT
 unset HICAR_WIND_OPERATOR_AUDIT_MAX_ITERS
 
 cd "$run"
-srun --distribution=block:block --cpu-bind=none "$wrapper" "$exe" "$run/input.nml" \
-  2>&1 | tee "$run/model.out"
+if test "$preemptible_attempt" -eq 1; then
+  "$python" "$preemption_helper" run \
+    --attempt-id "$attempt_id" \
+    --report "$interruption_report" \
+    --completion-marker "$report.ready" \
+    --log "$run/model.out" \
+    -- \
+    srun --distribution=block:block --cpu-bind=none \
+      "$wrapper" "$exe" "$run/input.nml"
+else
+  srun --distribution=block:block --cpu-bind=none "$wrapper" "$exe" "$run/input.nml" \
+    2>&1 | tee "$run/model.out"
+fi
 
 grep -q 'HICAR discretely adjoint wind projection enabled' "$run/model.out"
 grep -q 'HICAR SLEVE geometry gate:' "$run/model.out"

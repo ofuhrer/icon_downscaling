@@ -154,7 +154,7 @@ require_file "$rebuild_inventory"
 
 while IFS='|' read -r candidate kind locator protected_ref bundle_sha; do
   case "$kind" in
-    remote_ref)
+    remote_ref|git_remote_ref|git_remote_ref_and_bundle)
       if [ "$ONLINE" -eq 0 ]; then
         warn "candidate $candidate remote containment not checked offline"
         continue
@@ -292,7 +292,12 @@ with open(sys.argv[1], encoding="utf-8") as handle:
 unprotected = []
 for candidate in inventory.get("hicar_source_candidates", []):
     protection = candidate.get("protection", {})
-    if protection.get("kind") not in {"remote_ref", "git_bundle"}:
+    if protection.get("kind") not in {
+        "remote_ref",
+        "git_remote_ref",
+        "git_remote_ref_and_bundle",
+        "git_bundle",
+    }:
         unprotected.append(candidate.get("commit", "UNKNOWN"))
     elif not protection.get("locator"):
         unprotected.append(candidate.get("commit", "UNKNOWN"))

@@ -11,15 +11,25 @@ Use `$balfrin-user-environment` for generic module and partition rules. Keep sou
 
 - Local clone: `/Users/fuhrer/Work/agentic/icon_hicar/HICAR`
 - Remote: `git@github.com:ofuhrer/HICAR.git`
-- Production-performance branch: `feature/icon_downscaling`
-- National discretely-adjoint qualification branch:
-  `feature/wind-galerkin-multilevel`; qualified commit
-  `16bdb27b` (the numerical solver change is
-  commit `cd3089c25dad909610055d6bf9e665ed66d7202d`).
-- Retired solver-research and micro-optimization history is preserved under
-  the coordinating workspace's `archives/` directory; it is not an active
-  production branch.
+- Production-performance base: `feature/icon_downscaling` at `d6c52a54`.
+- Qualified bounded restart reference:
+  `codex/restart-noahmp-state-v26` at `246c8992`. It contains the
+  discretely-adjoint solver/output lineage and the final Noah-MP snow-age
+  restart-state fix.
+- Failed scientific handoff:
+  `codex/v29-summer-warm-bias` at `5da4b198`. It contains layout-neutral
+  cumulative water diagnostics and passed engineering/restart/budget gates,
+  but failed the frozen summer temperature screens. It is a diagnostic source
+  reference, not a production branch.
+- Retired solver-research and micro-optimization history is preserved by the
+  coordinator recovery inventory and checksum-bound durable bundles; it is
+  not active branch state.
 - Validated transport baseline: `06ba6b54` (`Fix OpenACC halo exchanges`)
+
+Read `memory/project-state.md` before submitting model work. While the V29
+warm/dry surface-regime failure is open, do not submit winter, overlap, month,
+annual, 20-year, or 100 m science runs. The next permitted compute is one
+minimal discriminating test derived from the preserved 72-hour diagnosis.
 
 The branch uses legacy `use mpi` for compatibility with Balfrin `cray-mpich-nvhpc/8.1.30`, fixes NVHPC virtual dispatch during variable initialization, and has correct four-GPU halo exchange with both GPU-aware MPI and NCCL.
 
@@ -29,6 +39,21 @@ The branch uses legacy `use mpi` for compatibility with Balfrin `cray-mpich-nvhp
 - CPU diagnosis: `HICAR_debug`.
 - Single-node four-A100 GPU default: OpenACC with `NCCL=OFF` and GPU-aware Cray MPICH.
 - Use `NCCL=ON` only for comparison, multi-node experiments, or targeted NCCL work. On the measured single node, MPI was faster in every halo case.
+- Switzerland-wide multi-node production: OpenACC with `NCCL=ON`, four
+  compute ranks plus one CPU-only I/O rank per node, and MPICH GPU support
+  disabled uniformly. The executable transport and launcher contract must
+  match.
+
+Use the exact CPU, single-node GPU-aware-MPI, and multi-node NCCL configure
+templates plus linkage acceptance checks in
+`references/build-and-performance.md`. Build in a fresh, source-specific
+directory on `pp-short`/`pp-long`; a stale or transport-mismatched CMake cache
+is not acceptable evidence. For GCC CPU builds, use the OpenBLAS module and
+explicit BLAS/LAPACK paths in that reference; otherwise configure can fail
+even with the NetCDF/MPI stack loaded. NVHPC GPU builds use the compiler
+suite's bundled BLAS/LAPACK. For new builds, use the canonical
+`case_studies/swiss_200m/scripts/build_hicar_balfrin.sbatch` entry point rather
+than copying a historical case-study build script.
 
 ## GPU runtime requirements
 
@@ -183,12 +208,12 @@ boundaries and explicitly selected periodic checkpoints; after the successor
 segment passes, verify both completion manifests and hashes before removing
 the superseded restart. Never retain every seven-day boundary.
 
-For a two-dimensional-only routine history profile, require commit
-`16bdb27b` or later. `cef7e3d6` stops restart-only three-dimensional state
-from forcing the static 80-level `z` field into every history file, and
-`16bdb27b` permits a valid zero-count 3-D output buffer. Validate that routine
-files contain the requested 2-D diagnostics plus lat/lon/time and do not
-contain `z`.
+For a two-dimensional-only routine history profile, use the implementation
+carried by the V26/V29 diagnostic lineage. Its originating commits
+`cef7e3d6` and `16bdb27b` stop restart-only three-dimensional state from
+forcing the static 80-level `z` field into every history file and permit a
+valid zero-count 3-D output buffer. Validate that routine files contain the
+requested 2-D diagnostics plus lat/lon/time and do not contain `z`.
 
 ## Validation sequence
 
@@ -222,6 +247,16 @@ contain `z`.
   (for example, `exec bash "$runner"`) rather than requiring its executable
   bit. Cover the read-only invocation path with a behavior test; a string-only
   script check does not prevent a pre-model exit 126.
+- Freeze the complete transitive runtime, not only the submitted wrapper.
+  If a pinned wrapper or Python entry point resolves sibling scripts through
+  `Path(__file__).with_name(...)`, imports a local module, or invokes another
+  repository script, include and checksum each leaf in the immutable
+  manifest. Exercise the frozen directory in preflight with the same working
+  directory and interpreter as Slurm. If a post-model validator fails only
+  because such a leaf was omitted, preserve its failed report, publish a new
+  immutable repair runtime, and replay the validator against the preserved
+  output. Do not rerun a scientifically valid model merely to repair the
+  validator packaging.
 - Set a finite timeout and fail loudly on missing producers.
 - Forcing must include the first record at or after `end_time` for interpolation; when `end_time` is exactly a forcing timestamp, that terminal record is sufficient and no additional record is required.
 - When HICAR restart-continuation timestamps have a sub-second encoding

@@ -1,33 +1,240 @@
 # Build and performance reference
 
-## CPU modules and configure template
+## Build invariants
+
+- Compile on `pp-short` (or `pp-long` if a clean build cannot fit); compiling
+  does not require a GPU allocation.
+- Use a new build directory for every source worktree and for every
+  CPU/GPU/transport variant. Never point an existing CMake cache at another
+  source tree, and never toggle `OPENACC` or `NCCL` in place.
+- Never run two builds concurrently against the same source clone, even when
+  their build directories differ. The `HICAR-tester` dependency fetch writes
+  `tests/Test_Cases` inside the source tree; concurrent CPU/GPU builds can
+  remove that directory underneath one another. Use one clean source clone
+  per simultaneous build variant. The canonical builder takes an atomic
+  shared-filesystem directory lock beside the source root and rejects this
+  unsafe topology. If a job is killed without running its shell trap, verify
+  the recorded owner job is no longer active before removing the stale lock
+  directory.
+- Resolve NetCDF, FFTW, MPI, CUDA, and NCCL paths from the loaded module stack
+  and pass them explicitly. HICAR's custom CMake discovery is not reliable
+  enough to infer a mixed module environment.
+- For the GCC CPU build, load OpenBLAS and pass its shared library as both
+  `BLAS_LIBRARIES` and `LAPACK_LIBRARIES`. Without this, configure can fail at
+  `Could NOT find BLAS` even though the rest of the stack is valid. NVHPC GPU
+  builds use the compiler suite's bundled BLAS/LAPACK libraries; do not replace
+  them with OpenBLAS merely to mirror the CPU recipe.
+- `FC=mpifort` is HICAR's CMake option. Do not export `CC=mpicc` or
+  `CXX=mpicxx` for the NVHPC GPU build: the validated GPU configuration uses
+  `nvc` and `nvc++` for C/C++ and Cray `mpifort` for Fortran/MPI.
+- Treat a completed compile as insufficient. Check the executable's dynamic
+  linkage, require no `not found` entries, record its SHA-256, and run a small
+  topology-matched smoke case before scientific work.
+
+If reusing an incremental build, first require:
 
 ```bash
-[ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
-module use "$USER_ENV_ROOT/modules"
-module load gcc/12.3.0 cray-mpich-gcc/8.1.30 cmake/3.24.4-gcc \
-  netcdf-c/4.8.1-gcc netcdf-fortran/4.5.4-gcc fftw/3.3.10-gcc
-
-cmake -S . -B build_cpu -DFC=mpifort -DMODE=release -DOPENACC=OFF -DNCCL=OFF
-cmake --build build_cpu --target HICAR HICAR-tester --parallel 8
+test "$(grep '^CMAKE_HOME_DIRECTORY:INTERNAL=' "$BUILD/CMakeCache.txt" |
+  cut -d= -f2-)" = "$SRC"
+git -C "$SRC" diff --quiet
+git -C "$SRC" diff --cached --quiet
 ```
 
-## GPU modules and configure template
+For release or qualification evidence, prefer a fresh build directory and
+record the clean source commit, configure command, module list, executable
+SHA-256, and `ldd` output.
+
+## Canonical Balfrin entry point
+
+Use
+`case_studies/swiss_200m/scripts/build_hicar_balfrin.sbatch` for new builds.
+It implements the three recipes below, refuses a dirty or wrongly pinned
+source, refuses an existing build directory or a concurrent build using the
+same source clone, checks dynamic linkage, and writes
+`hicar_build_provenance.txt` beside the executable.
+
+Submit it on the CPU build partition with exact paths and source identity:
+
+```bash
+sbatch --export=ALL,\
+HICAR_SOURCE_ROOT=/scratch/mch/olifu/icon_hicar/HICAR-qualified,\
+HICAR_BUILD_ROOT=/scratch/mch/olifu/icon_hicar/HICAR-qualified/build_cpu_release,\
+HICAR_EXPECTED_COMMIT=<full-40-character-commit>,\
+HICAR_BUILD_VARIANT=cpu \
+case_studies/swiss_200m/scripts/build_hicar_balfrin.sbatch
+```
+
+Choose exactly one of:
+
+- `HICAR_BUILD_VARIANT=cpu` for the GCC/Cray-MPICH release executable.
+- `HICAR_BUILD_VARIANT=gpu-mpi` for a single-node A100 executable using
+  GPU-aware Cray MPICH (`NCCL=OFF`).
+- `HICAR_BUILD_VARIANT=gpu-nccl` for the national multi-node topology
+  (`NCCL=ON`, CPU-only I/O ranks, MPICH GPU support disabled).
+
+Set a distinct `HICAR_BUILD_ROOT` for every source commit and variant. The
+templates below are the expanded commands implemented by the builder and are
+retained for audit/debugging; do not copy an older case-study build script as
+a new production recipe.
+
+## CPU release build
 
 ```bash
 [ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
-module use "$USER_ENV_ROOT/modules"
+module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
+module purge || true
+module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
+module load gcc/12.3.0 cray-mpich-gcc/8.1.30 \
+  cmake/3.24.4-gcc gmake/4.4.1-gcc \
+  netcdf-c/4.8.1-gcc netcdf-fortran/4.5.4-gcc fftw/3.3.10-gcc \
+  openblas/0.3.26-gcc
+
+SRC=${HICAR_SOURCE_ROOT:?}
+BUILD=${HICAR_BUILD_ROOT:?use a new CPU build directory}
+test ! -e "$BUILD"
+nc_prefix=$(nc-config --prefix)
+nf_prefix=$(nf-config --prefix)
+fftw_prefix=$(pkg-config --variable=prefix fftw3)
+mpi_prefix=$(dirname "$(dirname "$(command -v mpifort)")")
+openblas_root=${OPENBLAS_ROOT:?}
+test -f "$nc_prefix/lib/libnetcdf.so"
+test -f "$nf_prefix/lib/libnetcdff.so"
+test -f "$openblas_root/lib/libopenblas.so"
+
+cmake -S "$SRC" -B "$BUILD" \
+  -DFC=mpifort -DMODE=release -DOPENACC=OFF -DNCCL=OFF \
+  -DNETCDF_DIR="$nc_prefix" \
+  -DNETCDF_INCLUDES="$nc_prefix/include;$nf_prefix/include" \
+  -DNETCDF_INCLUDES_F90="$nf_prefix/include" \
+  -DNETCDF_LIBRARIES_C="$nc_prefix/lib/libnetcdf.so" \
+  -DNETCDF_LIBRARIES_F90="$nf_prefix/lib/libnetcdff.so" \
+  -DFFTW_DIR="$fftw_prefix" \
+  -DMPI_DIR="$mpi_prefix" \
+  -DBLAS_LIBRARIES="$openblas_root/lib/libopenblas.so" \
+  -DLAPACK_LIBRARIES="$openblas_root/lib/libopenblas.so" \
+  -DCMAKE_BUILD_RPATH="$nf_prefix/lib;$nc_prefix/lib;$openblas_root/lib"
+cmake --build "$BUILD" --target HICAR HICAR-tester \
+  --parallel "${SLURM_CPUS_PER_TASK:-8}"
+
+test -x "$BUILD/HICAR"
+! ldd "$BUILD/HICAR" | grep -q 'not found'
+sha256sum "$BUILD/HICAR"
+```
+
+Use the same recipe with `MODE=debug` and a distinct directory for diagnosis.
+Do not use a debug executable for throughput estimates.
+
+## A100 OpenACC build: single-node GPU-aware MPI
+
+This variant is for four compute ranks without a CPU-only I/O server. It uses
+GPU-aware Cray MPICH and therefore has `NCCL=OFF`.
+
+```bash
+[ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
+module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
+module purge || true
+module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
 module load nvhpc/24.5 cray-mpich-nvhpc/8.1.30 cuda/12.3.0-gcc \
   cmake/3.24.4-gcc gmake/4.4.1-gcc \
   netcdf-c/4.9.2-nvhpc netcdf-fortran/4.6.1-nvhpc \
   hdf5/1.14.3-nvhpc fftw/3.3.10-gcc
 
-cmake -S . -B build_gpu_mpi -DFC=mpifort -DMODE=release \
-  -DGPU_ARCH=cc80 -DOPENACC=ON -DNCCL=OFF
-cmake --build build_gpu_mpi --target HICAR HICAR-tester --parallel 8
+SRC=${HICAR_SOURCE_ROOT:?}
+BUILD=${HICAR_BUILD_ROOT:?use a new GPU-MPI build directory}
+test ! -e "$BUILD"
+nc_prefix=$(nc-config --prefix)
+nf_prefix=$(nf-config --prefix)
+fftw_prefix=$(pkg-config --variable=prefix fftw3)
+mpi_prefix=$(dirname "$(dirname "$(command -v mpifort)")")
+cuda_target="$CUDA_HOME/targets/x86_64-linux"
+
+cmake -S "$SRC" -B "$BUILD" \
+  -DFC=mpifort -DMODE=release -DOPENACC=ON -DNCCL=OFF \
+  -DGPU_ARCH=cc80 \
+  -DCMAKE_C_COMPILER=nvc -DCMAKE_CXX_COMPILER=nvc++ \
+  -DMPI_Fortran_COMPILER="$(command -v mpifort)" \
+  -DNETCDF_DIR="$nc_prefix" \
+  -DNETCDF_INCLUDES="$nc_prefix/include;$nf_prefix/include" \
+  -DNETCDF_INCLUDES_F90="$nf_prefix/include" \
+  -DNETCDF_LIBRARIES_C="$nc_prefix/lib/libnetcdf.so" \
+  -DNETCDF_LIBRARIES_F90="$nf_prefix/lib/libnetcdff.so" \
+  -DFFTW_DIR="$fftw_prefix" \
+  -DFFTW_INCLUDES="$fftw_prefix/include" \
+  -DFFTW_LIBRARIES="$fftw_prefix/lib/libfftw3.so" \
+  -DMPI_DIR="$mpi_prefix" \
+  -DCUDAToolkit_ROOT="$CUDA_HOME" \
+  -DCUFFT_LIBRARY="$cuda_target/lib/libcufft.so" \
+  -DCMAKE_BUILD_RPATH="$nf_prefix/lib;$nc_prefix/lib"
+cmake --build "$BUILD" --target HICAR HICAR-tester \
+  --parallel "${SLURM_CPUS_PER_TASK:-8}"
+
+test -x "$BUILD/HICAR_gpu"
+ldd "$BUILD/HICAR_gpu" | grep -q libcufft
+! ldd "$BUILD/HICAR_gpu" | grep -q libnccl
+! ldd "$BUILD/HICAR_gpu" | grep -q 'not found'
+sha256sum "$BUILD/HICAR_gpu"
 ```
 
-For NCCL comparison, use a separate build directory and `-DNCCL=ON`.
+At runtime set `MPICH_GPU_SUPPORT_ENABLED=1` uniformly on all four ranks.
+
+## A100 OpenACC build: multi-node NCCL production topology
+
+Switzerland-wide multi-node runs use four compute ranks plus one CPU-only I/O
+rank per node. They require an `NCCL=ON` executable and a launcher that sets
+`MPICH_GPU_SUPPORT_ENABLED=0` on every rank. Do not use the preceding
+`NCCL=OFF` executable with that launcher: device-backed MPI windows can fail
+during initialization.
+
+Use the same NVHPC module stack as above, then:
+
+```bash
+SRC=${HICAR_SOURCE_ROOT:?}
+BUILD=${HICAR_BUILD_ROOT:?use a new GPU-NCCL build directory}
+test ! -e "$BUILD"
+nc_prefix=$(nc-config --prefix)
+nf_prefix=$(nf-config --prefix)
+fftw_prefix=$(pkg-config --variable=prefix fftw3)
+mpi_prefix=$(dirname "$(dirname "$(command -v mpifort)")")
+cuda_target="$CUDA_HOME/targets/x86_64-linux"
+nvhpc_sdk_root=$(dirname "$(dirname "$(dirname "$(command -v nvc)")")")
+nccl_prefix="$nvhpc_sdk_root/comm_libs/12.4/nccl"
+test -f "$nccl_prefix/include/nccl.h"
+test -f "$nccl_prefix/lib/libnccl.so"
+
+cmake -S "$SRC" -B "$BUILD" \
+  -DFC=mpifort -DMODE=release -DOPENACC=ON -DNCCL=ON \
+  -DGPU_ARCH=cc80 \
+  -DCMAKE_C_COMPILER=nvc -DCMAKE_CXX_COMPILER=nvc++ \
+  -DMPI_Fortran_COMPILER="$(command -v mpifort)" \
+  -DNETCDF_DIR="$nc_prefix" \
+  -DNETCDF_INCLUDES="$nc_prefix/include;$nf_prefix/include" \
+  -DNETCDF_INCLUDES_F90="$nf_prefix/include" \
+  -DNETCDF_LIBRARIES_C="$nc_prefix/lib/libnetcdf.so" \
+  -DNETCDF_LIBRARIES_F90="$nf_prefix/lib/libnetcdff.so" \
+  -DFFTW_DIR="$fftw_prefix" \
+  -DFFTW_INCLUDES="$fftw_prefix/include" \
+  -DFFTW_LIBRARIES="$fftw_prefix/lib/libfftw3.so" \
+  -DMPI_DIR="$mpi_prefix" \
+  -DCUDAToolkit_ROOT="$CUDA_HOME" \
+  -DCUFFT_LIBRARY="$cuda_target/lib/libcufft.so" \
+  -DNCCL_INCLUDE_DIR="$nccl_prefix/include" \
+  -DNCCL_LIBRARY="$nccl_prefix/lib/libnccl.so" \
+  -DCMAKE_BUILD_RPATH="$nf_prefix/lib;$nc_prefix/lib;$nccl_prefix/lib" \
+  -DCMAKE_INSTALL_RPATH="$nf_prefix/lib;$nc_prefix/lib;$nccl_prefix/lib"
+cmake --build "$BUILD" --target HICAR HICAR-tester \
+  --parallel "${SLURM_CPUS_PER_TASK:-8}"
+
+test -x "$BUILD/HICAR_gpu"
+ldd "$BUILD/HICAR_gpu" | grep -q libcufft
+ldd "$BUILD/HICAR_gpu" | grep -q libnccl
+! ldd "$BUILD/HICAR_gpu" | grep -q 'not found'
+test "$(grep '^NCCL:BOOL=' "$BUILD/CMakeCache.txt")" = "NCCL:BOOL=ON"
+sha256sum "$BUILD/HICAR_gpu"
+```
+
+Before accepting any GPU build, run a small case using the same number of
+nodes, rank/GPU visibility, I/O-rank layout, and MPICH GPU-support setting as
+production. A successful `--help` call does not exercise device transport.
 
 ## Four-GPU compute plus CPU-only I/O topology
 
