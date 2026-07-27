@@ -302,9 +302,19 @@ It is non-promoting legacy evidence, not an active source branch.
   `/scratch/mch/olifu/icon_hicar/runtime/python_environment-preemption-production-91f917e-v1.json`,
   SHA-256
   `14cef4b493b52e9b36a436f104c166f34a1ddac08458ecccecadfef64af5e4eb`.
-  Both artifacts pass the production runtime contract and live Python smoke
-  validation. They make the pre-emption controller deployable but do not
-  authorize a scientific campaign.
+  Both artifacts pass the original checksum contract and the current Python
+  imports still match the report, but a 2026-07-27 independent re-audit found
+  that this release is **not launchable**: it omits
+  `case_studies/swiss_200m/config/hicar_swiss_200m.nml.in`, which the frozen
+  renderer reads; the forcing producer selects its validator from the mutable
+  case root rather than the frozen release; and the shared `venv_static`
+  remains owner-writable while reconciliation does not recheck its recorded
+  package set. The cancellation drill exercises the controller and sleep
+  helper, not the real HICAR/srun/restart path. No first-year campaign plan is
+  published under the Balfrin campaign root. Treat the production-purpose
+  runtime and Python report as failed launch-readiness evidence until these
+  gaps are repaired and a real bounded HICAR cancellation/restart drill passes.
+  This correction does not change the separate scientific hold.
 - Wind-climatology engineering pathway:
   `case_studies/swiss_200m/wind_climatology/PRODUCT_CONTRACT.md`.
 
