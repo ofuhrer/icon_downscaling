@@ -360,16 +360,17 @@ It is non-promoting legacy evidence, not an active source branch.
   Dry reconciliation selected one bounded three-record CPU array followed by
   a four-node `preemptible` model attempt; no Slurm job was submitted.
 
-  Coordinator `243da04846fdad20c3665837664e5aaefdf0f6ee` now contains the
+  Coordinator `5f39724` now contains the
   repaired target-stack qualification path. It adds exact predecessor restart
   provenance to model completion, campaign-specific multi-chain
   authorization, report readiness for compressed output, a two-segment real
-  HICAR TERM/KILL recovery driver, and unlimited-by-default retries only for
-  explicitly retryable scheduler outcomes. Pending attempts continue to count
-  against the global model-slot/node budget, so the controller keeps bounded
-  work eligible for immediate Slurm dispatch without building an unbounded
-  queue. Development on `main` remains mutable; the read-only runtime is only
-  a per-campaign execution snapshot.
+  HICAR TERM/KILL recovery driver, nonblocking signal-aware model-output
+  forwarding, and unlimited-by-default retries only for explicitly retryable
+  scheduler outcomes. Pending attempts count against the global model-slot
+  and node budgets: the controller leaves bounded work eligible and Slurm
+  starts it as nodes become available, without a separate free-node poller or
+  fixed retry delay. Development on `main` remains mutable; the read-only
+  runtime is only a per-campaign execution snapshot.
 
   Balfrin supplied real daytime pre-emption evidence during the engineering
   runs: jobs `4951991`, `4952023`, `4952291`, and `4952336` exited through the
@@ -380,13 +381,17 @@ It is non-promoting legacy evidence, not an active source branch.
   ready marker, and `scancel --full` bypassing wrapper publication; each issue
   was corrected rather than waived.
 
-  The final clean non-promoting qualification uses production-purpose runtime
-  `/scratch/mch/olifu/icon_hicar/onboarding/runtime/coordinator-243da04-v1`
-  and controller job `4952480`. It is currently preparing forcing on
-  `pp-short` before the real two-segment HICAR TERM/KILL/restart check. Until
-  its `hicar_preemptible_recovery.json.ready` report passes, target-stack
-  recovery remains engineering work in progress. It does not change the
-  separate scientific hold or authorize a first-year campaign.
+  Controlled TERM qualification exposed two distinct issues: blocking pipe
+  reads delayed the Python signal handler, and the cheap probe initially
+  signalled as soon as Slurm reported RUNNING, before its batch payload was
+  ready. Both are corrected; the probe now waits for an application startup
+  marker. Runtime `coordinator-5f39724-v1` and its Python environment were
+  published by bootstrap job `4952879`. A fresh real two-segment campaign is
+  prepared but unsubmitted at
+  `/scratch/mch/olifu/icon_hicar/engineering/hicar-preemption-recovery-27baced-v1`.
+  The corrected cheap probe and then the real TERM/KILL/restart qualification
+  still require PASS reports before target-stack recovery is qualified.
+  Neither changes the scientific hold or authorizes a first-year campaign.
 - Wind-climatology engineering pathway:
   `case_studies/swiss_200m/wind_climatology/PRODUCT_CONTRACT.md`.
 
