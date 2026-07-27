@@ -21,6 +21,7 @@ REQUIRED_RUNTIME_PATHS = (
     "orchestration/runtime_contract.py",
     "config/balfrin.env",
     "requirements/balfrin-preemptible.txt",
+    "scripts/load_balfrin_site_config.sh",
     "case_studies/swiss_200m/scripts/bootstrap_preemptible_python_balfrin.sbatch",
     "case_studies/swiss_200m/scripts/build_hicar_balfrin.sbatch",
     "case_studies/swiss_200m/scripts/compress_hicar_stream_output_balfrin.sbatch",

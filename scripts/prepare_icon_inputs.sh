@@ -66,6 +66,7 @@ die() {
 }
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$SCRIPT_DIR/load_balfrin_site_config.sh"
 
 abs_path() {
   local path=$1

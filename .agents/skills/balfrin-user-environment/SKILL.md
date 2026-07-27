@@ -76,7 +76,9 @@ separately published, read-only Python environment tied uniquely to that
 release. Run `make balfrin-preflight CHECK_FDB=1` from a clean checkout before
 building a first campaign; the ready report must confirm the production HICAR
 pin, shared tools, `preemptible` partition, FDB view, scratch, and
-`/store_new` access. Keep
+`/store_new` access. Primary wrappers must load `config/balfrin.env` through
+`scripts/load_balfrin_site_config.sh` before module initialization; explicit
+environment values override that shared non-secret record. Keep
 compression and journaled retirement ahead of further prefetch; cap the
 number of completed-but-unretired segments per chain. Retire forcing/raw
 output only after compression and solver publications pass, and retire a

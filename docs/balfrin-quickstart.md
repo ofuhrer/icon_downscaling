@@ -43,10 +43,12 @@ storage. It publishes
 The Make target loads the supported Python module itself; keep Python 3.11
 loaded for the remaining commands.
 
-Shared non-secret defaults are in `config/balfrin.env`. The frozen forcing
-runtime reads this file. A temporary site replacement can be selected with
-`HICAR_SITE_CONFIG`; individual variables may be overridden in the submitting
-environment. Durable project storage must remain below `/store_new`.
+Shared non-secret defaults are in `config/balfrin.env`. Every primary build,
+forcing, model, CPU-worker, and watcher wrapper loads it through
+`scripts/load_balfrin_site_config.sh` before initializing modules. A temporary
+site replacement can be selected with `HICAR_SITE_CONFIG`; explicit
+environment variables take precedence. Durable project storage must remain
+below `/store_new`.
 
 For a real two-field FDB read, run this from a workstation checkout:
 

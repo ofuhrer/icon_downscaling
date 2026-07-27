@@ -221,7 +221,9 @@ decision; scratch retirement is never evidence of durable publication.
 ## Supported Balfrin entry point
 
 `config/balfrin.env` is the single non-secret site-default record used by the
-frozen forcing runtime and onboarding preflight. It names the module tree,
+primary shell wrappers and onboarding preflight. The wrappers source
+`scripts/load_balfrin_site_config.sh` before module initialization, preserving
+explicit environment overrides. The record names the module tree,
 REA-L FDB image, fieldextra assets, ICON grid, `/store_new` durable root,
 production HICAR branch/pin, and primary workflow. Environment overrides are
 explicit and are recorded in preflight or campaign evidence.

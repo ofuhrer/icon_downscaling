@@ -10,6 +10,7 @@
 #SBATCH --time=01:00:00
 
 set -euo pipefail
+. "$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)/scripts/load_balfrin_site_config.sh"
 [ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
 module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
 
@@ -17,21 +18,6 @@ plan=${STREAM_PLAN:?Set STREAM_PLAN to a published chunk_plan.json}
 index=${STREAM_INDEX:-${SLURM_ARRAY_TASK_ID:-}}
 [[ "$index" =~ ^[0-9]+$ ]] || { echo "stream record index is required" >&2; exit 2; }
 repo_root=${REPO_ROOT:-$SCRATCH/icon_hicar}
-site_config=${HICAR_SITE_CONFIG:-$repo_root/config/balfrin.env}
-if test -f "$site_config"; then
-  while IFS='=' read -r key value; do
-    case "$key" in
-      ''|\#*) continue ;;
-      USER_ENV_ROOT|REA_FDB_IMAGE|FIELD_EXTRA_BIN|FIELD_EXTRA_RESOURCES|FIELD_EXTRA_SAMPLE|ICON_GRID|ICON_DOWNSCALING_DURABLE_ROOT|HICAR_PRODUCTION_BRANCH|HICAR_PRODUCTION_COMMIT|HICAR_PRIMARY_WORKFLOW)
-        if test -z "${!key+x}"; then
-          printf -v "$key" '%s' "$value"
-          export "$key"
-        fi
-        ;;
-      *) echo "unsupported Balfrin site-config key: $key" >&2; exit 2 ;;
-    esac
-  done < "$site_config"
-fi
 source_case=${HICAR_FORCING_CASE:-$repo_root/case_studies/swiss_100m}
 python=${HICAR_VALIDATION_PYTHON:-$repo_root/venv_static/bin/python}
 uenv_bin=${UENV_BIN:-/usr/bin/uenv}

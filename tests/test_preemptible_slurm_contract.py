@@ -34,7 +34,7 @@ def test_forcing_uses_frozen_site_grid_and_validator():
     producer = (
         SCRIPTS / "produce_rea_l_stream_record_balfrin.sbatch"
     ).read_text()
-    assert 'site_config=${HICAR_SITE_CONFIG:-$repo_root/config/balfrin.env}' in producer
+    assert "load_balfrin_site_config.sh" in producer
     assert (
         "validator=${HICAR_FORCING_VALIDATOR:-$repo_root/"
         "case_studies/swiss_200m/validation/validate_forcing.py}"
