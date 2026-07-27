@@ -49,6 +49,13 @@
         "exit_code": "0:0",
         "elapsed": "00:00:49",
         "reported_remove_targets": 225
+      },
+      {
+        "job_id": "4950197",
+        "state": "COMPLETED",
+        "exit_code": "0:0",
+        "elapsed": "00:00:03",
+        "reported_remove_targets": 126
       }
     ],
     "removed_classes": [
@@ -59,9 +66,10 @@
       "legacy 250 m raw case outputs and root ICON cache",
       "scratch Git bundles already protected under the durable root",
       "ignored HICAR dependency/test build products",
-      "stale locks, virtual environments, Slurm logs, and one-time cleanup wrappers"
+      "stale locks, virtual environments, Slurm logs, and one-time cleanup wrappers",
+      "superseded radiation/cloud-fraction payloads and obsolete validation diagnostics"
     ],
-    "scratch_usage_after_bytes": 23223052328,
+    "scratch_usage_after_bytes": 20243081756,
     "active_jobs_after_cleanup": 0,
     "retained_case_bytes": {
       "alpine_bridge_200m": 1462403759,

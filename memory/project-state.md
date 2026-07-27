@@ -123,8 +123,8 @@ nonzero by design because the two temperature screens failed.
 
 - Remote: `git@github.com:ofuhrer/icon_downscaling.git`
 - Active branch: `main`
-- The working handoff commit must contain this state, all reusable workflow
-  code, tests, documentation, and skills before cleanup is complete.
+- Consolidated handoff checkpoint:
+  `482b1f441d625fff00a9ebd634ebeeed3e01f75d`.
 
 ### HICAR
 
@@ -282,11 +282,13 @@ scientific reference. The three superseded solver-research branches were
 deleted after bundle/source verification. Local HICAR is clean on
 `feature/icon_downscaling` at `d6c52a54`.
 
-Balfrin cleanup jobs `4950170` and `4950184` completed successfully. They
+Balfrin cleanup jobs `4950170`, `4950184`, and `4950197` completed
+successfully. They
 removed 148 experiment source clones, 59 build variants, all superseded
 restart/water-budget trajectories and V29 restart payloads, the legacy 250 m
-raw case/cache, stale bundles/logs/locks/environments, and one-time wrappers.
-No user jobs remain. `$SCRATCH/icon_hicar` is reduced to 23,223,052,328 bytes.
+raw case/cache, obsolete radiation/cloud-fraction payloads, stale
+bundles/logs/locks/environments, and one-time wrappers. No user jobs remain.
+`$SCRATCH/icon_hicar` is reduced to 20,243,081,756 bytes.
 
 Retained scratch consists of the clean HICAR checkout, operational
 dependencies/observations, Alpine-bridge inputs, and the expensive Swiss
@@ -305,6 +307,9 @@ from `externals/fieldextra.lock`.
 - Portable coordinator suite after consolidation: `265 passed`.
 - Repository syntax, whitespace, and scoped Ruff checks after consolidation:
   PASS (`156` Python and `147` shell files).
+- Clean GitHub clone with initialized HICAR submodule: portable suite and
+  repository checks PASS at coordinator `482b1f4`.
+- Public coordinator CI run `30245948287`: PASS.
 - Against the exact V29 source, `7/11` opt-in HICAR source-contract tests
   pass: all restart-initialization and water-budget contracts pass. The four
   remaining tests describe the separate wind-climatology/CF-metadata source
