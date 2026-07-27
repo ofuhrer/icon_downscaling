@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
+import os
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -17,8 +19,10 @@ REQUIRED_RUNTIME_PATHS = (
     "orchestration/retire_campaign_artifacts.py",
     "orchestration/run_cpu_task.py",
     "orchestration/runtime_contract.py",
+    "config/balfrin.env",
     "requirements/balfrin-preemptible.txt",
     "case_studies/swiss_200m/scripts/bootstrap_preemptible_python_balfrin.sbatch",
+    "case_studies/swiss_200m/scripts/build_hicar_balfrin.sbatch",
     "case_studies/swiss_200m/scripts/compress_hicar_stream_output_balfrin.sbatch",
     "case_studies/swiss_200m/scripts/finalize_rea_l_stream_chunk_balfrin.sbatch",
     "case_studies/swiss_200m/scripts/gpu_rank_wrapper.sh",
@@ -29,6 +33,8 @@ REQUIRED_RUNTIME_PATHS = (
     "case_studies/swiss_200m/scripts/run_rea_l_stream_chunk_balfrin.sbatch",
     "case_studies/swiss_200m/scripts/validate_solver_event_balfrin.sbatch",
     "case_studies/swiss_200m/scripts/watch_preemptible_campaign_balfrin.sbatch",
+    "case_studies/swiss_200m/config/hicar_swiss_200m.nml.in",
+    "case_studies/swiss_200m/config/fieldextra_target_grid.txt",
     "case_studies/swiss_200m/streaming/compress_output_file.py",
     "case_studies/swiss_200m/streaming/create_chunk_plan.py",
     "case_studies/swiss_200m/streaming/finalize_forcing_chunk.py",
@@ -106,7 +112,7 @@ def validate_python_environment(
         raise ValueError(f"Python environment is not published: {report_path}")
     payload = json.loads(report_path.read_text())
     if (
-        payload.get("schema_version") != 1
+        payload.get("schema_version") != 2
         or payload.get("status") != "PASS"
         or payload.get("purpose") != "preemptible-runtime"
     ):
@@ -125,9 +131,44 @@ def validate_python_environment(
         or payload.get("requirements_sha256") != sha256(requirements)
     ):
         raise ValueError("Python environment identifies other requirements")
+    environment_root = Path(payload["environment_root"]).resolve()
     executable = Path(payload["python"]).absolute()
+    if executable.parent.parent.resolve() != environment_root:
+        raise ValueError("Python executable is outside the recorded environment")
     if not executable.is_file() or not executable.stat().st_mode & 0o111:
         raise ValueError(f"Python environment executable is missing: {executable}")
+    if payload.get("python_sha256") != sha256(executable):
+        raise ValueError("Python environment executable checksum changed")
+    if payload.get("immutable") is not True:
+        raise ValueError("Python environment is not marked immutable")
+    writable = []
+    for path in itertools.chain((environment_root,), environment_root.rglob("*")):
+        if path.is_symlink() or not (path.is_file() or path.is_dir()):
+            continue
+        if path.stat().st_mode & 0o222:
+            writable.append(str(path))
+            if len(writable) == 5:
+                break
+    if writable:
+        raise ValueError(
+            "Python environment contains writable paths: " + ", ".join(writable)
+        )
+    current_freeze = sorted(
+        line.strip()
+        for line in subprocess.check_output(
+            [str(executable), "-m", "pip", "freeze"],
+            text=True,
+            timeout=30,
+            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        ).splitlines()
+        if line.strip()
+    )
+    recorded_freeze = payload.get("pip_freeze")
+    if not isinstance(recorded_freeze, list) or current_freeze != recorded_freeze:
+        raise ValueError("Python environment package set changed")
+    freeze_bytes = ("\n".join(current_freeze) + "\n").encode()
+    if payload.get("pip_freeze_sha256") != hashlib.sha256(freeze_bytes).hexdigest():
+        raise ValueError("Python environment package inventory checksum changed")
     if smoke:
         subprocess.run(
             [
@@ -139,5 +180,6 @@ def validate_python_environment(
             capture_output=True,
             text=True,
             timeout=30,
+            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
         )
     return payload

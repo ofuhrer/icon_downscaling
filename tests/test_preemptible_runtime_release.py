@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
+import json
 from pathlib import Path
 import shutil
 import stat
@@ -43,6 +45,72 @@ def test_engineering_release_is_hash_bound_and_immutable(tmp_path):
     target.write_text(target.read_text() + "\n")
     with pytest.raises(ValueError, match="checksum changed"):
         CONTRACT.validate_runtime_release(manifest, expected_root=release_root)
+
+
+def test_release_contains_the_namelist_template_used_by_the_renderer(tmp_path):
+    release_root = tmp_path / "release"
+    RELEASE.build_release(ROOT, release_root, "engineering")
+    template = (
+        release_root
+        / "case_studies/swiss_200m/config/hicar_swiss_200m.nml.in"
+    )
+    assert template.is_file()
+    assert not template.stat().st_mode & stat.S_IWUSR
+
+
+def test_python_environment_rejects_writable_tree_and_package_drift(tmp_path):
+    release_root = tmp_path / "release"
+    RELEASE.build_release(ROOT, release_root, "engineering")
+    manifest = release_root / "runtime_release.json"
+    requirements = release_root / "requirements/balfrin-preemptible.txt"
+    environment_root = tmp_path / "runtime-python"
+    executable = environment_root / "bin/python"
+    executable.parent.mkdir(parents=True)
+    executable.symlink_to(sys.executable)
+    freeze = sorted(
+        line.strip()
+        for line in subprocess.check_output(
+            [str(executable), "-m", "pip", "freeze"], text=True
+        ).splitlines()
+        if line.strip()
+    )
+    executable.parent.chmod(0o500)
+    environment_root.chmod(0o500)
+    freeze_bytes = ("\n".join(freeze) + "\n").encode()
+    report = tmp_path / "python_environment.json"
+    payload = {
+        "schema_version": 2,
+        "status": "PASS",
+        "purpose": "preemptible-runtime",
+        "environment_root": str(environment_root),
+        "immutable": True,
+        "python": str(executable),
+        "python_sha256": CONTRACT.sha256(executable),
+        "python_version": sys.version.split()[0],
+        "runtime_release": str(manifest),
+        "runtime_release_sha256": CONTRACT.sha256(manifest),
+        "requirements": str(requirements),
+        "requirements_sha256": CONTRACT.sha256(requirements),
+        "versions": {},
+        "pip_freeze": freeze,
+        "pip_freeze_sha256": hashlib.sha256(freeze_bytes).hexdigest(),
+    }
+    report.write_text(json.dumps(payload))
+    Path(f"{report}.ready").touch()
+    CONTRACT.validate_python_environment(report, manifest)
+
+    environment_root.chmod(0o700)
+    with pytest.raises(ValueError, match="writable paths"):
+        CONTRACT.validate_python_environment(report, manifest)
+    environment_root.chmod(0o500)
+
+    payload["pip_freeze"] = ["not-the-installed-package-set==0"]
+    payload["pip_freeze_sha256"] = hashlib.sha256(
+        b"not-the-installed-package-set==0\n"
+    ).hexdigest()
+    report.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="package set changed"):
+        CONTRACT.validate_python_environment(report, manifest)
 
 
 def test_production_release_requires_a_clean_runtime_source(tmp_path):

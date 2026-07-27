@@ -5,7 +5,7 @@ HICAR_CONTRACT_TESTS := \
 	tests/test_hicar_output_metadata.py \
 	tests/test_hicar_restart_initialization.py
 
-.PHONY: help externals install-dev recovery-audit recovery-archive-verify test test-hicar-contract test-all syntax check
+.PHONY: help externals install-dev balfrin-preflight recovery-audit recovery-archive-verify test test-hicar-contract test-all syntax check
 
 RECOVERY_ARCHIVE_MANIFEST ?= /store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-foundation-v1.json
 RECOVERY_REPORTS_MANIFEST ?= /store_new/mch/msopr/olifu/icon_downscaling/recovery/v1/manifests/archive-qualification-reports-v1.json
@@ -14,6 +14,8 @@ help:
 	@echo "ICON-to-HICAR coordinator"
 	@echo "  make externals   initialize the pinned public HICAR source"
 	@echo "  make install-dev install local validation/test dependencies"
+	@echo "  make balfrin-preflight"
+	@echo "                    verify this checkout and Balfrin dependencies"
 	@echo "  make recovery-audit"
 	@echo "                    audit cold-start deletion readiness"
 	@echo "  make recovery-archive-verify"
@@ -30,6 +32,9 @@ externals:
 
 install-dev:
 	$(PYTHON) -m pip install -r requirements/dev.txt
+
+balfrin-preflight:
+	$(PYTHON) ./scripts/balfrin_preflight.py $(if $(CHECK_FDB),--check-fdb,)
 
 recovery-audit:
 	./scripts/check_recovery_readiness.sh

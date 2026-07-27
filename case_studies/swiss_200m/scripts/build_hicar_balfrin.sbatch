@@ -165,10 +165,14 @@ else
 fi
 
 provenance="$build_root/hicar_build_provenance.txt"
+provenance_partial="$provenance.partial.${SLURM_JOB_ID:-$$}"
+rm -f "$provenance.ready"
 {
   printf 'source_commit=%s\n' "$expected_commit"
   printf 'variant=%s\n' "$variant"
   printf 'mode=%s\n' "$mode"
+  printf 'build_script=%s\n' "$(realpath "$0")"
+  sha256sum "$(realpath "$0")"
   printf 'executable=%s\n' "$executable"
   sha256sum "$executable"
   printf 'tester=%s\n' "$tester"
@@ -180,7 +184,9 @@ provenance="$build_root/hicar_build_provenance.txt"
   printf '%s\n' '--- cmake command ---'
   printf '%q ' cmake "${cmake_args[@]}"
   printf '\n'
-} > "$provenance"
+} > "$provenance_partial"
+mv "$provenance_partial" "$provenance"
+touch "$provenance.ready"
 
 printf 'PASS variant=%s commit=%s executable=%s provenance=%s\n' \
   "$variant" "$expected_commit" "$executable" "$provenance"

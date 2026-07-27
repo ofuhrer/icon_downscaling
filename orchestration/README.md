@@ -1,7 +1,7 @@
 # Pre-emptible Balfrin campaign controller
 
-This directory contains the stateful controller for short, restart-linked
-HICAR attempts on Balfrin. It does not alter HICAR checkpoint serialization or
+This directory contains the primary stateful controller for short,
+restart-linked HICAR attempts on Balfrin. It does not alter HICAR checkpoint serialization or
 claim that the current restart-physics candidate is scientifically qualified.
 Qualification and production authorization remain independent gates.
 
@@ -83,10 +83,12 @@ The runtime Python environment is a separate publication. Submit
 `bootstrap_preemptible_python_balfrin.sbatch` on `pp-short` against the
 deployed release. It installs the exact direct versions in
 `requirements/balfrin-preemptible.txt`, runs import and package checks, and
-publishes a report binding the interpreter, resolved packages, requirements
-and runtime release. The planner and every controller reconciliation recheck
-both publications. Model and CPU jobs receive the frozen interpreter path
-explicitly rather than relying on shell activation.
+publishes a report binding the interpreter hash, exact resolved package
+inventory, requirements, immutable environment tree, and runtime release.
+Each release gets a separate environment by default. The planner and every
+controller reconciliation recheck both publications, including `pip freeze`
+drift and writable paths. Model and CPU jobs receive the frozen interpreter
+path explicitly rather than relying on shell activation.
 
 ## Planning and launch
 
@@ -99,7 +101,7 @@ Definitions use absolute Balfrin paths:
   "campaign_id": "swiss-200m-example",
   "campaign_root": "/scratch/USER/icon_hicar/campaigns/example",
   "runtime_release": "/scratch/USER/icon_hicar/runtime/releases/release-id/runtime_release.json",
-  "python_environment": "/scratch/USER/icon_hicar/runtime/python_environment-release-id.json",
+  "python_environment": "/scratch/USER/icon_hicar/runtime/python/release-id.environment.json",
   "model": {
     "expected_hicar_commit": "0000000000000000000000000000000000000000",
     "case_root": "/scratch/USER/icon_hicar/case_studies/swiss_200m",
@@ -131,6 +133,12 @@ Definitions use absolute Balfrin paths:
   ]
 }
 ```
+
+For the supported single-chain two-hour definition, use
+`scripts/create_balfrin_smoke_campaign.py` as shown in
+[`docs/balfrin-quickstart.md`](../docs/balfrin-quickstart.md). The hand-written
+example above documents the complete schema; it is not the recommended first
+entry point.
 
 Multiple chains additionally require a published
 `independent_chain_authorization`. A definition with `"purpose":

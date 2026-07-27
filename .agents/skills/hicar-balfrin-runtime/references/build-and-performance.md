@@ -267,7 +267,12 @@ Balfrin job `4832736` used five alternating-order trials and 500 steady-state ex
 | primary 3-D + 2-D pair | 171.12 us | 397.46 us |
 | equal-weight sum of 17 cases | 5.04 ms | 7.12 ms |
 
-Use `NCCL=OFF` for the current single-node four-A100 workflow. Multi-node performance and sustained full-model GPU runtime remain unvalidated.
+Use `NCCL=OFF` for the single-node four-A100 GPU-aware-MPI workflow. Use
+`NCCL=ON` for the validated Switzerland-wide multi-node topology with four
+compute ranks and one CPU-only I/O rank per node, uniform
+`MPICH_GPU_SUPPORT_ENABLED=0`, and rank-local GPU visibility. The canonical
+builder publishes `hicar_build_provenance.txt.ready`; do not launch a campaign
+from an unreported build directory.
 
 ## NUMA placement and multi-node smoke
 

@@ -76,10 +76,10 @@ abs_path() {
   printf '%s/%s\n' "$(cd "$dir" && pwd)" "$base"
 }
 
-FIELD_EXTRA_BIN="/oprusers/osm/opr.inn/abs/fieldextra_gnu_opt_omp-16.0.0-gcc-12.3.0"
-RESOURCES_DIR="/oprusers/osm/opr.inn/config/resources"
-SAMPLE="/oprusers/osm/opr.inn/modules/eccodes_cosmo_resources/2.36.0.3/samples/COSMO_GRIB2_default.tmpl"
-ICON_GRID="/oprusers/osm/opr.inn/data/grid_descriptions/icon_grid_0001_R19B08_mch.nc"
+FIELD_EXTRA_BIN=${FIELD_EXTRA_BIN:-/oprusers/osm/opr.inn/abs/fieldextra_gnu_opt_omp-16.0.0-gcc-12.3.0}
+RESOURCES_DIR=${FIELD_EXTRA_RESOURCES:-/oprusers/osm/opr.inn/config/resources}
+SAMPLE=${FIELD_EXTRA_SAMPLE:-/oprusers/osm/opr.inn/modules/eccodes_cosmo_resources/2.36.0.3/samples/COSMO_GRIB2_default.tmpl}
+ICON_GRID=${ICON_GRID:-/oprusers/osm/opr.inn/data/grid_descriptions/icon_grid_0001_R19B08_mch.nc}
 EXPVER="639"
 TARGET_GRID="rotlatlon,356860000,-1420000,540000,1060000,20000,20000,190000000,43000000"
 TARGET_METHOD="default"

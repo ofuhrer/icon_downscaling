@@ -72,7 +72,11 @@ array capped at two active jobs rather than multiplying producers by the
 number of model chains.
 
 Run campaigns only from a checksum-bound immutable runtime release and a
-separately published Python environment tied to that release. Keep
+separately published, read-only Python environment tied uniquely to that
+release. Run `make balfrin-preflight CHECK_FDB=1` from a clean checkout before
+building a first campaign; the ready report must confirm the production HICAR
+pin, shared tools, `preemptible` partition, FDB view, scratch, and
+`/store_new` access. Keep
 compression and journaled retirement ahead of further prefetch; cap the
 number of completed-but-unretired segments per chain. Retire forcing/raw
 output only after compression and solver publications pass, and retire a

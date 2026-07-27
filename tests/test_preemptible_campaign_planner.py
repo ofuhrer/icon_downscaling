@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import stat
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,6 +18,57 @@ RELEASE_SPEC = importlib.util.spec_from_file_location(
 RELEASE_MODULE = importlib.util.module_from_spec(RELEASE_SPEC)
 sys.modules[RELEASE_SPEC.name] = RELEASE_MODULE
 RELEASE_SPEC.loader.exec_module(RELEASE_MODULE)
+
+
+def publish_python_environment(
+    report: Path, runtime_manifest: Path, requirements: Path
+) -> None:
+    environment_root = report.with_suffix(".venv")
+    executable = environment_root / "bin/python"
+    environment_root.mkdir(parents=True, exist_ok=True)
+    environment_root.chmod(stat.S_IRWXU)
+    executable.parent.mkdir(parents=True, exist_ok=True)
+    executable.parent.chmod(stat.S_IRWXU)
+    if not executable.exists():
+        executable.symlink_to(sys.executable)
+    freeze = sorted(
+        line.strip()
+        for line in subprocess.check_output(
+            [str(executable), "-m", "pip", "freeze"], text=True
+        ).splitlines()
+        if line.strip()
+    )
+    for path in (executable.parent, environment_root):
+        path.chmod(stat.S_IRUSR | stat.S_IXUSR)
+    freeze_bytes = ("\n".join(freeze) + "\n").encode()
+    report.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "status": "PASS",
+                "purpose": "preemptible-runtime",
+                "environment_root": str(environment_root),
+                "immutable": True,
+                "python": str(executable),
+                "python_sha256": hashlib.sha256(executable.read_bytes()).hexdigest(),
+                "python_version": ".".join(
+                    str(item) for item in sys.version_info[:3]
+                ),
+                "runtime_release": str(runtime_manifest),
+                "runtime_release_sha256": hashlib.sha256(
+                    runtime_manifest.read_bytes()
+                ).hexdigest(),
+                "requirements": str(requirements),
+                "requirements_sha256": hashlib.sha256(
+                    requirements.read_bytes()
+                ).hexdigest(),
+                "versions": {},
+                "pip_freeze": freeze,
+                "pip_freeze_sha256": hashlib.sha256(freeze_bytes).hexdigest(),
+            }
+        )
+    )
+    Path(f"{report}.ready").touch()
 
 
 def definition(tmp_path: Path, *, nodes: int = 4, chains: int = 1) -> dict:
@@ -50,30 +102,11 @@ def run_planner(tmp_path: Path, payload: dict) -> subprocess.CompletedProcess[st
     runtime_manifest = release_root / "runtime_release.json"
     requirements = release_root / "requirements/balfrin-preemptible.txt"
     python_report = tmp_path / "python_environment.json"
-    python_report.write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "status": "PASS",
-                "purpose": "preemptible-runtime",
-                "python": sys.executable,
-                "python_version": ".".join(
-                    str(item) for item in sys.version_info[:3]
-                ),
-                "runtime_release": str(runtime_manifest),
-                "runtime_release_sha256": hashlib.sha256(
-                    runtime_manifest.read_bytes()
-                ).hexdigest(),
-                "requirements": str(requirements),
-                "requirements_sha256": hashlib.sha256(
-                    requirements.read_bytes()
-                ).hexdigest(),
-                "versions": {},
-                "pip_freeze": [],
-            }
-        )
+    publish_python_environment(
+        python_report,
+        runtime_manifest,
+        requirements,
     )
-    Path(f"{python_report}.ready").touch()
     payload["runtime_release"] = str(runtime_manifest)
     payload["python_environment"] = str(python_report)
     source = tmp_path / "definition.json"

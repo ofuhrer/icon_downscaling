@@ -17,14 +17,29 @@ plan=${STREAM_PLAN:?Set STREAM_PLAN to a published chunk_plan.json}
 index=${STREAM_INDEX:-${SLURM_ARRAY_TASK_ID:-}}
 [[ "$index" =~ ^[0-9]+$ ]] || { echo "stream record index is required" >&2; exit 2; }
 repo_root=${REPO_ROOT:-$SCRATCH/icon_hicar}
+site_config=${HICAR_SITE_CONFIG:-$repo_root/config/balfrin.env}
+if test -f "$site_config"; then
+  while IFS='=' read -r key value; do
+    case "$key" in
+      ''|\#*) continue ;;
+      USER_ENV_ROOT|REA_FDB_IMAGE|FIELD_EXTRA_BIN|FIELD_EXTRA_RESOURCES|FIELD_EXTRA_SAMPLE|ICON_GRID|ICON_DOWNSCALING_DURABLE_ROOT|HICAR_PRODUCTION_BRANCH|HICAR_PRODUCTION_COMMIT|HICAR_PRIMARY_WORKFLOW)
+        if test -z "${!key+x}"; then
+          printf -v "$key" '%s' "$value"
+          export "$key"
+        fi
+        ;;
+      *) echo "unsupported Balfrin site-config key: $key" >&2; exit 2 ;;
+    esac
+  done < "$site_config"
+fi
 source_case=${HICAR_FORCING_CASE:-$repo_root/case_studies/swiss_100m}
 python=${HICAR_VALIDATION_PYTHON:-$repo_root/venv_static/bin/python}
 uenv_bin=${UENV_BIN:-/usr/bin/uenv}
 image=${REA_FDB_IMAGE:-fdb/5.19:v2}
-validator="$source_case/validation/validate_forcing.py"
+validator=${HICAR_FORCING_VALIDATOR:-$repo_root/case_studies/swiss_200m/validation/validate_forcing.py}
 case_name=$(basename "$source_case")
 static_domain=${HICAR_STATIC_DOMAIN:-$source_case/static/domain_static_${case_name}.nc}
-grid_file="$source_case/config/fieldextra_target_grid.txt"
+grid_file=${HICAR_FIELD_EXTRA_GRID:-$repo_root/case_studies/swiss_200m/config/fieldextra_target_grid.txt}
 converter="$repo_root/scripts/prepare_icon_inputs.sh"
 
 for path in "$plan" "$plan.ready" "$python" "$uenv_bin" "$validator" \

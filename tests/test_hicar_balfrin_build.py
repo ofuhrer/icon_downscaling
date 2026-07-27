@@ -65,6 +65,8 @@ def test_canonical_builder_requires_linkage_and_identity_evidence() -> None:
     assert 'tester="$build_root/tests/HICAR-tester"' in text
     assert 'sha256sum "$tester"' in text
     assert "hicar_build_provenance.txt" in text
+    assert 'touch "$provenance.ready"' in text
+    assert 'sha256sum "$(realpath "$0")"' in text
     assert "module -t list" in text
 
 

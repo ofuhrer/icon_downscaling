@@ -29,7 +29,7 @@ are explicit and it does not embed one case's acceptance decision.
 configuration. Python validators that implement a case's scientific contract
 stay with that case.
 
-`orchestration/` contains the stateful retry/lease controller for the
+`orchestration/` contains the primary stateful retry/lease controller for the
 short-slice pre-emptible workflow. It owns attempt identity, scheduler
 reconciliation, capacity limits, and final coverage publication. It does not
 absorb scientific validators, case Slurm scripts, or model logic. Legacy
@@ -212,7 +212,30 @@ is node-aware against a 44-node budget and may be changed at runtime, including
 zero to pause submissions. Parallelism is allowed only across independently
 authorized restart chains.
 
-This first controller deliberately does not automate destructive forcing,
-restart, or raw-output retirement. Existing hash-checked retirement tools and
-the archive contract remain the lifecycle authority until their destructive
-steps have the same interruption-recovery coverage as publication and retry.
+The controller now journals and resumes forcing, restart, failed-attempt, and
+raw-output retirement after compression and validation publications pass.
+It preserves configured periodic and final checkpoints and caps each chain's
+unretired backlog. Durable transfer remains a separate archive-contract
+decision; scratch retirement is never evidence of durable publication.
+
+## Supported Balfrin entry point
+
+`config/balfrin.env` is the single non-secret site-default record used by the
+frozen forcing runtime and onboarding preflight. It names the module tree,
+REA-L FDB image, fieldextra assets, ICON grid, `/store_new` durable root,
+production HICAR branch/pin, and primary workflow. Environment overrides are
+explicit and are recorded in preflight or campaign evidence.
+
+`docs/balfrin-quickstart.md` is the operator entry point. It moves a clean
+checkout through:
+
+1. site and dependency preflight;
+2. checksum-bound restoration of rebuild-critical static input;
+3. canonical HICAR build publication;
+4. immutable runtime and release-specific Python publication;
+5. a bounded two-hour, one-chain campaign definition; and
+6. dry reconciliation before any Slurm submission.
+
+The quickstart cannot construct a production authorization. Scientific and
+long-duration promotion remain fail-closed even when all engineering
+onboarding checks pass.

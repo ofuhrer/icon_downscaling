@@ -16,6 +16,10 @@ The workflow must cover source-data discovery, structured forcing conversion, st
 - Durable online root: `/store_new/mch/msopr/olifu/icon_downscaling`
 - HICAR remote: `git@github.com:ofuhrer/HICAR.git`
 - Production-performance branch: `feature/icon_downscaling`
+- Production HICAR pin:
+  `7700c97a0248abcc1db055ef04c22e1ff9ec6d22`
+- Primary campaign workflow: checksum-bound short segments managed by
+  `orchestration/preemptible_campaign.py`
 - Retired solver-research source: checksum-bound bundles and manifests under
   `recovery/` and the durable online root; do not recreate active branches or
   scratch worktrees for it.
@@ -59,6 +63,8 @@ Fall back to `rg` or direct reads for scripts/configuration, exact strings, or f
 - Use `ssh balfrin`; retry transient refusal twice, then ask the user to restore passwordless access.
 - Do not run heavy computation on login nodes or use `balfrin-ln001`.
 - Select partitions explicitly: `debug`/`short`/`normal` for GPU; `pp-short`/`pp-long` for CPU/post-processing.
+- Use `preemptible` for controller-managed heavy campaign attempts; legacy
+  long `normal` jobs are not pre-emption-safe.
 - Initialize the MCH module path in every non-interactive shell and Slurm job.
 - Keep large data/builds in `$SCRATCH/icon_hicar`; use `/tmp` only for small transient payloads.
 - Use `/store_new/mch/msopr/olifu` for project-owned durable online storage.

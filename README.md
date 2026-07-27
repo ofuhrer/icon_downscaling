@@ -11,6 +11,12 @@ MeteoSwiss ICON output from roughly 1 km to 100--250 m with
 > The 100 m workflow remains conditional on its capacity and physical-quality
 > gates.
 
+The supported operator path is for authorized MeteoSwiss Balfrin users. Start
+with the [Balfrin quickstart](docs/balfrin-quickstart.md): it checks site
+access, restores the checksum-published static input from `/store_new`, builds
+the pinned production HICAR line, freezes the runtime, and creates a bounded
+pre-emptible campaign plan.
+
 ## What this repository provides
 
 The repository coordinates the complete downscaling chain while keeping the
@@ -99,8 +105,9 @@ make test
 The full production workflow also needs NetCDF/NCO, ecCodes, GDAL, the
 operational MeteoSwiss fieldextra installation, and a supported HICAR
 toolchain. Balfrin module, partition, MPI, GPU, and Slurm conventions are
-documented in the project skills and case launchers; they are not reproduced
-by the local Python environment.
+checked by `make balfrin-preflight` and documented in the
+[Balfrin quickstart](docs/balfrin-quickstart.md); they are not reproduced by
+the local Python environment.
 
 ## Follow the workflow
 
@@ -131,7 +138,7 @@ Ready markers are publication guarantees: write to a temporary path, validate
 the finished product, atomically rename it, and create `<file>.ready` last.
 
 Legacy long Slurm chains use fixed run directories and must not be described
-as pre-emption-safe. The separate short-slice controller uses immutable
+as pre-emption-safe. The primary short-slice controller uses immutable
 attempts, signal-aware failure classification, external retry state, and
 globally bounded model/CPU pools. Its operating contract and current
 non-destructive lifecycle boundary are documented in
@@ -141,7 +148,10 @@ non-destructive lifecycle boundary are documented in
 
 HICAR and fieldextra remain independent projects with independent histories:
 
-- `HICAR/` pins the exact fork revision used by this workflow. HICAR changes
+- `HICAR/` pins the exact production fork revision used by this workflow.
+  The production branch is `feature/icon_downscaling`; qualified and failed
+  scientific evidence branches remain separate and must not be selected by
+  default. HICAR changes
   are developed, tested, committed, and pushed in that repository before the
   coordinating submodule pointer is advanced.
 - `externals/fieldextra.lock` records the inspected private fieldextra source
@@ -211,12 +221,14 @@ make test-hicar-contract
 make test-all
 ```
 
-They are intentionally not part of public coordinator CI. The current V29
-warm-bias source satisfies the restart and water-budget subset but not the
-separate wind-output/CF-metadata subset; no production claim follows from the
-union suite until those lines are deliberately merged and requalified. A
-local dirty HICAR tree must never be smuggled into the outer repository
-through passing tests.
+They are intentionally not part of public coordinator CI. The production pin
+at `7700c97a` passes the four restart-initialization checks and deliberately
+fails seven metadata/water-diagnostic checks that describe the scientifically
+failed V29 line and other unmerged output work. Do not weaken or xfail that
+explicit integration gate. No production claim follows from the union suite
+until those lines are deliberately integrated and scientifically
+requalified. A local dirty HICAR tree must never be smuggled into the outer
+repository through passing tests.
 
 Run the repository-level syntax and whitespace checks with:
 
