@@ -34,7 +34,10 @@ install-dev:
 	$(PYTHON) -m pip install -r requirements/dev.txt
 
 balfrin-preflight:
-	$(PYTHON) ./scripts/balfrin_preflight.py $(if $(CHECK_FDB),--check-fdb,)
+	bash -lc '[ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh; \
+		module use "$${USER_ENV_ROOT:-/mch-environment/v8}/modules"; \
+		module load python/3.11.7; \
+		python ./scripts/balfrin_preflight.py $(if $(CHECK_FDB),--check-fdb,)'
 
 recovery-audit:
 	./scripts/check_recovery_readiness.sh

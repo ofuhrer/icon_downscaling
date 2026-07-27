@@ -29,6 +29,10 @@ git clone --recurse-submodules \
 cd icon_downscaling
 git submodule update --init --recursive
 make balfrin-preflight CHECK_FDB=1
+
+[ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
+module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
+module load python/3.11.7
 ```
 
 The preflight checks the pinned production HICAR commit, required Slurm
@@ -36,6 +40,8 @@ commands, the `preemptible` partition, the module tree, FDB metadata,
 fieldextra resources, the ICON grid, writable scratch, and writable durable
 storage. It publishes
 `$SCRATCH/icon_hicar/onboarding/balfrin_preflight.json.ready` only on PASS.
+The Make target loads the supported Python module itself; keep Python 3.11
+loaded for the remaining commands.
 
 Shared non-secret defaults are in `config/balfrin.env`. The frozen forcing
 runtime reads this file. A temporary site replacement can be selected with
