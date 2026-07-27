@@ -39,4 +39,6 @@ exec "$python" "$helper" run \
   --report "$run/attempt_interrupted.json" \
   --completion-marker "$run/model_chunk_completion.json.ready" \
   --log "$run/probe.out" \
-  -- "$python" -c "import time; time.sleep($sleep_seconds)"
+  -- "$python" -c \
+  'import pathlib,sys,time; pathlib.Path(sys.argv[1]).touch(); time.sleep(int(sys.argv[2]))' \
+  "$run/probe_started.ready" "$sleep_seconds"

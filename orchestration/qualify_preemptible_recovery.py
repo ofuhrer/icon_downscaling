@@ -46,6 +46,15 @@ def wait_for(
     )
 
 
+def wait_for_path(path: Path, timeout_seconds: int) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if path.is_file():
+            return
+        time.sleep(1)
+    raise TimeoutError(f"probe did not publish startup marker: {path}")
+
+
 def cancel(job_id: str, signal_name: str) -> None:
     subprocess.run(
         ["scancel", f"--signal={signal_name}", "--batch", job_id],
@@ -212,6 +221,10 @@ def drill(
         first = runtime["attempts"][-1]
         submitted.append(first["job_id"])
         wait_for(first["job_id"], {"RUNNING"}, start_timeout)
+        wait_for_path(
+            Path(first["run_dir"]) / "probe_started.ready",
+            timeout_seconds=60,
+        )
         cancel(first["job_id"], "TERM")
         first_terminal = wait_for(
             first["job_id"],
@@ -241,6 +254,10 @@ def drill(
             raise ValueError("controller did not create an immutable retry")
         submitted.append(second["job_id"])
         wait_for(second["job_id"], {"RUNNING"}, start_timeout)
+        wait_for_path(
+            Path(second["run_dir"]) / "probe_started.ready",
+            timeout_seconds=60,
+        )
         cancel(second["job_id"], "KILL")
         second_terminal = wait_for(
             second["job_id"],
