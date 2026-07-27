@@ -12,10 +12,8 @@ def test_model_runner_has_fail_closed_preemption_path():
     assert 'preemption_helper" run' in runner
     assert "--completion-marker" in runner
     assert "STREAM_RESTART_INPUT_REPORT" in runner
-    assert "trap 'forward_preemption_signal TERM' TERM" in runner
-    assert "trap 'forward_preemption_signal USR1' USR1" in runner
-    assert 'kill "-$signal_name" "$preemption_pid"' in runner
-    assert 'exit "$preemption_status"' in runner
+    assert "preemption_signal_forwarding.sh" in runner
+    assert "run_with_preemption_signal_forwarding" in runner
 
 
 def test_watcher_hands_off_to_exactly_one_afterany_successor():
@@ -58,6 +56,8 @@ def test_recovery_probe_is_engineering_only_and_uses_the_signal_guard():
     assert "#SBATCH --no-requeue" in probe
     assert "Engineering-only" in probe
     assert 'helper" run' in probe
+    assert "preemption_signal_forwarding.sh" in probe
+    assert "run_with_preemption_signal_forwarding" in probe
     assert "model_chunk_completion.json.ready" in probe
     assert "HICAR_gpu" not in probe
 

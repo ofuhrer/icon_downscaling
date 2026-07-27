@@ -24,6 +24,7 @@ REQUIRED_RUNTIME_PATHS = (
     "requirements/balfrin-preemptible.txt",
     "scripts/create_balfrin_smoke_campaign.py",
     "scripts/load_balfrin_site_config.sh",
+    "scripts/preemption_signal_forwarding.sh",
     "case_studies/swiss_200m/scripts/bootstrap_preemptible_python_balfrin.sbatch",
     "case_studies/swiss_200m/scripts/build_hicar_balfrin.sbatch",
     "case_studies/swiss_200m/scripts/compress_hicar_stream_output_balfrin.sbatch",

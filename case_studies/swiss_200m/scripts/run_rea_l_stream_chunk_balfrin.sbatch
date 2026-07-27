@@ -60,6 +60,7 @@ report="$run/model_chunk_completion.json"
 preemptible_attempt=${STREAM_PREEMPTIBLE_ATTEMPT:-0}
 attempt_id=${STREAM_ATTEMPT_ID:-}
 preemption_helper=${HICAR_PREEMPTION_HELPER:-$SCRATCH/icon_hicar/orchestration/preemption.py}
+signal_forwarder="$repo_root/scripts/preemption_signal_forwarding.sh"
 interruption_report="$run/attempt_interrupted.json"
 output_profile=${STREAM_OUTPUT_PROFILE:-routine}
 if test "$output_profile" = wind_climatology && test -z "${STREAM_OUTPUT_INTERVAL:-}"; then
@@ -90,6 +91,11 @@ if test "$preemptible_attempt" -eq 1; then
     echo "missing pre-emption helper: $preemption_helper" >&2
     exit 2
   }
+  test -f "$signal_forwarder" || {
+    echo "missing pre-emption signal forwarder: $signal_forwarder" >&2
+    exit 2
+  }
+  . "$signal_forwarder"
 fi
 for value_name in output_interval wind_reduction_interval; do
   value=${!value_name}
@@ -369,35 +375,15 @@ unset HICAR_WIND_OPERATOR_AUDIT_MAX_ITERS
 
 cd "$run"
 if test "$preemptible_attempt" -eq 1; then
-  preemption_pid=""
-  forward_preemption_signal() {
-    local signal_name=$1
-    if test -n "$preemption_pid" && kill -0 "$preemption_pid" 2>/dev/null; then
-      kill "-$signal_name" "$preemption_pid"
-    fi
-  }
-  trap 'forward_preemption_signal TERM' TERM
-  trap 'forward_preemption_signal USR1' USR1
-  "$python" "$preemption_helper" run \
+  run_with_preemption_signal_forwarding \
+    "$python" "$preemption_helper" run \
     --attempt-id "$attempt_id" \
     --report "$interruption_report" \
     --completion-marker "$report.ready" \
     --log "$run/model.out" \
     -- \
     srun --distribution=block:block --cpu-bind=none \
-      "$wrapper" "$exe" "$run/input.nml" &
-  preemption_pid=$!
-  set +e
-  while true; do
-    wait "$preemption_pid"
-    preemption_status=$?
-    if ! kill -0 "$preemption_pid" 2>/dev/null; then
-      break
-    fi
-  done
-  set -e
-  trap - TERM USR1
-  test "$preemption_status" -eq 0 || exit "$preemption_status"
+      "$wrapper" "$exe" "$run/input.nml"
 else
   srun --distribution=block:block --cpu-bind=none "$wrapper" "$exe" "$run/input.nml" \
     2>&1 | tee "$run/model.out"

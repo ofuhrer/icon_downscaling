@@ -18,6 +18,7 @@ module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
 
 python=${HICAR_VALIDATION_PYTHON:?Set HICAR_VALIDATION_PYTHON to the published runtime interpreter}
 helper=${HICAR_PREEMPTION_HELPER:-$repo_root/orchestration/preemption.py}
+signal_forwarder="$repo_root/scripts/preemption_signal_forwarding.sh"
 attempt_id=${STREAM_ATTEMPT_ID:?Set STREAM_ATTEMPT_ID}
 run=${STREAM_RUN_DIR:?Set STREAM_RUN_DIR}
 sleep_seconds=${HICAR_PREEMPTION_PROBE_SLEEP_SECONDS:-600}
@@ -29,12 +30,13 @@ test "$sleep_seconds" -ge 60 || {
   echo "probe sleep must be at least 60 seconds" >&2
   exit 2
 }
-for path in "$python" "$helper"; do
+for path in "$python" "$helper" "$signal_forwarder"; do
   test -e "$path" || { echo "missing recovery probe input: $path" >&2; exit 2; }
 done
 mkdir -p "$run"
+. "$signal_forwarder"
 
-exec "$python" "$helper" run \
+run_with_preemption_signal_forwarding "$python" "$helper" run \
   --attempt-id "$attempt_id" \
   --report "$run/attempt_interrupted.json" \
   --completion-marker "$run/model_chunk_completion.json.ready" \
