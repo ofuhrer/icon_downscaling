@@ -444,16 +444,21 @@ from `externals/fieldextra.lock`.
 - Clean GitHub clone with initialized HICAR submodule: portable suite and
   repository checks PASS at coordinator `482b1f4`.
 - Public coordinator CI run `30245948287`: PASS.
-- Current onboarding/pre-emption-focused suite: `43 passed`, including
+- Current onboarding/pre-emption-focused regressions: PASS, including
   immutable runtime leaves, Python tree/package drift rejection, site
   preflight, checksum-bound restore, bounded campaign generation, eleven-slot
   empty-capacity submission, full-cluster pending-job backpressure,
   interruption-resumable retirement, and SIGKILL retry classification.
-- Current portable coordinator suite: `294 passed`. A clean GitHub checkout at
-  coordinator `cf75ce1` with the initialized HICAR submodule has the same
-  portable gate through public CI, and repository checks PASS (`169` Python and `150` shell
-  files).
-- Public coordinator CI run `30262050144` for `cf75ce1`: PASS.
+- Current portable coordinator suite: `297 passed`; repository checks PASS
+  (`169` Python and `150` shell files). A fresh GitHub clone at coordinator
+  `ef3949e8b32c8149e3409a821d4a5e10d3271314` on `balfrin-ln003` passed the
+  corrected site-config-first preflight, including live REA-L FDB metadata,
+  production HICAR pin `7700c97a`, `preemptible`, shared fieldextra/ICON
+  assets, scratch, and `/store_new`. Preflight report SHA-256:
+  `6066c402b116de37847c08eddc210e1a1eaed252b93ec88219757086ea3c850e`.
+  Operator Markdown links and code fences pass the repository documentation
+  audit.
+- Public coordinator CI run `30265943868` for `ef3949e`: PASS.
 - The opt-in HICAR source-contract gate is intentionally `4 passed, 7
   failed` at production pin `7700c97a`: the qualified V26 restart
   initialization contract passes, while metadata/water-diagnostic checks
