@@ -189,8 +189,8 @@ def run_drill(
 
             cancellation_index = len(cancellations)
             if cancellation_index < len(cancellation_plan):
-                if len(attempts) > cancellation_index:
-                    attempt = attempts[cancellation_index]
+                if attempts:
+                    attempt = attempts[-1]
                     if attempt["status"] == "PUBLISHED":
                         raise ValueError(
                             "continuation completed before controlled cancellation"
