@@ -93,9 +93,8 @@ def scheduler_terminal(job_id: str, timeout_seconds: int) -> dict[str, str]:
 
 
 def cancel(job_id: str, signal_name: str) -> None:
-    scope = "--batch" if signal_name == "KILL" else "--full"
     subprocess.run(
-        ["scancel", f"--signal={signal_name}", scope, job_id],
+        ["scancel", f"--signal={signal_name}", "--batch", job_id],
         check=True,
         timeout=30,
     )

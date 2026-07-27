@@ -69,5 +69,6 @@ def test_real_hicar_recovery_qualification_is_controller_only():
     assert "#SBATCH --no-requeue" in wrapper
     assert "--execute" in wrapper
     assert 'cancellation_plan = ("TERM", "KILL")' in qualifier
+    assert '"--batch"' in qualifier
     assert "matching_restart_evidence" in qualifier
     assert '"assessment": "ENGINEERING_ONLY"' in qualifier
