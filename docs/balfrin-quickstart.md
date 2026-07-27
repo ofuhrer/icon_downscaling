@@ -30,8 +30,9 @@ cd icon_downscaling
 git submodule update --init --recursive
 make balfrin-preflight CHECK_FDB=1
 
+. ./scripts/load_balfrin_site_config.sh
 [ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
-module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
+module use "$USER_ENV_ROOT/modules"
 module load python/3.11.7
 ```
 
@@ -47,8 +48,10 @@ Shared non-secret defaults are in `config/balfrin.env`. Every primary build,
 forcing, model, CPU-worker, and watcher wrapper loads it through
 `scripts/load_balfrin_site_config.sh` before initializing modules. A temporary
 site replacement can be selected with `HICAR_SITE_CONFIG`; explicit
-environment variables take precedence. Durable project storage must remain
-below `/store_new`.
+environment variables take precedence. Select an absolute, stable
+`HICAR_SITE_CONFIG` path before preflight so the interactive shell and Slurm
+jobs read the same record. Durable project storage must remain below
+`/store_new`.
 
 For a real two-field FDB read, run this from a workstation checkout:
 

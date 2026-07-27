@@ -34,10 +34,13 @@ install-dev:
 	$(PYTHON) -m pip install -r requirements/dev.txt
 
 balfrin-preflight:
-	bash -lc '[ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh; \
-		module use "$${USER_ENV_ROOT:-/mch-environment/v8}/modules"; \
+	bash -lc '. ./scripts/load_balfrin_site_config.sh; \
+		[ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh; \
+		module use "$$USER_ENV_ROOT/modules"; \
 		module load python/3.11.7; \
-		python ./scripts/balfrin_preflight.py $(if $(CHECK_FDB),--check-fdb,)'
+		python ./scripts/balfrin_preflight.py \
+			--config "$${HICAR_SITE_CONFIG:-./config/balfrin.env}" \
+			$(if $(CHECK_FDB),--check-fdb,)'
 
 recovery-audit:
 	./scripts/check_recovery_readiness.sh

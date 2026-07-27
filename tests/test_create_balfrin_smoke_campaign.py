@@ -18,6 +18,12 @@ sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
 
 
+def test_site_configuration_path_honors_environment(monkeypatch, tmp_path):
+    replacement = tmp_path / "balfrin.env"
+    monkeypatch.setenv("HICAR_SITE_CONFIG", str(replacement))
+    assert MODULE.selected_site_config(ROOT / "config/balfrin.env") == replacement
+
+
 def test_definition_is_bounded_and_preemptible_controller_compatible(tmp_path):
     payload = MODULE.definition_payload(
         campaign_id="smoke",

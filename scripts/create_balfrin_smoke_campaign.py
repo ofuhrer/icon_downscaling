@@ -26,6 +26,11 @@ from runtime_contract import (  # noqa: E402
 TIME_FORMAT = "%Y-%m-%dT%H:%M:%S"
 
 
+def selected_site_config(default: Path) -> Path:
+    """Return the operator-selected site record, or the repository default."""
+    return Path(os.environ.get("HICAR_SITE_CONFIG", default))
+
+
 def sha256(path: Path) -> str:
     hasher = hashlib.sha256()
     with path.open("rb") as stream:
@@ -206,7 +211,7 @@ def main() -> int:
     parser.add_argument(
         "--site-config",
         type=Path,
-        default=ROOT / "config/balfrin.env",
+        default=selected_site_config(ROOT / "config/balfrin.env"),
     )
     args = parser.parse_args()
 

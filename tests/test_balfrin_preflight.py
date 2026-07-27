@@ -34,6 +34,12 @@ def test_environment_can_override_a_site_default():
     assert config["REA_FDB_IMAGE"] == "fdb/test:v1"
 
 
+def test_site_configuration_path_honors_environment(monkeypatch, tmp_path):
+    replacement = tmp_path / "balfrin.env"
+    monkeypatch.setenv("HICAR_SITE_CONFIG", str(replacement))
+    assert MODULE.selected_site_config(ROOT / "config/balfrin.env") == replacement
+
+
 def test_ready_marker_is_published_only_for_a_passing_report(tmp_path):
     path = tmp_path / "preflight.json"
     MODULE.publish(path, {"status": "FAIL"})

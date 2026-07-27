@@ -120,3 +120,14 @@ def test_bootstrap_and_builder_use_explicit_slurm_roots():
 def test_reusable_forcing_converter_loads_site_defaults():
     text = (ROOT / "scripts/prepare_icon_inputs.sh").read_text()
     assert '. "$SCRIPT_DIR/load_balfrin_site_config.sh"' in text
+
+
+def test_preflight_make_target_loads_site_defaults_before_modules():
+    text = (ROOT / "Makefile").read_text()
+    target = text.split("balfrin-preflight:", 1)[1].split(
+        "\nrecovery-audit:", 1
+    )[0]
+    assert target.index("load_balfrin_site_config.sh") < target.index(
+        "/etc/profile.d/modules.sh"
+    )
+    assert '--config "$${HICAR_SITE_CONFIG:-./config/balfrin.env}"' in target

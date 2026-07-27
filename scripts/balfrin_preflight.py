@@ -30,6 +30,11 @@ REQUIRED_CONFIG = {
 }
 
 
+def selected_site_config(default: Path) -> Path:
+    """Return the operator-selected site record, or the repository default."""
+    return Path(os.environ.get("HICAR_SITE_CONFIG", default))
+
+
 def load_config(path: Path, environ: dict[str, str] | None = None) -> dict[str, str]:
     """Load the deliberately small KEY=VALUE site-default format."""
     values: dict[str, str] = {}
@@ -329,7 +334,7 @@ def main() -> int:
     parser.add_argument(
         "--config",
         type=Path,
-        default=root / "config/balfrin.env",
+        default=selected_site_config(root / "config/balfrin.env"),
     )
     parser.add_argument("--output", type=Path)
     parser.add_argument("--check-fdb", action="store_true")
