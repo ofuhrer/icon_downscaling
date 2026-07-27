@@ -171,7 +171,7 @@ nonzero by design because the two temperature screens failed.
 - Consolidated handoff checkpoint:
   `482b1f441d625fff00a9ebd634ebeeed3e01f75d`.
 - Reproducible Balfrin onboarding implementation:
-  `1903891c6074046aa347e9cbdb40b8fc68ff162c`.
+  `cf75ce18785baa85167f68dbef666eef0fa994b5`.
 
 ### HICAR
 
@@ -326,34 +326,37 @@ It is non-promoting legacy evidence, not an active source branch.
   defaults, canonical builder, and frozen forcing validator. Each runtime gets
   a separate read-only Python environment; reconciliation verifies the
   interpreter hash, exact sorted package inventory, requirements binding, and
-  absence of writable paths.
+  absence of writable paths. Primary wrappers load the central site record
+  before modules and require the exported immutable `REPO_ROOT` plus
+  published `HICAR_VALIDATION_PYTHON`; they no longer fall back to a mutable
+  `$SCRATCH/icon_hicar` runtime or shared `venv_static`.
 
-  A clean GitHub clone at coordinator `1903891` passed the Balfrin preflight
+  A clean GitHub clone at coordinator `cf75ce1` passed the Balfrin preflight
   on `balfrin-ln002`, including the exact HICAR `7700c97a` pin and remote
   branch, `preemptible` partition, REA-L FDB metadata, operational
   fieldextra/ICON-grid assets, scratch, and writable `/store_new`. Preflight
   report SHA-256:
-  `c17617565f1bb9a171a8ded354ee4a74e03e0bfd5ec3b53c250d4e1e1fffec90`.
+  `1d0cd2c8212557f9e1555985daa9072c7e1653e20d2093d913335ddeda5466d2`.
 
   Clean production runtime manifest
-  `coordinator-1903891-v1` has SHA-256
-  `54f4e2bfe31dd7073d5d82522be7dbb936e871132046cee6d2b7eb759c0cc157`.
-  Python bootstrap job `4951194` published a schema-v2 immutable-environment
+  `coordinator-cf75ce1-v1` has SHA-256
+  `4da64d2c6f18b5d747ed9b3fc6dfb74f887841e2682339fa7b18362727b4e0cd`.
+  Python bootstrap job `4951249` published a schema-v2 immutable-environment
   report with SHA-256
-  `1d3c11c37b454bea79763c9602c20f0b5c9862853bec82fdd3568fbd649d3cb1`
+  `8ee6bd6b2f29a96d927efc9abaccc63b95b1aeb19fbdaf091889984d26fcf7d3`
   and passed independent runtime revalidation.
 
   The recovery restore helper reproduced the summer initialized static domain
   from `/store_new` at its canonical SHA-256
   `dc949651c18f9c30e6d18419ba4935ce5d100493c594179da44bcb2942e14ef0`.
-  Canonical GPU/NCCL build job `4951197` passed at HICAR `7700c97a`;
+  Canonical GPU/NCCL build job `4951256` passed at HICAR `7700c97a`;
   executable SHA-256:
-  `28df0adea55131959447c22ea7849f49835a8d7f9d86ea23bf34e1c70dddaa49`;
+  `756763fa439b2c642c948ccc8f20e4b29eeef91b96f0088ee751bb1018ca5eec`;
   published build-provenance SHA-256:
-  `6c367b8bb4dad7a466731c4274a2b6eea70aadaaf17562efea6da68ed75184cd`.
+  `35f58d66a7930520fd10e7e315a58e420a53ca25af1eec1050cf8820cf2997cc`.
 
   The generated two-hour, one-chain plan has SHA-256
-  `9560f94006d55a06c4a8c5af1e6598b9eeb4c75348c8a460076c2d96c99bcc36`.
+  `d9b548ddef3d7a62c4ed5520aea8fffa77ee7889ba14180ecebe8046ee4c911c`.
   Dry reconciliation selected one bounded three-record CPU array followed by
   a four-node `preemptible` model attempt; no Slurm job was submitted and the
   queue was empty afterward. This establishes reproducible launch planning,
@@ -441,16 +444,16 @@ from `externals/fieldextra.lock`.
 - Clean GitHub clone with initialized HICAR submodule: portable suite and
   repository checks PASS at coordinator `482b1f4`.
 - Public coordinator CI run `30245948287`: PASS.
-- Current onboarding/pre-emption-focused suite: `37 passed`, including
+- Current onboarding/pre-emption-focused suite: `43 passed`, including
   immutable runtime leaves, Python tree/package drift rejection, site
   preflight, checksum-bound restore, bounded campaign generation, eleven-slot
   empty-capacity submission, full-cluster pending-job backpressure,
   interruption-resumable retirement, and SIGKILL retry classification.
-- Current portable coordinator suite: `288 passed`. A clean GitHub clone at
-  coordinator `1903891` with the initialized HICAR submodule has the same
-  `288` passes and repository checks PASS (`168` Python and `149` shell
+- Current portable coordinator suite: `294 passed`. A clean GitHub checkout at
+  coordinator `cf75ce1` with the initialized HICAR submodule has the same
+  portable gate through public CI, and repository checks PASS (`169` Python and `150` shell
   files).
-- Public coordinator CI run `30260383098` for `1903891`: PASS.
+- Public coordinator CI run `30262050144` for `cf75ce1`: PASS.
 - The opt-in HICAR source-contract gate is intentionally `4 passed, 7
   failed` at production pin `7700c97a`: the qualified V26 restart
   initialization contract passes, while metadata/water-diagnostic checks

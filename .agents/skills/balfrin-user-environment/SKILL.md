@@ -97,6 +97,11 @@ user to restore passwordless access; do not invent SSH workarounds.
 
 - Put module initialization inside scripts and Slurm jobs, not only
   interactive shell startup.
+- `sbatch` executes a spool copy of the submitted script, so `$0` does not
+  identify the checkout inside a job. Never derive repository state from
+  `$0` in a Slurm wrapper. Export and require the appropriate immutable
+  identity: `REPO_ROOT` for campaign jobs, `HICAR_RUNTIME_RELEASE` for Python
+  bootstrap, or `HICAR_COORDINATOR_ROOT` for the canonical builder.
 - Verify tool versions and paths in the actual job environment.
 - Prefer project scripts and reproducible build directories over ad hoc
   login-node commands.
