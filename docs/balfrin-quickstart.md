@@ -180,9 +180,8 @@ python3 scripts/create_balfrin_smoke_campaign.py \
 ```
 
 The `routine` profile deliberately keeps this engineering recovery drill
-independent of scientific diagnostic-output qualification and rolling
-retirement. The final command is a dry reconciliation: it creates pristine
-controller
+independent of scientific diagnostic-output qualification. The final command
+is a dry reconciliation: it creates pristine controller
 state and prints intended actions without submitting jobs. The generated
 definition is bounded to one four-node chain, two one-hour segments, one model
 slot, one CPU slot, and three attempts. It uses `preemptible` for HICAR and

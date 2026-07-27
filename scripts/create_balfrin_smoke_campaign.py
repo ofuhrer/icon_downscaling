@@ -165,7 +165,7 @@ def definition_payload(
             "prefetch_segments_per_chain": 1,
             "max_model_attempts": 3,
             "max_cpu_attempts": 3,
-            "rolling_retirement": output_profile != "routine",
+            "rolling_retirement": True,
             "preserve_restart_every_segments": 0,
             "max_unretired_segments_per_chain": 1,
         },
