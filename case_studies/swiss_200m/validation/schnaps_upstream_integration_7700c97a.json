@@ -1,0 +1,237 @@
+{
+  "schema_version": 1,
+  "kind": "selective_schnaps_upstream_integration",
+  "status": "PASS",
+  "created_utc": "2026-07-27T09:35:00Z",
+  "scope": {
+    "purpose": "Selectively port upstream SCHNAPS correctness fixes onto the qualified HICAR restart baseline without merging the upstream rename, build-system migration, or optional features.",
+    "production_authorization": false,
+    "scientific_baseline_changed": false
+  },
+  "upstream_audit": {
+    "repository": "https://codeberg.org/SCHNAPS-Model/SCHNAPS.git",
+    "default_branch": "main",
+    "head": "622c2d42f6939b94f77fe6f68eb9cf5d822e1ab1",
+    "head_date": "2026-07-24",
+    "shared_ancestor": "cb3cef16eaf3d47b0fa1a54f3437137f2c14aa59",
+    "audited_commits": 50,
+    "develop_commits_ahead_of_main": 0,
+    "coverage": "Every commit after the shared ancestor was classified; every commit touching src/, tests/, CMakeLists.txt, or helpers/domains/ received a file-level review. Diverged topic branches contained older pre-squash work, not newer development beyond main.",
+    "ported_source_commits": [
+      "a168dfea",
+      "2ed8b927",
+      "de66b83a",
+      "36d6912f",
+      "839687cc",
+      "b961ac54",
+      "8d5835ce",
+      "814b42d5"
+    ],
+    "ported_changes": [
+      "Morrison GPU top-level sedimentation sign and removal of racy unused GPU arrays",
+      "Morrison CPU OpenMP privatization and CPU/GPU arithmetic ordering",
+      "lateral-boundary u-wind rotation signs",
+      "density halo exchange immediately before wind updates",
+      "radiation horizon-axis and azimuth-index corrections",
+      "extra-dimension I/O setup, reversed vertical-boundary indexing, and psim metadata",
+      "defined initialization of domain, soil, and option state",
+      "OpenACC map-factor lifecycle on compute ranks",
+      "manual vertical-grid preservation and regression checks",
+      "compiler policy preventing decomposition-dependent advection contraction"
+    ],
+    "deliberately_deferred": [
+      {
+        "commits": [
+          "2065641d"
+        ],
+        "reason": "The z-coordinate warning and cumulus GPU guard do not affect the structured forcing or convection-disabled production configuration."
+      },
+      {
+        "commits": [
+          "b9d46c52",
+          "a9a68ad0"
+        ],
+        "reason": "Compressed NetCDF output and Zarr forcing are optional features requiring a separate format and throughput qualification."
+      },
+      {
+        "commits": [
+          "be5883f0",
+          "6a00b2ab"
+        ],
+        "reason": "Assertion removal and the I/O cleanup are refactors with no additional applicable correctness fix."
+      },
+      {
+        "commits": [
+          "de66b83a",
+          "8d5835ce",
+          "b01d7836",
+          "e4e52a1e"
+        ],
+        "reason": "The remaining cuFFT linear-wind, SNOWPACK, snow-drift, and fine-mesh metadata changes target physics not enabled by the current workflow."
+      },
+      {
+        "commits": [
+          "814b42d5"
+        ],
+        "reason": "The remaining output-index helper hardens unsupported requested 1-D/4-D outputs; current production lists contain only supported 2-D/3-D fields."
+      },
+      {
+        "commits": [
+          "839687cc",
+          "622c2d42"
+        ],
+        "reason": "The new upstream domain-builder and polar GeoTIFF mosaic fix are not used by the project-owned, validated Alpine domain builder; the reported seam failure is polar rather than Alpine."
+      },
+      {
+        "commits": [
+          "remaining migration, release, CI, lint, generated-example, and documentation commits"
+        ],
+        "reason": "These do not change the current runtime trajectory or supported workflow."
+      }
+    ]
+  },
+  "integration": {
+    "base": "246c8992564ad3e89f49546776ae31ad8a1ce239",
+    "branch": "codex/schnaps-relevant-fixes",
+    "head": "7700c97a0248abcc1db055ef04c22e1ff9ec6d22",
+    "remote_branch": "origin/codex/schnaps-relevant-fixes",
+    "commits": [
+      {
+        "sha": "cc276e4c369152f3cbf045ce5036cb735e6bd11e",
+        "subject": "Fix upstream physics correctness issues"
+      },
+      {
+        "sha": "c4c8e81a9f0693925e17b885aa7dfd8dbde22777",
+        "subject": "Port upstream initialization and I/O fixes"
+      },
+      {
+        "sha": "7700c97a0248abcc1db055ef04c22e1ff9ec6d22",
+        "subject": "Stabilize advection across decompositions"
+      }
+    ],
+    "remote_policy": {
+      "origin": "git@github.com:ofuhrer/HICAR.git",
+      "codeberg_tracking_remote": "schnaps",
+      "codeberg_url": "https://codeberg.org/SCHNAPS-Model/SCHNAPS.git",
+      "decision": "Keep GitHub origin for the fork and add Codeberg as a separate fetch remote. Do not replace origin while production branches and collaboration still live on GitHub."
+    }
+  },
+  "local_validation": {
+    "compiler": "GNU Fortran 16 debug",
+    "clean_build": true,
+    "diff_check": "PASS",
+    "test_status": "PASS",
+    "tests_passed": 52,
+    "tests_failed": 0,
+    "groups": {
+      "halo": "5/5",
+      "control_flow": "6/6",
+      "advection": "5/5",
+      "snow_drift": "1/1",
+      "wind_iterative": "8/8",
+      "geo": "9/9",
+      "time": "9/9",
+      "utilities": "9/9"
+    },
+    "new_regressions": [
+      "io_read_extra_dimension",
+      "horizon_azimuth_index",
+      "manual_vertical_grid"
+    ]
+  },
+  "balfrin_validation": {
+    "root": "/scratch/mch/olifu/icon_hicar/validation/schnaps_7700c97a",
+    "source_commit": "7700c97a0248abcc1db055ef04c22e1ff9ec6d22",
+    "builds": [
+      {
+        "job": 4950793,
+        "variant": "cpu",
+        "compiler": "GCC 12.3",
+        "state": "COMPLETED",
+        "exit_code": "0:0",
+        "executable_sha256": "28059b083e249225ed354b16fbb7eed774ab44d218fcd9c0b0fca3100e377378",
+        "tester_sha256": "74114dc287ae583e7a34c5778776a5ac9af711ddbe80db64498f6ffb724d02c2"
+      },
+      {
+        "job": 4950851,
+        "variant": "gpu-mpi",
+        "compiler": "NVHPC 24.5",
+        "state": "COMPLETED",
+        "exit_code": "0:0",
+        "executable_sha256": "ffc5c3e7e49a27616cfbec74c8eafb6e238cecef13c48184bf5f8db2cb8fdf80",
+        "tester_sha256": "5ac784cb6fccef1fc685422848768993c94338c4a1aa0d6a537688f92a7f60ed",
+        "advection_flags": "-Mnofma -gpu=nofma"
+      }
+    ],
+    "tests": [
+      {
+        "job": 4950867,
+        "name": "four-rank CPU full unit suite",
+        "state": "COMPLETED",
+        "exit_code": "0:0",
+        "result": "52/52 PASS"
+      },
+      {
+        "job": 4950945,
+        "name": "four-rank, four-A100 GPU halo suite",
+        "state": "COMPLETED",
+        "exit_code": "0:0",
+        "result": "5/5 PASS on every rank"
+      },
+      {
+        "job": 4950946,
+        "name": "30-minute Alpine bridge with variational winds and production physics",
+        "state": "COMPLETED",
+        "exit_code": "0:0",
+        "result": "Wind solver status 0 after 518 iterations; true residual 2.5779e-4; relative residual 9.8378e-6; model completed."
+      },
+      {
+        "job": 4950947,
+        "name": "30-minute Alpine Morrison GPU smoke with wind disabled",
+        "state": "COMPLETED",
+        "exit_code": "0:0",
+        "result": "Model completed; qi max 6.9707e-5, qs max 1.84553e-5, precipitation max 1.23249e-2."
+      },
+      {
+        "jobs": [
+          4951003,
+          4951004
+        ],
+        "name": "two-minute upstream Standard Gaudergrat CPU/GPU Morrison pair",
+        "state": "COMPLETED",
+        "exit_code": "0:0",
+        "topology": "4 compute ranks plus 1 I/O rank; GPU I/O rank had CUDA hidden"
+      },
+      {
+        "job": 4951006,
+        "name": "official upstream tolerance comparison",
+        "state": "COMPLETED",
+        "exit_code": "0:0",
+        "result": "PASS: 4/4 variables, 0 failed, 0 warned, 0 missing",
+        "metrics": {
+          "precipitation": {
+            "max_abs": 9.077266440726817e-7,
+            "violations": 0,
+            "finite_values": 46576
+          },
+          "qi": {
+            "max_abs": 3.610182708335685e-10,
+            "violations": 4,
+            "finite_values": 1863040,
+            "allowed_fraction": 0.0001
+          },
+          "qs": {
+            "max_abs": 1.1303128669582635e-10,
+            "violations": 1,
+            "finite_values": 1863040,
+            "allowed_fraction": 0.0001
+          }
+        },
+        "report": "/scratch/mch/olifu/icon_hicar/validation/schnaps_7700c97a/small_cpu_gpu_official_report.json",
+        "report_sha256": "bfe2cdda2fbfec091259679d34bc3a78ea6ad9248823a9df215e9ca8160a9819"
+      }
+    ],
+    "evidence_manifest": "/scratch/mch/olifu/icon_hicar/validation/schnaps_7700c97a/validation_evidence.sha256",
+    "raw_outputs_retained": false
+  }
+}

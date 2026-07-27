@@ -87,6 +87,45 @@ This qualifies restart from a validator-published boundary for the tested
 trajectory. It does not prove independent-year equivalence or authorize
 production.
 
+### Selective SCHNAPS upstream integration
+
+Codeberg `main` was audited through
+`622c2d42f6939b94f77fe6f68eb9cf5d822e1ab1` (2026-07-24): all 50 commits
+after the shared ancestor were classified, all runtime/domain/test/build
+touches received file-level review, `develop` has no commits ahead of `main`,
+and the remaining diverged topic branches contain older pre-squash work.
+
+The applicable fixes were ported onto the qualified V26 restart baseline as
+`codex/schnaps-relevant-fixes` at
+`7700c97a0248abcc1db055ef04c22e1ff9ec6d22`:
+
+- `cc276e4c`: Morrison CPU/GPU correctness, lateral-wind rotation, density
+  exchange placement, and radiation-horizon indexing;
+- `c4c8e81a`: applicable I/O, initialization, GPU-lifecycle,
+  manual-vertical-grid, soil, and metadata fixes plus regressions;
+- `7700c97a`: decomposition-stable advection compiler policy.
+
+Local debug validation passed 52/52 tests. Balfrin CPU/GPU release builds,
+four-rank CPU tests, four-A100 halo tests, the full variational-wind Alpine
+bridge, and the upstream Standard Morrison CPU/GPU comparison all passed.
+The official upstream tolerance comparator reported 4/4 fields passing with
+no failures, warnings, or missing fields (jobs `4950793`, `4950851`,
+`4950867`, `4950945`, `4950946`, `4950947`, and `4951003`--`4951006`).
+
+The complete commit classification, deliberate deferrals, executable
+checksums, job topology, and comparison metrics are in
+`case_studies/swiss_200m/validation/schnaps_upstream_integration_7700c97a.json`.
+
+Keep the GitHub fork as `origin` and the old GitHub project remote unchanged;
+track the migrated project with the additional fetch remote:
+
+```text
+schnaps https://codeberg.org/SCHNAPS-Model/SCHNAPS.git
+```
+
+This branch is implementation evidence, not a production pin, and does not
+alter the failed V29 scientific verdict or authorize new production.
+
 ### V29 summer engineering and budget gates
 
 Balfrin model job `4949561` completed in `4:49:49` on four normal nodes.
@@ -129,6 +168,8 @@ nonzero by design because the two temperature screens failed.
 ### HICAR
 
 - Remote: `git@github.com:ofuhrer/HICAR.git`
+- Migrated-upstream tracking remote:
+  `https://codeberg.org/SCHNAPS-Model/SCHNAPS.git` as `schnaps`.
 - Stable production-performance base:
   `feature/icon_downscaling` at
   `d6c52a54bc6338ea82922f9b69d9fdc02b54267a`.
@@ -138,6 +179,9 @@ nonzero by design because the two temperature screens failed.
 - Failed scientific V29 handoff:
   `codex/v29-summer-warm-bias` at
   `5da4b1980497f20468e6e4b5b4c4a584849c3454`.
+- Selective SCHNAPS integration candidate:
+  `codex/schnaps-relevant-fixes` at
+  `7700c97a0248abcc1db055ef04c22e1ff9ec6d22`.
 
 V29 is intentionally not a production pin. Its water diagnostics are useful
 and its restart policy passes, but it is a scientifically failed baseline.
