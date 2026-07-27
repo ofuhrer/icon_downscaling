@@ -8,6 +8,8 @@ import subprocess
 import sys
 import stat
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "orchestration/preemptible_campaign.py"
@@ -105,18 +107,6 @@ def make_campaign(
         release_manifest,
         requirements,
     )
-    independent_authorization = None
-    if chain_count > 1:
-        authorization_path = tmp_path / "independent_authorization.json"
-        publish_json(
-            authorization_path,
-            {"status": "PASS", "decision": "GO_INDEPENDENT_CHAINS"},
-        )
-        independent_authorization = {
-            "path": str(authorization_path),
-            "sha256": MODULE.sha256(authorization_path),
-            "decision": "GO_INDEPENDENT_CHAINS",
-        }
     chains = []
     for chain_index in range(chain_count):
         chain_id = f"chain-{chain_index}"
@@ -180,7 +170,7 @@ def make_campaign(
             ),
             "requirements_sha256": MODULE.sha256(requirements),
         },
-        "independent_chain_authorization": independent_authorization,
+        "independent_chain_authorization": None,
         "production_authorization": None,
         "model": {
             "partition": "preemptible",
@@ -213,6 +203,24 @@ def make_campaign(
             "cpu_task_root": str(root / "cpu_tasks"),
         },
     }
+    if chain_count > 1:
+        authorization_path = tmp_path / "independent_authorization.json"
+        scope = MODULE.independent_chain_scope(campaign)
+        authorization = {
+            "schema_version": 1,
+            "status": "PASS",
+            "decision": "GO_INDEPENDENT_CHAINS",
+            "scope": scope,
+            "scope_sha256": MODULE.json_payload_sha256(scope),
+        }
+        publish_json(authorization_path, authorization)
+        campaign["independent_chain_authorization"] = {
+            "path": str(authorization_path),
+            "sha256": MODULE.sha256(authorization_path),
+            "decision": authorization["decision"],
+            "scope": scope,
+            "scope_sha256": authorization["scope_sha256"],
+        }
     path = tmp_path / "campaign.json"
     publish_json(path, campaign)
     return path
@@ -226,6 +234,16 @@ def reconcile(path: Path, scheduler: FakeSlurm):
         scheduler=scheduler,
         execute=True,
     )
+
+
+def test_controller_rejects_authorization_for_another_chain_scope(tmp_path):
+    path = make_campaign(tmp_path, chain_count=2, model_slots=2)
+    campaign = json.loads(path.read_text())
+    campaign["chains"][1]["segments"][0]["end"] = "2020-01-01T02:00:00"
+    path.write_text(json.dumps(campaign))
+    scheduler = FakeSlurm()
+    with pytest.raises(ValueError, match="no longer matches campaign"):
+        reconcile(path, scheduler)
 
 
 def execute_cpu_retirements(state: dict) -> None:

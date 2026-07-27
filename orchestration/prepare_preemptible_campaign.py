@@ -38,6 +38,11 @@ def sha256(path: Path) -> str:
     return hasher.hexdigest()
 
 
+def payload_sha256(payload: dict[str, Any]) -> str:
+    content = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    return hashlib.sha256(content.encode()).hexdigest()
+
+
 def write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
@@ -77,11 +82,34 @@ def slurm_time_seconds(value: str) -> int:
     return days * 86400 + hours * 3600 + minutes * 60 + seconds
 
 
+def independent_chain_scope(definition: dict[str, Any]) -> dict[str, Any]:
+    model = definition["model"]
+    chains = [
+        {
+            "chain_id": str(chain["chain_id"]),
+            "start": parse_time(str(chain["start"])).strftime(TIME_FORMAT),
+            "end": parse_time(str(chain["end"])).strftime(TIME_FORMAT),
+            "rea_l_land_initialization": bool(
+                chain.get("rea_l_land_initialization", True)
+            ),
+        }
+        for chain in definition["chains"]
+    ]
+    return {
+        "schema_version": 1,
+        "campaign_id": str(definition["campaign_id"]),
+        "expected_hicar_commit": str(model["expected_hicar_commit"]),
+        "static_file": str(Path(model["static_file"]).resolve()),
+        "chain_count": len(chains),
+        "chains": chains,
+    }
+
+
 def require_independent_chain_authorization(
     definition: dict[str, Any],
-    chain_count: int,
 ) -> dict[str, Any] | None:
-    if chain_count <= 1:
+    scope = independent_chain_scope(definition)
+    if scope["chain_count"] <= 1:
         return None
     value = definition.get("independent_chain_authorization")
     if not value:
@@ -90,21 +118,29 @@ def require_independent_chain_authorization(
         )
     path = Path(value).resolve()
     authorization = published_json(path, "independent-chain authorization")
-    if (
-        authorization.get("status") != "PASS"
-        and authorization.get("assessment_status") != "COMPLETE"
-    ):
-        raise ValueError("independent-chain authorization is not published PASS/COMPLETE")
+    if authorization.get("schema_version") != 1:
+        raise ValueError("independent-chain authorization schema is not 1")
+    if authorization.get("status") != "PASS":
+        raise ValueError("independent-chain authorization is not PASS")
     if authorization.get("decision") not in {
-        "AUTHORIZED",
         "GO_INDEPENDENT_CHAINS",
         "GO_20_YEAR_200M_PRODUCTION",
     }:
         raise ValueError("independent-chain authorization has no accepted decision")
+    scope_hash = payload_sha256(scope)
+    if (
+        authorization.get("scope") != scope
+        or authorization.get("scope_sha256") != scope_hash
+    ):
+        raise ValueError(
+            "independent-chain authorization does not match this campaign"
+        )
     return {
         "path": str(path),
         "sha256": sha256(path),
         "decision": authorization["decision"],
+        "scope": scope,
+        "scope_sha256": scope_hash,
     }
 
 
@@ -312,7 +348,7 @@ def build_campaign(
         "python_version": python_payload["python_version"],
         "requirements_sha256": python_payload["requirements_sha256"],
     }
-    authorization = require_independent_chain_authorization(definition, len(chains))
+    authorization = require_independent_chain_authorization(definition)
     chunk_planner = (
         repo_root
         / "case_studies/swiss_200m/streaming/create_chunk_plan.py"

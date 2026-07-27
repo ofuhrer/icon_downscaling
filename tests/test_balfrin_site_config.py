@@ -13,6 +13,7 @@ PRIMARY_WRAPPERS = (
     "compress_hicar_stream_output_balfrin.sbatch",
     "finalize_rea_l_stream_chunk_balfrin.sbatch",
     "produce_rea_l_stream_record_balfrin.sbatch",
+    "qualify_hicar_preemptible_recovery_balfrin.sbatch",
     "run_preemptible_recovery_probe_balfrin.sbatch",
     "run_preemptible_campaign_cpu_task_balfrin.sbatch",
     "run_rea_l_stream_chunk_balfrin.sbatch",

@@ -364,6 +364,22 @@ def test_model_validator_accepts_restart_output_after_boundary(tmp_path):
             )
         )
     )
+    restart_input = tmp_path / "restart-input.nc"
+    restart_input.write_bytes(b"published predecessor restart")
+    predecessor = tmp_path / "predecessor-completion.json"
+    predecessor.write_text(
+        json.dumps(
+            {
+                "status": "PASS",
+                "end": "2020-01-01T02:00:00",
+                "restart": {
+                    "path": str(restart_input.resolve()),
+                    "sha256": VALIDATOR_MODULE.sha256(restart_input),
+                },
+            }
+        )
+    )
+    Path(f"{predecessor}.ready").touch()
     report = tmp_path / "completion.json"
     result = subprocess.run(
         [
@@ -380,6 +396,10 @@ def test_model_validator_accepts_restart_output_after_boundary(tmp_path):
             "--model-log",
             str(model_log),
             "--restart-continuation",
+            "--restart-input-file",
+            str(restart_input),
+            "--restart-input-report",
+            str(predecessor),
             "--report",
             str(report),
         ],
@@ -390,6 +410,10 @@ def test_model_validator_accepts_restart_output_after_boundary(tmp_path):
     payload = json.loads(report.read_text())
     assert payload["status"] == "PASS"
     assert payload["restart_continuation"]
+    assert payload["restart_input"]["path"] == str(restart_input.resolve())
+    assert payload["restart_input"]["publication_sha256"] == (
+        VALIDATOR_MODULE.sha256(predecessor)
+    )
 
 
 def test_model_validator_accepts_three_hour_qualification_output(tmp_path):

@@ -163,6 +163,7 @@ python3 scripts/create_balfrin_smoke_campaign.py \
   --static-file "$STATIC" \
   --start 2020-07-01T00:00:00 \
   --hours 2 \
+  --segment-hours 1 \
   --output "$DEFINITION"
 
 "$PYTHON" "$RELEASE/orchestration/prepare_preemptible_campaign.py" \
@@ -175,11 +176,25 @@ python3 scripts/create_balfrin_smoke_campaign.py \
   --repo-root "$RELEASE"
 ```
 
-The final command is a dry reconciliation: it creates controller state and
-prints intended actions without submitting jobs. The generated definition is
-bounded to one four-node chain, one two-hour segment, one model slot, one CPU
-slot, and three attempts. It uses `preemptible` for HICAR and `pp-short` for
-bounded forcing/post-processing.
+The final command is a dry reconciliation: it creates pristine controller
+state and prints intended actions without submitting jobs. The generated
+definition is bounded to one four-node chain, two one-hour segments, one model
+slot, one CPU slot, and three attempts. It uses `preemptible` for HICAR and
+`pp-short` for bounded forcing/post-processing.
+
+Submit the engineering-only target-stack recovery drill against a fresh plan:
+
+```bash
+REPORT="$CAMPAIGN/hicar_preemptible_recovery.json"
+sbatch --no-requeue \
+  --export=ALL,REPO_ROOT="$RELEASE",HICAR_VALIDATION_PYTHON="$PYTHON",HICAR_CAMPAIGN_PLAN="$PLAN",HICAR_RECOVERY_QUALIFICATION_REPORT="$REPORT" \
+  "$RELEASE/case_studies/swiss_200m/scripts/qualify_hicar_preemptible_recovery_balfrin.sbatch"
+```
+
+It completes the first segment, sends SIGTERM and then SIGKILL to two real
+HICAR continuation attempts after `srun` starts producing output, and requires
+a third immutable attempt to complete from the exact predecessor restart.
+This qualifies recovery engineering only.
 
 ## 6. Launch only when the scientific state authorizes it
 

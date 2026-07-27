@@ -129,8 +129,12 @@ def definition_payload(
     expected_commit: str,
     start: datetime,
     hours: int,
+    segment_hours: int | None = None,
 ) -> dict[str, Any]:
     end = start + timedelta(hours=hours)
+    segment_hours = hours if segment_hours is None else segment_hours
+    if hours % segment_hours:
+        raise ValueError("smoke duration must be divisible by segment duration")
     release_root = runtime_manifest.resolve().parent
     return {
         "schema_version": 1,
@@ -153,7 +157,7 @@ def definition_payload(
             "output_interval_seconds": 3600,
         },
         "policy": {
-            "segment_hours": hours,
+            "segment_hours": segment_hours,
             "model_node_budget": 4,
             "model_slots": 1,
             "cpu_slots": 1,
@@ -207,6 +211,11 @@ def main() -> int:
     parser.add_argument("--static-file", type=Path, required=True)
     parser.add_argument("--start", required=True)
     parser.add_argument("--hours", type=int, default=2)
+    parser.add_argument(
+        "--segment-hours",
+        type=int,
+        help="Restart-linked segment length; defaults to the full smoke duration.",
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
         "--site-config",
@@ -219,6 +228,11 @@ def main() -> int:
         raise SystemExit("campaign ID may contain only letters, numbers, - and _")
     if not 1 <= args.hours <= 24:
         raise SystemExit("--hours must be within 1..24")
+    segment_hours = args.hours if args.segment_hours is None else args.segment_hours
+    if not 1 <= segment_hours <= args.hours or args.hours % segment_hours:
+        raise SystemExit(
+            "--segment-hours must divide --hours and be within 1..hours"
+        )
     try:
         start = datetime.strptime(args.start, TIME_FORMAT)
     except ValueError as exc:
@@ -275,6 +289,7 @@ def main() -> int:
         expected_commit=expected_commit,
         start=start,
         hours=args.hours,
+        segment_hours=segment_hours,
     )
     write_json_atomic(args.output, payload)
     print(json.dumps(payload, indent=2, sort_keys=True))

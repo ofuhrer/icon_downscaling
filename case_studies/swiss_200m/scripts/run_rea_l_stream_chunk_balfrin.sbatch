@@ -206,6 +206,8 @@ required_validator_options=(
   --output-profile
   --output-interval-seconds
   --restart-continuation
+  --restart-input-file
+  --restart-input-report
   --report
 )
 for option in "${required_validator_options[@]}"; do
@@ -317,10 +319,16 @@ if test -n "${STREAM_RESTART_FROM:-}"; then
     else
       ln -s "$(realpath "$restart_input_file")" "$previous_file"
     fi
+    validator_restart_args=(
+      --restart-continuation
+      --restart-input-file "$restart_input_file"
+      --restart-input-report "$restart_input_report"
+    )
+  else
+    validator_restart_args=(--restart-continuation)
   fi
   test -s "$previous_file" || { echo "missing previous restart: $previous_file" >&2; exit 2; }
   restart_args=(--restart-from "$start_hicar")
-  validator_restart_args=(--restart-continuation)
 fi
 
 "$python" "$renderer" \

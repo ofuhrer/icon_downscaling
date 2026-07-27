@@ -56,3 +56,18 @@ def test_recovery_probe_is_engineering_only_and_uses_the_signal_guard():
     assert 'helper" run' in probe
     assert "model_chunk_completion.json.ready" in probe
     assert "HICAR_gpu" not in probe
+
+
+def test_real_hicar_recovery_qualification_is_controller_only():
+    wrapper = (
+        SCRIPTS / "qualify_hicar_preemptible_recovery_balfrin.sbatch"
+    ).read_text()
+    qualifier = (
+        ROOT / "orchestration/qualify_hicar_preemptible_recovery.py"
+    ).read_text()
+    assert "#SBATCH --partition=pp-long" in wrapper
+    assert "#SBATCH --no-requeue" in wrapper
+    assert "--execute" in wrapper
+    assert 'cancellation_plan = ("TERM", "KILL")' in qualifier
+    assert "matching_restart_evidence" in qualifier
+    assert '"assessment": "ENGINEERING_ONLY"' in qualifier

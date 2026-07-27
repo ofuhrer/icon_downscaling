@@ -36,6 +36,7 @@ def test_definition_is_bounded_and_preemptible_controller_compatible(tmp_path):
         expected_commit="a" * 40,
         start=datetime(2020, 7, 1),
         hours=2,
+        segment_hours=1,
     )
     assert payload["purpose"] == "qualification"
     assert payload["model"]["expected_hicar_commit"] == "a" * 40
@@ -44,7 +45,7 @@ def test_definition_is_bounded_and_preemptible_controller_compatible(tmp_path):
     assert payload["policy"]["model_node_budget"] == 4
     assert payload["policy"]["model_slots"] == 1
     assert payload["policy"]["cpu_slots"] == 1
-    assert payload["policy"]["segment_hours"] == 2
+    assert payload["policy"]["segment_hours"] == 1
     assert payload["chains"] == [
         {
             "chain_id": "smoke",
@@ -53,6 +54,27 @@ def test_definition_is_bounded_and_preemptible_controller_compatible(tmp_path):
             "rea_l_land_initialization": True,
         }
     ]
+
+
+def test_definition_rejects_non_dividing_segment_length(tmp_path):
+    try:
+        MODULE.definition_payload(
+            campaign_id="smoke",
+            campaign_root=tmp_path / "campaign",
+            runtime_manifest=tmp_path / "release/runtime_release.json",
+            python_report=tmp_path / "python.json",
+            hicar_root=tmp_path / "HICAR",
+            build_root=tmp_path / "build",
+            static_file=tmp_path / "static.nc",
+            expected_commit="a" * 40,
+            start=datetime(2020, 7, 1),
+            hours=3,
+            segment_hours=2,
+        )
+    except ValueError as exc:
+        assert "divisible" in str(exc)
+    else:
+        raise AssertionError("non-dividing segment length was accepted")
 
 
 def test_definition_writer_is_idempotent_but_refuses_replacement(tmp_path):

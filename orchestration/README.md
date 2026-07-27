@@ -141,8 +141,13 @@ example above documents the complete schema; it is not the recommended first
 entry point.
 
 Multiple chains additionally require a published
-`independent_chain_authorization`. A definition with `"purpose":
-"production"` also requires a checksum-frozen annual assessment whose
+`independent_chain_authorization`. Its schema-v1 `scope` must exactly bind the
+campaign ID, HICAR commit, static initialization path, chain count, chain IDs,
+start/end timestamps, and per-chain land-initialization choice; its
+`scope_sha256` is the SHA-256 of the sorted, indented JSON scope plus a final
+newline. Both planning and every reconciliation reject an authorization for
+another campaign. A definition with `"purpose": "production"` also requires a
+checksum-frozen annual assessment whose
 decision is `GO_20_YEAR_200M_PRODUCTION`. The planner and controller recheck
 those publications and hashes. This prevents the orchestration mechanism from
 bypassing the current scientific hold.
@@ -215,3 +220,26 @@ pauses campaign capacity and cancels the final probe job before publishing
 This report is always `ENGINEERING_ONLY`, `promotion_eligible=false`, and
 `scientific_authorization=false`. It qualifies scheduler/controller recovery;
 it cannot qualify HICAR restart physics or authorize a scientific campaign.
+
+## Real HICAR recovery qualification
+
+The scheduler-only sleep probe is necessary but not sufficient. Before the
+first campaign, prepare a fresh two-hour qualification definition with
+`--segment-hours 1`, turn it into a campaign plan, and submit:
+
+```bash
+sbatch --no-requeue \
+  --export=ALL,REPO_ROOT="$RELEASE",HICAR_VALIDATION_PYTHON="$PYTHON",HICAR_CAMPAIGN_PLAN="$PLAN",HICAR_RECOVERY_QUALIFICATION_REPORT="$CAMPAIGN/hicar_preemptible_recovery.json" \
+  "$RELEASE/case_studies/swiss_200m/scripts/qualify_hicar_preemptible_recovery_balfrin.sbatch"
+```
+
+The first one-hour HICAR segment must complete and publish its restart. The
+qualifier sends SIGTERM to the first continuation attempt and SIGKILL to the
+second only after each real `srun` has produced model output. A third immutable
+attempt must complete. Its model completion must bind the exact predecessor
+restart path, restart SHA-256, predecessor publication path, and publication
+SHA-256 before the engineering report can pass.
+
+This bounded report is also `ENGINEERING_ONLY`; it qualifies the real
+HICAR/srun/restart recovery mechanism but does not supersede scientific
+restart-equivalence, seasonal, annual, or production authorization.

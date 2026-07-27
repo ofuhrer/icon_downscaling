@@ -282,6 +282,32 @@ def campaign_paths(campaign: dict[str, Any]) -> tuple[Path, Path]:
     return Path(controller["state"]), Path(controller["lease"])
 
 
+def independent_chain_scope(campaign: dict[str, Any]) -> dict[str, Any]:
+    chains = []
+    for chain in campaign["chains"]:
+        segments = chain["segments"]
+        if not segments:
+            raise ValueError(f"campaign chain has no segments: {chain['chain_id']}")
+        chains.append(
+            {
+                "chain_id": chain["chain_id"],
+                "start": segments[0]["start"],
+                "end": segments[-1]["end"],
+                "rea_l_land_initialization": bool(
+                    segments[0]["rea_l_land_initialization"]
+                ),
+            }
+        )
+    return {
+        "schema_version": 1,
+        "campaign_id": campaign["campaign_id"],
+        "expected_hicar_commit": campaign["model"]["expected_hicar_commit"],
+        "static_file": str(Path(campaign["model"]["static_file"]).resolve()),
+        "chain_count": len(chains),
+        "chains": chains,
+    }
+
+
 def validate_campaign_authorizations(campaign: dict[str, Any]) -> None:
     if len(campaign["chains"]) > 1:
         evidence = campaign.get("independent_chain_authorization")
@@ -291,8 +317,20 @@ def validate_campaign_authorizations(campaign: dict[str, Any]) -> None:
         authorization = published_json(path, "independent-chain authorization")
         if sha256(path) != evidence["sha256"]:
             raise ValueError("independent-chain authorization changed")
+        scope = independent_chain_scope(campaign)
+        scope_hash = json_payload_sha256(scope)
+        if (
+            authorization.get("schema_version") != 1
+            or authorization.get("status") != "PASS"
+            or authorization.get("scope") != scope
+            or authorization.get("scope_sha256") != scope_hash
+            or evidence.get("scope") != scope
+            or evidence.get("scope_sha256") != scope_hash
+        ):
+            raise ValueError(
+                "independent-chain authorization no longer matches campaign"
+            )
         if authorization.get("decision") not in {
-            "AUTHORIZED",
             "GO_INDEPENDENT_CHAINS",
             "GO_20_YEAR_200M_PRODUCTION",
         }:

@@ -127,6 +127,32 @@ def run_planner(tmp_path: Path, payload: dict) -> subprocess.CompletedProcess[st
     )
 
 
+def independent_scope(payload: dict) -> dict:
+    return {
+        "schema_version": 1,
+        "campaign_id": payload["campaign_id"],
+        "expected_hicar_commit": payload["model"]["expected_hicar_commit"],
+        "static_file": str(Path(payload["model"]["static_file"]).resolve()),
+        "chain_count": len(payload["chains"]),
+        "chains": [
+            {
+                "chain_id": chain["chain_id"],
+                "start": chain["start"],
+                "end": chain["end"],
+                "rea_l_land_initialization": chain.get(
+                    "rea_l_land_initialization", True
+                ),
+            }
+            for chain in payload["chains"]
+        ],
+    }
+
+
+def payload_sha256(payload: dict) -> str:
+    content = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    return hashlib.sha256(content.encode()).hexdigest()
+
+
 def test_planner_makes_short_preemptible_segments_and_node_aware_capacity(tmp_path):
     result = run_planner(tmp_path, definition(tmp_path, nodes=16))
     assert result.returncode == 0, result.stderr + result.stdout
@@ -171,8 +197,17 @@ def test_planner_requires_published_authorization_for_independent_chains(tmp_pat
 def test_planner_accepts_published_independent_chain_authorization(tmp_path):
     payload = definition(tmp_path, chains=2)
     authorization = tmp_path / "authorization.json"
+    scope = independent_scope(payload)
     authorization.write_text(
-        json.dumps({"status": "PASS", "decision": "GO_INDEPENDENT_CHAINS"})
+        json.dumps(
+            {
+                "schema_version": 1,
+                "status": "PASS",
+                "decision": "GO_INDEPENDENT_CHAINS",
+                "scope": scope,
+                "scope_sha256": payload_sha256(scope),
+            }
+        )
     )
     Path(f"{authorization}.ready").touch()
     payload["independent_chain_authorization"] = str(authorization)
@@ -183,6 +218,28 @@ def test_planner_accepts_published_independent_chain_authorization(tmp_path):
     assert plan["independent_chain_authorization"]["decision"] == (
         "GO_INDEPENDENT_CHAINS"
     )
+    assert plan["independent_chain_authorization"]["scope"] == scope
+
+
+def test_planner_rejects_unbound_independent_chain_authorization(tmp_path):
+    payload = definition(tmp_path, chains=2)
+    authorization = tmp_path / "authorization.json"
+    authorization.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "status": "PASS",
+                "decision": "GO_INDEPENDENT_CHAINS",
+                "scope": independent_scope(payload),
+                "scope_sha256": "0" * 64,
+            }
+        )
+    )
+    Path(f"{authorization}.ready").touch()
+    payload["independent_chain_authorization"] = str(authorization)
+    result = run_planner(tmp_path, payload)
+    assert result.returncode != 0
+    assert "does not match this campaign" in result.stderr
 
 
 def test_production_requires_the_published_annual_go_decision(tmp_path):

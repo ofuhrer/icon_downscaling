@@ -382,12 +382,52 @@ def main() -> int:
         action="store_true",
         help="Expect output after, rather than at, the already-published start boundary.",
     )
+    parser.add_argument("--restart-input-file", type=Path)
+    parser.add_argument("--restart-input-report", type=Path)
     args = parser.parse_args()
 
     plan = json.loads(args.plan.read_text())
     start = datetime.fromisoformat(plan["start"])
     end = datetime.fromisoformat(plan["end"])
     failures: list[str] = []
+    restart_input = None
+    if args.restart_continuation:
+        if args.restart_input_file is None and args.restart_input_report is None:
+            restart_input = {"status": "NOT_RECORDED"}
+        elif args.restart_input_file is None or args.restart_input_report is None:
+            failures.append(
+                "restart continuation requires the input file and publication"
+            )
+        else:
+            try:
+                report_ready = Path(f"{args.restart_input_report}.ready")
+                if not args.restart_input_report.is_file() or not report_ready.is_file():
+                    raise ValueError("restart input publication is not ready")
+                previous = json.loads(args.restart_input_report.read_text())
+                if previous.get("status") != "PASS":
+                    raise ValueError("restart input publication is not PASS")
+                if previous.get("end") != plan["start"]:
+                    raise ValueError("restart input boundary is not the chunk start")
+                expected = previous.get("restart", {})
+                actual_path = str(args.restart_input_file.resolve())
+                actual_sha256 = sha256(args.restart_input_file)
+                if (
+                    expected.get("path") != actual_path
+                    or expected.get("sha256") != actual_sha256
+                ):
+                    raise ValueError(
+                        "restart input does not match predecessor publication"
+                    )
+                restart_input = {
+                    "path": actual_path,
+                    "sha256": actual_sha256,
+                    "publication": str(args.restart_input_report.resolve()),
+                    "publication_sha256": sha256(args.restart_input_report),
+                }
+            except Exception as exc:
+                failures.append(f"cannot validate restart input provenance: {exc}")
+    elif args.restart_input_file is not None or args.restart_input_report is not None:
+        failures.append("cold-start validation received restart input provenance")
     duration_seconds = int((end - start).total_seconds())
     if args.output_interval_seconds <= 0:
         failures.append("output interval must be positive")
@@ -727,6 +767,7 @@ def main() -> int:
         "end": plan["end"],
         "hours": plan["hours"],
         "restart_continuation": args.restart_continuation,
+        "restart_input": restart_input,
         "output_profile": args.output_profile,
         "output_interval_seconds": args.output_interval_seconds,
         "static_file": str(args.static_file.resolve()) if args.static_file else None,
