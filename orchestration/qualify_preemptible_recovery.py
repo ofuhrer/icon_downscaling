@@ -47,9 +47,8 @@ def wait_for(
 
 
 def cancel(job_id: str, signal_name: str) -> None:
-    scope = "--batch" if signal_name == "KILL" else "--full"
     subprocess.run(
-        ["scancel", f"--signal={signal_name}", scope, job_id],
+        ["scancel", f"--signal={signal_name}", "--batch", job_id],
         check=True,
         timeout=30,
     )
@@ -147,7 +146,7 @@ def make_campaign(
             "model_slots": 1,
             "cpu_slots": 1,
             "prefetch_segments_per_chain": 0,
-            "max_model_attempts": 5,
+            "max_model_attempts": 0,
             "max_cpu_attempts": 1,
             "lease_seconds": 60,
             "rolling_retirement": True,
