@@ -24,6 +24,7 @@ def test_canonical_builder_uses_cpu_partition_and_frozen_clean_source() -> None:
 
     assert "#SBATCH --partition=pp-short" in text
     assert "${HICAR_SOURCE_ROOT:?" in text
+    assert "${HICAR_COORDINATOR_ROOT:?" in text
     assert "${HICAR_BUILD_ROOT:?" in text
     assert "${HICAR_EXPECTED_COMMIT:?" in text
     assert "test ! -e \"$build_root\"" in text

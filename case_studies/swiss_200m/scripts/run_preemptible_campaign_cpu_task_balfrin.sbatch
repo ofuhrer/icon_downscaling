@@ -10,12 +10,12 @@
 #SBATCH --no-requeue
 
 set -euo pipefail
-. "$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)/scripts/load_balfrin_site_config.sh"
+repo_root=${REPO_ROOT:?Set REPO_ROOT to the immutable runtime release}
+. "$repo_root/scripts/load_balfrin_site_config.sh"
 [ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
 module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
 
-repo_root=${REPO_ROOT:-$SCRATCH/icon_hicar}
-python=${HICAR_VALIDATION_PYTHON:-$repo_root/venv_static/bin/python}
+python=${HICAR_VALIDATION_PYTHON:?Set HICAR_VALIDATION_PYTHON to the published runtime interpreter}
 task_file=${HICAR_CAMPAIGN_CPU_TASK_FILE:?Set HICAR_CAMPAIGN_CPU_TASK_FILE}
 task_sha256=${HICAR_CAMPAIGN_CPU_TASK_SHA256:?Set HICAR_CAMPAIGN_CPU_TASK_SHA256}
 runner="$repo_root/orchestration/run_cpu_task.py"

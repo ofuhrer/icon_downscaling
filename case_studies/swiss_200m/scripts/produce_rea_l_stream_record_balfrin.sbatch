@@ -10,16 +10,16 @@
 #SBATCH --time=01:00:00
 
 set -euo pipefail
-. "$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)/scripts/load_balfrin_site_config.sh"
+repo_root=${REPO_ROOT:?Set REPO_ROOT to the immutable runtime release}
+. "$repo_root/scripts/load_balfrin_site_config.sh"
 [ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
 module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
 
 plan=${STREAM_PLAN:?Set STREAM_PLAN to a published chunk_plan.json}
 index=${STREAM_INDEX:-${SLURM_ARRAY_TASK_ID:-}}
 [[ "$index" =~ ^[0-9]+$ ]] || { echo "stream record index is required" >&2; exit 2; }
-repo_root=${REPO_ROOT:-$SCRATCH/icon_hicar}
 source_case=${HICAR_FORCING_CASE:-$repo_root/case_studies/swiss_100m}
-python=${HICAR_VALIDATION_PYTHON:-$repo_root/venv_static/bin/python}
+python=${HICAR_VALIDATION_PYTHON:?Set HICAR_VALIDATION_PYTHON to the published runtime interpreter}
 uenv_bin=${UENV_BIN:-/usr/bin/uenv}
 image=${REA_FDB_IMAGE:-fdb/5.19:v2}
 validator=${HICAR_FORCING_VALIDATOR:-$repo_root/case_studies/swiss_200m/validation/validate_forcing.py}

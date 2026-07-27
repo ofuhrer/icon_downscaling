@@ -93,7 +93,7 @@ HICAR_COMMIT=$(git -C HICAR rev-parse HEAD)
 BUILD="$WORK/build/hicar-${HICAR_COMMIT:0:12}-gpu-nccl"
 
 sbatch --wait --no-requeue \
-  --export=ALL,HICAR_SOURCE_ROOT="$REPO/HICAR",HICAR_BUILD_ROOT="$BUILD",HICAR_EXPECTED_COMMIT="$HICAR_COMMIT",HICAR_BUILD_VARIANT=gpu-nccl,HICAR_BUILD_MODE=release \
+  --export=ALL,HICAR_COORDINATOR_ROOT="$REPO",HICAR_SOURCE_ROOT="$REPO/HICAR",HICAR_BUILD_ROOT="$BUILD",HICAR_EXPECTED_COMMIT="$HICAR_COMMIT",HICAR_BUILD_VARIANT=gpu-nccl,HICAR_BUILD_MODE=release \
   case_studies/swiss_200m/scripts/build_hicar_balfrin.sbatch
 
 test -f "$BUILD/hicar_build_provenance.txt.ready"

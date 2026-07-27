@@ -11,12 +11,12 @@
 #SBATCH --no-requeue
 
 set -euo pipefail
-. "$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)/scripts/load_balfrin_site_config.sh"
+repo_root=${REPO_ROOT:?Set REPO_ROOT to the immutable runtime release}
+. "$repo_root/scripts/load_balfrin_site_config.sh"
 [ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
 module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
 
-repo_root=${REPO_ROOT:?Set REPO_ROOT to the immutable runtime release}
-python=${HICAR_VALIDATION_PYTHON:-$SCRATCH/icon_hicar/venv_static/bin/python}
+python=${HICAR_VALIDATION_PYTHON:?Set HICAR_VALIDATION_PYTHON to the published runtime interpreter}
 helper=${HICAR_PREEMPTION_HELPER:-$repo_root/orchestration/preemption.py}
 attempt_id=${STREAM_ATTEMPT_ID:?Set STREAM_ATTEMPT_ID}
 run=${STREAM_RUN_DIR:?Set STREAM_RUN_DIR}

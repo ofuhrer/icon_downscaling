@@ -11,7 +11,8 @@
 #SBATCH --exclusive
 
 set -euo pipefail
-. "$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)/scripts/load_balfrin_site_config.sh"
+repo_root=${REPO_ROOT:?Set REPO_ROOT to the immutable runtime release}
+. "$repo_root/scripts/load_balfrin_site_config.sh"
 [ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
 module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
 module purge || true
@@ -21,7 +22,6 @@ module load nvhpc/24.5 cray-mpich-nvhpc/8.1.30 cuda/12.3.0-gcc \
   hdf5/1.14.3-nvhpc fftw/3.3.10-gcc
 
 plan=${STREAM_PLAN:?Set STREAM_PLAN to a published chunk_plan.json}
-repo_root=${REPO_ROOT:-$SCRATCH/icon_hicar}
 root=${HICAR_MULTILEVEL_ROOT:-$SCRATCH/icon_hicar/HICAR}
 case_root=${HICAR_SWISS_CASE:-$SCRATCH/icon_hicar/case_studies/swiss_200m}
 case_name=$(basename "$case_root")
@@ -32,7 +32,7 @@ static_basename=$(basename "${static_file%.nc}")
 renderer=${HICAR_NAMELIST_RENDERER:-$repo_root/case_studies/swiss_200m/scripts/render_hicar_namelist.py}
 validator=${HICAR_STREAM_VALIDATOR:-$repo_root/case_studies/swiss_200m/streaming/validate_model_chunk.py}
 wind_reducer=${HICAR_WIND_REDUCER:-$repo_root/scripts/reduce_hicar_wind_climatology.py}
-python=${HICAR_VALIDATION_PYTHON:-$SCRATCH/icon_hicar/venv_static/bin/python}
+python=${HICAR_VALIDATION_PYTHON:?Set HICAR_VALIDATION_PYTHON to the published runtime interpreter}
 wrapper=${HICAR_GPU_WRAPPER:-$repo_root/case_studies/swiss_200m/scripts/gpu_rank_wrapper.sh}
 
 IFS=$'\t' read -r chunk_id chunk_root start end hours forcing_list < <(

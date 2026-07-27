@@ -9,7 +9,8 @@
 #SBATCH --time=01:00:00
 
 set -euo pipefail
-. "$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)/scripts/load_balfrin_site_config.sh"
+repo_root=${REPO_ROOT:?Set REPO_ROOT to the immutable runtime release}
+. "$repo_root/scripts/load_balfrin_site_config.sh"
 [ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
 module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
 module load netcdf-c/4.9.2-nvhpc
@@ -17,8 +18,7 @@ module load netcdf-c/4.9.2-nvhpc
 list=${OUTPUT_FILE_LIST:?Set OUTPUT_FILE_LIST to one absolute source path per line}
 index=${OUTPUT_INDEX:-${SLURM_ARRAY_TASK_ID:-}}
 [[ "$index" =~ ^[0-9]+$ ]] || { echo "output index is required" >&2; exit 2; }
-repo_root=${REPO_ROOT:-$SCRATCH/icon_hicar}
-python=${HICAR_VALIDATION_PYTHON:-$repo_root/venv_static/bin/python}
+python=${HICAR_VALIDATION_PYTHON:?Set HICAR_VALIDATION_PYTHON to the published runtime interpreter}
 compressor="$repo_root/case_studies/swiss_200m/streaming/compress_output_file.py"
 target_dir=${COMPRESSED_OUTPUT_DIR:?Set COMPRESSED_OUTPUT_DIR}
 source=$(sed -n "$((index + 1))p" "$list")

@@ -5,7 +5,8 @@ description: Prepare, package, inspect, or validate structured NetCDF forcing fo
 
 # ICON to HICAR forcing
 
-Work in `/Users/fuhrer/Work/agentic/icon_hicar`; run data-heavy steps on Balfrin under `$SCRATCH/icon_hicar`.
+Work from the current coordinator checkout; run data-heavy steps on Balfrin
+under `$SCRATCH/icon_hicar`.
 
 ## Workflow
 

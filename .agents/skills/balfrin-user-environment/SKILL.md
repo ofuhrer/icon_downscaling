@@ -23,7 +23,7 @@ CMake 3.24, gmake 4.4, ecCodes 2.36, NCO 5.0, NetCDF, HDF5, and FFTW.
 ## Project locations
 
 ```text
-Local workspace: /Users/fuhrer/Work/agentic/icon_hicar
+Local workspace: current coordinator checkout
 Balfrin root:    $SCRATCH/icon_hicar
 Durable root:    /store_new/mch/msopr/olifu/icon_downscaling
 ```

@@ -10,7 +10,7 @@
 #SBATCH --no-requeue
 
 set -euo pipefail
-. "$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)/scripts/load_balfrin_site_config.sh"
+. "${HICAR_RUNTIME_RELEASE:?Set HICAR_RUNTIME_RELEASE}/scripts/load_balfrin_site_config.sh"
 [ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
 module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
 module purge || true
@@ -18,7 +18,7 @@ module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
 module load python/3.11.7
 export PYTHONDONTWRITEBYTECODE=1
 
-release=${HICAR_RUNTIME_RELEASE:?Set HICAR_RUNTIME_RELEASE}
+release=$HICAR_RUNTIME_RELEASE
 release=$(realpath "$release")
 release_id=$(basename "$release")
 target=${HICAR_PYTHON_ENV_ROOT:-$SCRATCH/icon_hicar/runtime/python/$release_id}

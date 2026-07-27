@@ -9,7 +9,8 @@ Use `$balfrin-user-environment` for generic module and partition rules. Keep sou
 
 ## Current source
 
-- Local clone: `/Users/fuhrer/Work/agentic/icon_hicar/HICAR`
+- Coordinator checkout: the current repository root; HICAR is the pinned
+  `HICAR/` submodule beneath it.
 - Remote: `git@github.com:ofuhrer/HICAR.git`
 - Production engineering branch: `feature/icon_downscaling` at
   `7700c97a0248abcc1db055ef04c22e1ff9ec6d22`. This is the coordinator

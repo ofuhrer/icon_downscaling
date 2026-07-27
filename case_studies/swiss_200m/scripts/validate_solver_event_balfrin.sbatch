@@ -9,14 +9,14 @@
 #SBATCH --time=00:10:00
 
 set -euo pipefail
-. "$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)/scripts/load_balfrin_site_config.sh"
+repo_root=${REPO_ROOT:?Set REPO_ROOT to the immutable runtime release}
+. "$repo_root/scripts/load_balfrin_site_config.sh"
 [ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
 module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
 
 plan=${STREAM_PLAN:?Set STREAM_PLAN to the event chunk_plan.json}
 run=${EVENT_RUN_DIR:?Set EVENT_RUN_DIR to the validated HICAR run}
-repo_root=${REPO_ROOT:-$SCRATCH/icon_hicar}
-python=${HICAR_VALIDATION_PYTHON:-$repo_root/venv_static/bin/python}
+python=${HICAR_VALIDATION_PYTHON:?Set HICAR_VALIDATION_PYTHON to the published runtime interpreter}
 evaluator=${HICAR_SOLVER_EVALUATOR:-$repo_root/case_studies/swiss_200m/validation/evaluate_hicar_solver_log.py}
 completion="$run/model_chunk_completion.json"
 model_log="$run/model.out"

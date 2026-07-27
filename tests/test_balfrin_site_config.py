@@ -90,6 +90,33 @@ def test_primary_wrappers_load_site_defaults_before_modules():
         assert loader_index < module_index, name
 
 
+def test_runtime_wrappers_require_the_immutable_repo_root():
+    script_root = ROOT / "case_studies/swiss_200m/scripts"
+    runtime_wrappers = set(PRIMARY_WRAPPERS) - {
+        "bootstrap_preemptible_python_balfrin.sbatch",
+        "build_hicar_balfrin.sbatch",
+    }
+    for name in runtime_wrappers:
+        text = (script_root / name).read_text()
+        assert (
+            "repo_root=${REPO_ROOT:?Set REPO_ROOT to the immutable runtime release}"
+            in text
+        ), name
+        assert "REPO_ROOT:-$SCRATCH/icon_hicar" not in text, name
+        assert "HICAR_VALIDATION_PYTHON:?" in text, name
+        assert "venv_static" not in text, name
+
+
+def test_bootstrap_and_builder_use_explicit_slurm_roots():
+    script_root = ROOT / "case_studies/swiss_200m/scripts"
+    bootstrap = (
+        script_root / "bootstrap_preemptible_python_balfrin.sbatch"
+    ).read_text()
+    builder = (script_root / "build_hicar_balfrin.sbatch").read_text()
+    assert "${HICAR_RUNTIME_RELEASE:?Set HICAR_RUNTIME_RELEASE}/scripts/" in bootstrap
+    assert "${HICAR_COORDINATOR_ROOT:?Set HICAR_COORDINATOR_ROOT}" in builder
+
+
 def test_reusable_forcing_converter_loads_site_defaults():
     text = (ROOT / "scripts/prepare_icon_inputs.sh").read_text()
     assert '. "$SCRIPT_DIR/load_balfrin_site_config.sh"' in text

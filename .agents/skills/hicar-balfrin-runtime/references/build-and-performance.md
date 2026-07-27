@@ -57,8 +57,9 @@ Submit it on the CPU build partition with exact paths and source identity:
 
 ```bash
 sbatch --export=ALL,\
-HICAR_SOURCE_ROOT=/scratch/mch/olifu/icon_hicar/HICAR-qualified,\
-HICAR_BUILD_ROOT=/scratch/mch/olifu/icon_hicar/HICAR-qualified/build_cpu_release,\
+HICAR_COORDINATOR_ROOT="$PWD",\
+HICAR_SOURCE_ROOT="$PWD/HICAR",\
+HICAR_BUILD_ROOT="$SCRATCH/icon_hicar/build/HICAR-qualified-cpu-release",\
 HICAR_EXPECTED_COMMIT=<full-40-character-commit>,\
 HICAR_BUILD_VARIANT=cpu \
 case_studies/swiss_200m/scripts/build_hicar_balfrin.sbatch
