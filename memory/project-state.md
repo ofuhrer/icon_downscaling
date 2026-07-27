@@ -292,7 +292,19 @@ It is non-promoting legacy evidence, not an active source branch.
   and Python-environment report SHA-256
   `d163de3316e9eb9202f75e198bddd2b562e8bbc61c407093341345aa31c84021`.
   It is explicitly engineering-only and does not change any scientific or
-  production authorization.
+  production authorization. The exact committed implementation at coordinator
+  commit `91f917e03e7dfb2d526e1d615cb11584820922d8` is also published as the
+  clean production-purpose runtime
+  `/scratch/mch/olifu/icon_hicar/runtime/releases/preemption-production-91f917e-v1`;
+  its manifest SHA-256 is
+  `3c5313f48b6d828c789438a993618b1c785c565aab26ea5ce81961228bb6840d`.
+  Python bootstrap job `4951118` completed and published
+  `/scratch/mch/olifu/icon_hicar/runtime/python_environment-preemption-production-91f917e-v1.json`,
+  SHA-256
+  `14cef4b493b52e9b36a436f104c166f34a1ddac08458ecccecadfef64af5e4eb`.
+  Both artifacts pass the production runtime contract and live Python smoke
+  validation. They make the pre-emption controller deployable but do not
+  authorize a scientific campaign.
 - Wind-climatology engineering pathway:
   `case_studies/swiss_200m/wind_climatology/PRODUCT_CONTRACT.md`.
 
