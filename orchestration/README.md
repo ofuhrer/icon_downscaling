@@ -71,13 +71,13 @@ Forcing, finalization, solver audits, and compression use one campaign-wide
 stage initially placed in `preemptible`; post-processing stays on the bounded
 CPU partition.
 
-## Runtime release and Python environment
+## Per-campaign execution snapshot
 
-Campaigns do not execute from a mutable repository checkout. Build a
-checksum-bound runtime stage with `prepare_runtime_release.py`, deploy it to a
-new absolute Balfrin release directory, and validate
-`runtime_release.json.ready`. An engineering release may record dirty source;
-a production release refuses any changed required runtime file.
+The repository and its normal development environment remain mutable. At
+launch, copy only the scripts and configuration used by that campaign into a
+read-only execution directory with `prepare_runtime_release.py`. This small
+snapshot exists so a retry six months later does not silently use newer code;
+it is not a project release or a constraint on continued development.
 
 The runtime Python environment is a separate publication. Submit
 `bootstrap_preemptible_python_balfrin.sbatch` on `pp-short` against the
@@ -85,10 +85,10 @@ deployed release. It installs the exact direct versions in
 `requirements/balfrin-preemptible.txt`, runs import and package checks, and
 publishes a report binding the interpreter hash, exact resolved package
 inventory, requirements, immutable environment tree, and runtime release.
-Each release gets a separate environment by default. The planner and every
-controller reconciliation recheck both publications, including `pip freeze`
-drift and writable paths. Model and CPU jobs receive the frozen interpreter
-path explicitly rather than relying on shell activation.
+Each campaign snapshot gets a separate environment by default. The planner
+and controller reject an environment that has subsequently changed. Model and
+CPU jobs receive that interpreter path explicitly rather than relying on
+shell activation.
 
 ## Planning and launch
 
@@ -240,6 +240,7 @@ attempt must complete. Its model completion must bind the exact predecessor
 restart path, restart SHA-256, predecessor publication path, and publication
 SHA-256 before the engineering report can pass.
 
-This bounded report is also `ENGINEERING_ONLY`; it qualifies the real
-HICAR/srun/restart recovery mechanism but does not supersede scientific
+This bounded report is also `ENGINEERING_ONLY`; it uses the `routine` output
+profile to qualify the real HICAR/srun/restart mechanism without conflating
+that with scientific diagnostic-output qualification. It does not supersede
 restart-equivalence, seasonal, annual, or production authorization.

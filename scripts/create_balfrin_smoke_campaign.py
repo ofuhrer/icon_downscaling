@@ -130,6 +130,7 @@ def definition_payload(
     start: datetime,
     hours: int,
     segment_hours: int | None = None,
+    output_profile: str = "qualification",
 ) -> dict[str, Any]:
     end = start + timedelta(hours=hours)
     segment_hours = hours if segment_hours is None else segment_hours
@@ -153,7 +154,7 @@ def definition_payload(
             "static_file": str(static_file.resolve()),
             "nodes": 4,
             "time_limit": "01:00:00",
-            "output_profile": "qualification",
+            "output_profile": output_profile,
             "output_interval_seconds": 3600,
         },
         "policy": {
@@ -211,6 +212,11 @@ def main() -> int:
     parser.add_argument("--static-file", type=Path, required=True)
     parser.add_argument("--start", required=True)
     parser.add_argument("--hours", type=int, default=2)
+    parser.add_argument(
+        "--output-profile",
+        choices=("routine", "qualification"),
+        default="qualification",
+    )
     parser.add_argument(
         "--segment-hours",
         type=int,
@@ -290,6 +296,7 @@ def main() -> int:
         start=start,
         hours=args.hours,
         segment_hours=segment_hours,
+        output_profile=args.output_profile,
     )
     write_json_atomic(args.output, payload)
     print(json.dumps(payload, indent=2, sort_keys=True))

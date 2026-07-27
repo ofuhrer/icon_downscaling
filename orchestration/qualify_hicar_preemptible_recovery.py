@@ -43,8 +43,11 @@ def validate_campaign(campaign_path: Path) -> dict[str, Any]:
         raise ValueError("real recovery drill requires the preemptible partition")
     if int(campaign["model"].get("nodes", 0)) != 4:
         raise ValueError("real recovery drill requires the four-node topology")
-    if campaign["model"].get("output_profile") != "qualification":
-        raise ValueError("real recovery drill requires qualification output")
+    if campaign["model"].get("output_profile") != "routine":
+        raise ValueError(
+            "real recovery drill requires routine output; scientific "
+            "qualification is a separate gate"
+        )
     if int(campaign["policy"].get("max_model_attempts", 0)) < 3:
         raise ValueError("real recovery drill requires at least three attempts")
     first, second = chains[0]["segments"]

@@ -37,11 +37,13 @@ def test_definition_is_bounded_and_preemptible_controller_compatible(tmp_path):
         start=datetime(2020, 7, 1),
         hours=2,
         segment_hours=1,
+        output_profile="routine",
     )
     assert payload["purpose"] == "qualification"
     assert payload["model"]["expected_hicar_commit"] == "a" * 40
     assert payload["model"]["nodes"] == 4
     assert payload["model"]["time_limit"] == "01:00:00"
+    assert payload["model"]["output_profile"] == "routine"
     assert payload["policy"]["model_node_budget"] == 4
     assert payload["policy"]["model_slots"] == 1
     assert payload["policy"]["cpu_slots"] == 1

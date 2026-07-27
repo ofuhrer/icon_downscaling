@@ -31,7 +31,7 @@ def campaign(tmp_path: Path) -> tuple[Path, dict]:
         "model": {
             "partition": "preemptible",
             "nodes": 4,
-            "output_profile": "qualification",
+            "output_profile": "routine",
         },
         "policy": {"max_model_attempts": 3},
         "chains": [

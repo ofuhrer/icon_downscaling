@@ -105,10 +105,11 @@ test -f "$BUILD/hicar_build_provenance.txt.ready"
 The build fails on a dirty or wrong source checkout and publishes provenance
 only after the executable, tester, linkage, and NCCL checks pass.
 
-## 4. Freeze the controller runtime
+## 4. Snapshot the campaign runtime
 
-Campaign jobs must not execute from the mutable checkout. Build a clean,
-checksum-bound release outside the repository:
+Keep developing the repository normally. Immediately before launching a
+campaign, copy its small set of executable scripts and configuration into a
+read-only campaign runtime:
 
 ```bash
 COORDINATOR_COMMIT=$(git rev-parse HEAD)
@@ -120,9 +121,10 @@ python3 orchestration/prepare_runtime_release.py \
   --purpose production
 ```
 
-The release contains the controller, launch scripts, validators, namelist
-template, target grid, and site defaults. Every file is read-only and listed
-by SHA-256 in `runtime_release.json`.
+This is a per-campaign execution snapshot, not a project release. It contains
+the controller, launch scripts, validators, namelist template, target grid,
+and site defaults needed to make retries reproducible while development
+continues on `main`.
 
 Build a release-specific, read-only Python environment:
 
@@ -164,6 +166,7 @@ python3 scripts/create_balfrin_smoke_campaign.py \
   --start 2020-07-01T00:00:00 \
   --hours 2 \
   --segment-hours 1 \
+  --output-profile routine \
   --output "$DEFINITION"
 
 "$PYTHON" "$RELEASE/orchestration/prepare_preemptible_campaign.py" \
@@ -176,7 +179,9 @@ python3 scripts/create_balfrin_smoke_campaign.py \
   --repo-root "$RELEASE"
 ```
 
-The final command is a dry reconciliation: it creates pristine controller
+The `routine` profile deliberately keeps this engineering recovery drill
+independent of scientific diagnostic-output qualification. The final command
+is a dry reconciliation: it creates pristine controller
 state and prints intended actions without submitting jobs. The generated
 definition is bounded to one four-node chain, two one-hour segments, one model
 slot, one CPU slot, and three attempts. It uses `preemptible` for HICAR and
