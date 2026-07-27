@@ -95,8 +95,7 @@ after the shared ancestor were classified, all runtime/domain/test/build
 touches received file-level review, `develop` has no commits ahead of `main`,
 and the remaining diverged topic branches contain older pre-squash work.
 
-The applicable fixes were ported onto the qualified V26 restart baseline as
-`codex/schnaps-relevant-fixes` at
+The applicable fixes were ported onto the qualified V26 restart baseline at
 `7700c97a0248abcc1db055ef04c22e1ff9ec6d22`:
 
 - `cc276e4c`: Morrison CPU/GPU correctness, lateral-wind rotation, density
@@ -112,6 +111,13 @@ The official upstream tolerance comparator reported 4/4 fields passing with
 no failures, warnings, or missing fields (jobs `4950793`, `4950851`,
 `4950867`, `4950945`, `4950946`, `4950947`, and `4951003`--`4951006`).
 
+After qualification, `feature/icon_downscaling` was fast-forwarded to this
+commit and the coordinator HICAR gitlink was advanced. The redundant
+`codex/schnaps-relevant-fixes` ref was removed after reachability was
+verified. This is now the single production engineering source line; it does
+not include the scientifically failed V29 diagnostics and does not alter the
+V29 scientific verdict.
+
 The complete commit classification, deliberate deferrals, executable
 checksums, job topology, and comparison metrics are in
 `case_studies/swiss_200m/validation/schnaps_upstream_integration_7700c97a.json`.
@@ -123,8 +129,8 @@ track the migrated project with the additional fetch remote:
 schnaps https://codeberg.org/SCHNAPS-Model/SCHNAPS.git
 ```
 
-This branch is implementation evidence, not a production pin, and does not
-alter the failed V29 scientific verdict or authorize new production.
+This source is an engineering production pin, not a scientific production
+authorization.
 
 ### V29 summer engineering and budget gates
 
@@ -164,25 +170,23 @@ nonzero by design because the two temperature screens failed.
 - Active branch: `main`
 - Consolidated handoff checkpoint:
   `482b1f441d625fff00a9ebd634ebeeed3e01f75d`.
+- Reproducible Balfrin onboarding implementation:
+  `1903891c6074046aa347e9cbdb40b8fc68ff162c`.
 
 ### HICAR
 
 - Remote: `git@github.com:ofuhrer/HICAR.git`
 - Migrated-upstream tracking remote:
   `https://codeberg.org/SCHNAPS-Model/SCHNAPS.git` as `schnaps`.
-- Stable production-performance base:
+- Production engineering branch and coordinator submodule pin:
   `feature/icon_downscaling` at
-  `d6c52a54bc6338ea82922f9b69d9fdc02b54267a`.
+  `7700c97a0248abcc1db055ef04c22e1ff9ec6d22`.
 - Qualified restart baseline:
   `codex/restart-noahmp-state-v26` at
   `246c8992564ad3e89f49546776ae31ad8a1ce239`.
 - Failed scientific V29 handoff:
   `codex/v29-summer-warm-bias` at
   `5da4b1980497f20468e6e4b5b4c4a584849c3454`.
-- Selective SCHNAPS integration candidate:
-  `codex/schnaps-relevant-fixes` at
-  `7700c97a0248abcc1db055ef04c22e1ff9ec6d22`.
-
 V29 is intentionally not a production pin. Its water diagnostics are useful
 and its restart policy passes, but it is a scientifically failed baseline.
 
@@ -304,7 +308,7 @@ It is non-promoting legacy evidence, not an active source branch.
   `14cef4b493b52e9b36a436f104c166f34a1ddac08458ecccecadfef64af5e4eb`.
   Both artifacts pass the original checksum contract and the current Python
   imports still match the report, but a 2026-07-27 independent re-audit found
-  that this release is **not launchable**: it omits
+  that the historical `91f917e` release is **not launchable**: it omits
   `case_studies/swiss_200m/config/hicar_swiss_200m.nml.in`, which the frozen
   renderer reads; the forcing producer selects its validator from the mutable
   case root rather than the frozen release; and the shared `venv_static`
@@ -315,6 +319,47 @@ It is non-promoting legacy evidence, not an active source branch.
   runtime and Python report as failed launch-readiness evidence until these
   gaps are repaired and a real bounded HICAR cancellation/restart drill passes.
   This correction does not change the separate scientific hold.
+- Reproducible Balfrin onboarding and repaired pre-emptible runtime:
+  `docs/balfrin-quickstart.md` is the supported operator entry point and
+  `config/balfrin.env` is the shared non-secret site-default record. Runtime
+  releases now include the namelist template, fieldextra target grid, site
+  defaults, canonical builder, and frozen forcing validator. Each runtime gets
+  a separate read-only Python environment; reconciliation verifies the
+  interpreter hash, exact sorted package inventory, requirements binding, and
+  absence of writable paths.
+
+  A clean GitHub clone at coordinator `1903891` passed the Balfrin preflight
+  on `balfrin-ln002`, including the exact HICAR `7700c97a` pin and remote
+  branch, `preemptible` partition, REA-L FDB metadata, operational
+  fieldextra/ICON-grid assets, scratch, and writable `/store_new`. Preflight
+  report SHA-256:
+  `c17617565f1bb9a171a8ded354ee4a74e03e0bfd5ec3b53c250d4e1e1fffec90`.
+
+  Clean production runtime manifest
+  `coordinator-1903891-v1` has SHA-256
+  `54f4e2bfe31dd7073d5d82522be7dbb936e871132046cee6d2b7eb759c0cc157`.
+  Python bootstrap job `4951194` published a schema-v2 immutable-environment
+  report with SHA-256
+  `1d3c11c37b454bea79763c9602c20f0b5c9862853bec82fdd3568fbd649d3cb1`
+  and passed independent runtime revalidation.
+
+  The recovery restore helper reproduced the summer initialized static domain
+  from `/store_new` at its canonical SHA-256
+  `dc949651c18f9c30e6d18419ba4935ce5d100493c594179da44bcb2942e14ef0`.
+  Canonical GPU/NCCL build job `4951197` passed at HICAR `7700c97a`;
+  executable SHA-256:
+  `28df0adea55131959447c22ea7849f49835a8d7f9d86ea23bf34e1c70dddaa49`;
+  published build-provenance SHA-256:
+  `6c367b8bb4dad7a466731c4274a2b6eea70aadaaf17562efea6da68ed75184cd`.
+
+  The generated two-hour, one-chain plan has SHA-256
+  `9560f94006d55a06c4a8c5af1e6598b9eeb4c75348c8a460076c2d96c99bcc36`.
+  Dry reconciliation selected one bounded three-record CPU array followed by
+  a four-node `preemptible` model attempt; no Slurm job was submitted and the
+  queue was empty afterward. This establishes reproducible launch planning,
+  not HICAR cancellation recovery or scientific authorization. A real bounded
+  HICAR/srun hard-kill/restart drill remains required before describing model
+  recovery as target-stack qualified.
 - Wind-climatology engineering pathway:
   `case_studies/swiss_200m/wind_climatology/PRODUCT_CONTRACT.md`.
 
@@ -363,9 +408,10 @@ Cleanup is complete and recorded in
 
 The HICAR remote now retains only `main`, `feature/icon_downscaling`, the
 qualified V26 restart reference, and the failed-but-reproducible V29
-scientific reference. The three superseded solver-research branches were
-deleted after bundle/source verification. Local HICAR is clean on
-`feature/icon_downscaling` at `d6c52a54`.
+scientific reference. The three superseded solver-research branches and the
+redundant selective-integration topic ref were deleted after reachability or
+bundle/source verification. Local HICAR is clean on
+`feature/icon_downscaling` at `7700c97a`.
 
 Balfrin cleanup jobs `4950170`, `4950184`, and `4950197` completed
 successfully. They
@@ -395,16 +441,21 @@ from `externals/fieldextra.lock`.
 - Clean GitHub clone with initialized HICAR submodule: portable suite and
   repository checks PASS at coordinator `482b1f4`.
 - Public coordinator CI run `30245948287`: PASS.
-- Current pre-emption-focused suite: `26 passed`, including eleven-slot
+- Current onboarding/pre-emption-focused suite: `37 passed`, including
+  immutable runtime leaves, Python tree/package drift rejection, site
+  preflight, checksum-bound restore, bounded campaign generation, eleven-slot
   empty-capacity submission, full-cluster pending-job backpressure,
-  interruption-resumable retirement, immutable runtime/Python publications,
-  and SIGKILL retry classification.
-- Current portable coordinator suite: `276 passed`. A whole-workspace run has
-  the same `276` coordinator passes with `11` opt-in HICAR
-  source-contract failures because the local submodule is intentionally on
-  clean production-performance base `d6c52a54`, which does not contain the
-  V29 water/metadata and restart-initialization source line those tests
-  inspect. No pre-emption test failed.
+  interruption-resumable retirement, and SIGKILL retry classification.
+- Current portable coordinator suite: `288 passed`. A clean GitHub clone at
+  coordinator `1903891` with the initialized HICAR submodule has the same
+  `288` passes and repository checks PASS (`168` Python and `149` shell
+  files).
+- Public coordinator CI run `30260383098` for `1903891`: PASS.
+- The opt-in HICAR source-contract gate is intentionally `4 passed, 7
+  failed` at production pin `7700c97a`: the qualified V26 restart
+  initialization contract passes, while metadata/water-diagnostic checks
+  describe the scientifically failed V29 and other unmerged output work.
+  They remain visible and must not be xfailed or weakened.
 - Against the exact V29 source, `7/11` opt-in HICAR source-contract tests
   pass: all restart-initialization and water-budget contracts pass. The four
   remaining tests describe the separate wind-climatology/CF-metadata source
@@ -415,9 +466,8 @@ from `externals/fieldextra.lock`.
 - `summer_transition_outcome.json` publication hash check: PASS.
 - V29 source branch and durable Git bundle: available.
 - V26 qualified source branch: available.
-- The HICAR submodule is clean on `feature/icon_downscaling` at `d6c52a54`;
-  the V26 and V29 source references are remote branches, not the public
-  coordinator pin.
+- The HICAR submodule is clean on `feature/icon_downscaling` at `7700c97a`;
+  V26 and V29 remain evidence branches, not the default coordinator pin.
 - The conservative full-deletion recovery audit remains intentionally
   `NOT READY`: the annual production archive contract is unresolved and
   durable payload verification must run on Balfrin where `/store_new` is
