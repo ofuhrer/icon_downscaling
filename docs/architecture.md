@@ -188,7 +188,9 @@ The implemented controller coordinates short campaign segments with:
   deterministic model or scientific failure;
 - restart selection from validator-published, checksum-bound checkpoints;
 - idempotent publication recovery across termination at every boundary;
-- bounded retries and an explicit terminal blocked state.
+- unlimited retries for explicitly recognized scheduler interruptions, while
+  deterministic model, validation, timeout, and resource failures enter an
+  explicit terminal blocked state.
 
 Slurm requeue is not itself resume. The controller never reuses a partial
 attempt directory, weakens a scientific gate, or infers success from scheduler
@@ -209,8 +211,10 @@ Heavy HICAR attempts are the only jobs initially assigned to `preemptible`.
 The lightweight persistent watcher uses `pp-long`; one campaign-wide CPU
 array uses `pp-short` with a maximum of two active tasks. The model-slot limit
 is node-aware against a 44-node budget and may be changed at runtime, including
-zero to pause submissions. Parallelism is allowed only across independently
-authorized restart chains.
+zero to pause submissions. The controller keeps work pending up to that limit;
+Slurm itself notices freed nodes and starts the queued attempts immediately,
+so no separate free-node polling policy or fixed retry delay is required.
+Parallelism is allowed only across independently authorized restart chains.
 
 The controller now journals and resumes forcing, restart, failed-attempt, and
 raw-output retirement after compression and validation publications pass.
