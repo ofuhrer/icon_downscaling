@@ -46,16 +46,21 @@ def test_lossless_output_compression_is_published_and_idempotent(tmp_path):
     assert payload["status"] == "PASS"
     assert target.is_file()
     assert Path(f"{target}.ready").is_file()
+    assert Path(f"{report}.ready").is_file()
 
+    Path(f"{report}.ready").unlink()
     second = subprocess.run(command, text=True, capture_output=True)
     assert second.returncode == 0, second.stderr + second.stdout
     assert "already published and verified" in second.stdout
+    assert Path(f"{report}.ready").is_file()
 
     Path(f"{target}.ready").unlink()
+    Path(f"{report}.ready").unlink()
     recovered = subprocess.run(command, text=True, capture_output=True)
     assert recovered.returncode == 0, recovered.stderr + recovered.stdout
     assert "recovered publication marker" in recovered.stdout
     assert Path(f"{target}.ready").is_file()
+    assert Path(f"{report}.ready").is_file()
 
 
 def test_incomplete_compression_is_quarantined_before_retry(tmp_path):

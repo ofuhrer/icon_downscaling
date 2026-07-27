@@ -91,12 +91,14 @@ def main() -> int:
     ready = Path(f"{args.target}.ready")
     if ready.exists():
         if verify_publication(args.source, args.target, args.report):
+            Path(f"{args.report}.ready").touch()
             print(f"already published and verified: {args.target}")
             return 0
         raise SystemExit("ready marker exists for an invalid compressed publication")
     if args.target.exists() or args.report.exists():
         if verify_publication(args.source, args.target, args.report):
             ready.touch()
+            Path(f"{args.report}.ready").touch()
             print(f"recovered publication marker: {args.target}")
             return 0
         quarantine_incomplete(args.target, args.report)
@@ -156,6 +158,7 @@ def main() -> int:
             "logical_variable_sha256": logical_hashes,
         }
         write_json_atomic(args.report, payload)
+        Path(f"{args.report}.ready").touch()
         ready.touch()
     finally:
         partial.unlink(missing_ok=True)
