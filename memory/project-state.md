@@ -360,17 +360,18 @@ It is non-promoting legacy evidence, not an active source branch.
   Dry reconciliation selected one bounded three-record CPU array followed by
   a four-node `preemptible` model attempt; no Slurm job was submitted.
 
-  Coordinator `5f39724` now contains the
+  Coordinator `a39bbb5457a6f1eaff38dc642638c741799aa4c4` now contains the
   repaired target-stack qualification path. It adds exact predecessor restart
   provenance to model completion, campaign-specific multi-chain
   authorization, report readiness for compressed output, a two-segment real
   HICAR TERM/KILL recovery driver, nonblocking signal-aware model-output
-  forwarding, and unlimited-by-default retries only for explicitly retryable
-  scheduler outcomes. Pending attempts count against the global model-slot
-  and node budgets: the controller leaves bounded work eligible and Slurm
-  starts it as nodes become available, without a separate free-node poller or
-  fixed retry delay. Development on `main` remains mutable; the read-only
-  runtime is only a per-campaign execution snapshot.
+  forwarding across the Slurm batch-shell boundary, and unlimited-by-default
+  retries only for explicitly retryable scheduler outcomes. Pending attempts
+  count against the global model-slot and node budgets: the controller leaves
+  bounded work eligible and Slurm starts it as nodes become available,
+  without a separate free-node poller or fixed retry delay. Development on
+  `main` remains mutable; the read-only runtime is only a per-campaign
+  execution snapshot.
 
   Balfrin supplied real daytime pre-emption evidence during the engineering
   runs: jobs `4951991`, `4952023`, `4952291`, and `4952336` exited through the
@@ -381,17 +382,22 @@ It is non-promoting legacy evidence, not an active source branch.
   ready marker, and `scancel --full` bypassing wrapper publication; each issue
   was corrected rather than waived.
 
-  Controlled TERM qualification exposed two distinct issues: blocking pipe
-  reads delayed the Python signal handler, and the cheap probe initially
-  signalled as soon as Slurm reported RUNNING, before its batch payload was
-  ready. Both are corrected; the probe now waits for an application startup
-  marker. Runtime `coordinator-5f39724-v1` and its Python environment were
-  published by bootstrap job `4952879`. A fresh real two-segment campaign is
-  prepared but unsubmitted at
-  `/scratch/mch/olifu/icon_hicar/engineering/hicar-preemption-recovery-27baced-v1`.
-  The corrected cheap probe and then the real TERM/KILL/restart qualification
-  still require PASS reports before target-stack recovery is qualified.
-  Neither changes the scientific hold or authorizes a first-year campaign.
+  Final runtime `coordinator-a39bbb5-v1` has manifest SHA-256
+  `250b16df447310e94168fd98c08fc6b172259d5dfd82519e30417d9efcd3ec28`;
+  its read-only Python environment report SHA-256 is
+  `30a4a06ba8b03e8dd567028cff89e2e30cc210e979b045d33c8277d257046740`.
+  The shared batch-shell TERM/KILL probe passed under that runtime. The real
+  two-segment, four-node HICAR qualification at
+  `/scratch/mch/olifu/icon_hicar/engineering/hicar-preemption-recovery-a39bbb5-v1`
+  also passed: controller `4953041`, predecessor `4953049`, TERM `4953076`
+  (`75:0` with interruption report), KILL `4953079` (`0:9` without cleanup),
+  and successful restart retry `4953123`. Its non-promoting report SHA-256 is
+  `9af88ff0ea621f3cbd248e93a777952ecbc1b6021d2015af12bf2f45cf93f9d8`;
+  campaign-completion SHA-256 is
+  `15d6f53225c4483c1b31c2c73e772b953ab03dcbec2ed8572bc40f27aa902365`.
+  The report is `ENGINEERING_ONLY`, `promotion_eligible=false`, and
+  `scientific_authorization=false`; it qualifies recovery mechanics only and
+  does not authorize a first-year campaign.
 - Wind-climatology engineering pathway:
   `case_studies/swiss_200m/wind_climatology/PRODUCT_CONTRACT.md`.
 
