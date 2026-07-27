@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import selectors
 import signal
 import socket
 import subprocess
@@ -139,14 +140,25 @@ def run_guarded(args: argparse.Namespace) -> int:
             start_new_session=True,
         )
         assert child.stdout is not None
+        selector = selectors.DefaultSelector()
+        selector.register(child.stdout, selectors.EVENT_READ)
         with log_path.open("ab", buffering=0) as log:
             while True:
-                block = child.stdout.read(1024 * 1024)
-                if not block:
+                events = selector.select(timeout=1)
+                if not events:
+                    if child.poll() is None:
+                        continue
+                    block = os.read(child.stdout.fileno(), 1024 * 1024)
+                else:
+                    block = os.read(child.stdout.fileno(), 1024 * 1024)
+                if not block and child.poll() is not None:
                     break
+                if not block:
+                    continue
                 log.write(block)
                 sys.stdout.buffer.write(block)
                 sys.stdout.buffer.flush()
+        selector.close()
         return_code = child.wait()
     finally:
         for signum, handler in previous_handlers.items():
