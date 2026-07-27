@@ -33,7 +33,7 @@ def campaign(tmp_path: Path) -> tuple[Path, dict]:
             "nodes": 4,
             "output_profile": "routine",
         },
-        "policy": {"max_model_attempts": 3},
+        "policy": {"max_model_attempts": 0},
         "chains": [
             {
                 "chain_id": "smoke",

@@ -184,10 +184,10 @@ independent of scientific diagnostic-output qualification. The final command
 is a dry reconciliation: it creates pristine controller
 state and prints intended actions without submitting jobs. The generated
 definition is bounded to one four-node chain, two one-hour segments, one model
-slot, one CPU slot, and six attempts. The extra attempt budget accommodates
-genuine scheduler pre-emption in addition to the drill's two controlled
-cancellations. It uses `preemptible` for HICAR and `pp-short` for bounded
-forcing/post-processing.
+slot, and one CPU slot. Retryable scheduler interruptions have no fixed
+attempt limit (`max_model_attempts=0`); application or validation failures
+still block immediately. It uses `preemptible` for HICAR and `pp-short` for
+bounded forcing/post-processing.
 
 Submit the engineering-only target-stack recovery drill against a fresh plan:
 

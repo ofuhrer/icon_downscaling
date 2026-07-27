@@ -48,7 +48,7 @@ def test_definition_is_bounded_and_preemptible_controller_compatible(tmp_path):
     assert payload["policy"]["model_slots"] == 1
     assert payload["policy"]["cpu_slots"] == 1
     assert payload["policy"]["segment_hours"] == 1
-    assert payload["policy"]["max_model_attempts"] == 6
+    assert payload["policy"]["max_model_attempts"] == 0
     assert payload["chains"] == [
         {
             "chain_id": "smoke",

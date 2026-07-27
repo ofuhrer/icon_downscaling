@@ -48,7 +48,8 @@ def validate_campaign(campaign_path: Path) -> dict[str, Any]:
             "real recovery drill requires routine output; scientific "
             "qualification is a separate gate"
         )
-    if int(campaign["policy"].get("max_model_attempts", 0)) < 3:
+    maximum_attempts = int(campaign["policy"].get("max_model_attempts", 0))
+    if maximum_attempts != 0 and maximum_attempts < 3:
         raise ValueError("real recovery drill requires at least three attempts")
     first, second = chains[0]["segments"]
     if first["end"] != second["start"]:

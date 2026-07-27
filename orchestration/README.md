@@ -41,6 +41,10 @@ kill appears on Balfrin as `FAILED` with Slurm exit status `0:9`; `SIGKILL`
 and externally delivered `SIGTERM` are also retryable without requiring a
 signal-time report. `OUT_OF_MEMORY`, `TIMEOUT`, application exit failures,
 scientific failures, and unexplained failures still block the campaign.
+Set `max_model_attempts` to `0` (the default) to keep retrying those explicitly
+retryable scheduler outcomes indefinitely. Pending attempts still count
+against the model-slot and node budgets, so this does not create an unbounded
+Slurm queue.
 
 ## Elastic capacity
 
@@ -118,7 +122,7 @@ Definitions use absolute Balfrin paths:
     "model_slots": 11,
     "cpu_slots": 2,
     "prefetch_segments_per_chain": 1,
-    "max_model_attempts": 5,
+    "max_model_attempts": 0,
     "max_cpu_attempts": 3,
     "rolling_retirement": true,
     "preserve_restart_every_segments": 30,

@@ -362,6 +362,30 @@ def test_preempted_model_retries_in_a_new_attempt_and_publishes_exact_union(tmp_
     assert payload["chains"][0]["output_count"] == 2
 
 
+def test_unlimited_scheduler_retries_remain_one_pending_attempt(tmp_path):
+    campaign_path = make_campaign(tmp_path)
+    campaign = json.loads(campaign_path.read_text())
+    campaign["policy"]["max_model_attempts"] = 0
+    campaign_path.write_text(json.dumps(campaign))
+    scheduler = FakeSlurm()
+
+    for sequence in range(7):
+        state, _actions = reconcile(campaign_path, scheduler)
+        attempts = state["chains"]["chain-0"]["segments"][0]["attempts"]
+        assert len(attempts) == sequence + 1
+        assert MODULE.job_ids(state) == [attempts[-1]["job_id"]]
+        scheduler.records[attempts[-1]["job_id"]] = {
+            "state": "PREEMPTED",
+            "exit_code": "0:15",
+        }
+
+    state, _actions = reconcile(campaign_path, scheduler)
+    attempts = state["chains"]["chain-0"]["segments"][0]["attempts"]
+    assert len(attempts) == 8
+    assert not state["blockers"]
+    assert MODULE.job_ids(state) == [attempts[-1]["job_id"]]
+
+
 def test_model_concurrency_is_bounded_globally_across_chains(tmp_path):
     campaign_path = make_campaign(tmp_path, chain_count=3, model_slots=2)
     scheduler = FakeSlurm()

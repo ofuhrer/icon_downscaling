@@ -163,7 +163,7 @@ def definition_payload(
             "model_slots": 1,
             "cpu_slots": 1,
             "prefetch_segments_per_chain": 1,
-            "max_model_attempts": 6,
+            "max_model_attempts": 0,
             "max_cpu_attempts": 3,
             "rolling_retirement": True,
             "preserve_restart_every_segments": 0,

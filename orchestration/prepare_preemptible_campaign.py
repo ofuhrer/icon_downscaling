@@ -282,7 +282,7 @@ def build_campaign(
             "prefetch_segments_per_chain": int(
                 policy.get("prefetch_segments_per_chain", 1)
             ),
-            "max_model_attempts": int(policy.get("max_model_attempts", 5)),
+            "max_model_attempts": int(policy.get("max_model_attempts", 0)),
             "max_cpu_attempts": int(policy.get("max_cpu_attempts", 3)),
             "lease_seconds": int(policy.get("lease_seconds", 300)),
             "rolling_retirement": rolling_retirement,
@@ -294,8 +294,10 @@ def build_campaign(
             ),
         }
     )
-    if policy["max_model_attempts"] < 1 or policy["max_cpu_attempts"] < 1:
-        raise ValueError("retry limits must be positive")
+    if policy["max_model_attempts"] < 0 or policy["max_cpu_attempts"] < 1:
+        raise ValueError(
+            "model retry limit must be non-negative and CPU retry limit positive"
+        )
     if policy["prefetch_segments_per_chain"] < 0:
         raise ValueError("prefetch_segments_per_chain must be non-negative")
     if policy["lease_seconds"] < 60:

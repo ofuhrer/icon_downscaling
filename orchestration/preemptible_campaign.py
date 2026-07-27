@@ -886,7 +886,9 @@ def refresh_model_attempts(
             classification = classify_attempt_terminal(attempt, record)
             previous_status = attempt["status"]
             attempt["status"] = classification
-            if classification == "RETRYABLE" and len(runtime["attempts"]) < maximum:
+            if classification == "RETRYABLE" and (
+                maximum == 0 or len(runtime["attempts"]) < maximum
+            ):
                 runtime["status"] = "READY_TO_RETRY"
                 if previous_status != "RETRYABLE":
                     event(
