@@ -358,11 +358,35 @@ It is non-promoting legacy evidence, not an active source branch.
   The generated two-hour, one-chain plan has SHA-256
   `d9b548ddef3d7a62c4ed5520aea8fffa77ee7889ba14180ecebe8046ee4c911c`.
   Dry reconciliation selected one bounded three-record CPU array followed by
-  a four-node `preemptible` model attempt; no Slurm job was submitted and the
-  queue was empty afterward. This establishes reproducible launch planning,
-  not HICAR cancellation recovery or scientific authorization. A real bounded
-  HICAR/srun hard-kill/restart drill remains required before describing model
-  recovery as target-stack qualified.
+  a four-node `preemptible` model attempt; no Slurm job was submitted.
+
+  Coordinator `243da04846fdad20c3665837664e5aaefdf0f6ee` now contains the
+  repaired target-stack qualification path. It adds exact predecessor restart
+  provenance to model completion, campaign-specific multi-chain
+  authorization, report readiness for compressed output, a two-segment real
+  HICAR TERM/KILL recovery driver, and unlimited-by-default retries only for
+  explicitly retryable scheduler outcomes. Pending attempts continue to count
+  against the global model-slot/node budget, so the controller keeps bounded
+  work eligible for immediate Slurm dispatch without building an unbounded
+  queue. Development on `main` remains mutable; the read-only runtime is only
+  a per-campaign execution snapshot.
+
+  Balfrin supplied real daytime pre-emption evidence during the engineering
+  runs: jobs `4951991`, `4952023`, `4952291`, and `4952336` exited through the
+  signal wrapper with retry code `75`, new immutable attempts were submitted,
+  and job `4952375` later completed and published a validated national
+  one-hour checkpoint. Those runs also exposed and preserved failed evidence
+  for an over-scoped scientific-output gate, a missing compression-report
+  ready marker, and `scancel --full` bypassing wrapper publication; each issue
+  was corrected rather than waived.
+
+  The final clean non-promoting qualification uses production-purpose runtime
+  `/scratch/mch/olifu/icon_hicar/onboarding/runtime/coordinator-243da04-v1`
+  and controller job `4952480`. It is currently preparing forcing on
+  `pp-short` before the real two-segment HICAR TERM/KILL/restart check. Until
+  its `hicar_preemptible_recovery.json.ready` report passes, target-stack
+  recovery remains engineering work in progress. It does not change the
+  separate scientific hold or authorize a first-year campaign.
 - Wind-climatology engineering pathway:
   `case_studies/swiss_200m/wind_climatology/PRODUCT_CONTRACT.md`.
 
