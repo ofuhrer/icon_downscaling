@@ -124,3 +124,16 @@ def test_recovery_qualification_rejects_another_predecessor(tmp_path):
     )
     with pytest.raises(ValueError, match="not bound"):
         MODULE.matching_restart_evidence(predecessor, successor)
+
+
+def test_model_started_accepts_the_real_srun_step(tmp_path, monkeypatch):
+    attempt = {
+        "job_id": "1234",
+        "run_dir": str(tmp_path),
+    }
+
+    class Result:
+        stdout = "1234.0\n1234.batch\n"
+
+    monkeypatch.setattr(MODULE.subprocess, "run", lambda *args, **kwargs: Result())
+    assert MODULE.model_started(attempt)

@@ -99,7 +99,17 @@ def cancel(job_id: str, signal_name: str) -> None:
 
 def model_started(attempt: dict[str, Any]) -> bool:
     model_log = Path(attempt["run_dir"]) / "model.out"
-    return model_log.is_file() and model_log.stat().st_size > 0
+    if model_log.is_file() and model_log.stat().st_size > 0:
+        return True
+    job_id = str(attempt["job_id"])
+    result = subprocess.run(
+        ["squeue", "--steps", f"--jobs={job_id}", "--noheader", "--format=%i"],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    return f"{job_id}.0" in result.stdout.split()
 
 
 def active_job_ids(state: dict[str, Any]) -> list[str]:
