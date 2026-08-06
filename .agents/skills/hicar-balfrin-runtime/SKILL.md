@@ -13,9 +13,10 @@ Use `$balfrin-user-environment` for generic module and partition rules. Keep sou
   `HICAR/` submodule beneath it.
 - Remote: `git@github.com:ofuhrer/HICAR.git`
 - Production engineering branch: `feature/icon_downscaling` at
-  `7700c97a0248abcc1db055ef04c22e1ff9ec6d22`. This is the coordinator
-  submodule pin and contains the qualified V26 restart state plus the
-  selectively validated SCHNAPS fixes.
+  `6bd302f8b97062cd43c1b8d4e59bd3cf0dc8ae07`. This is the coordinator
+  submodule pin and contains the qualified V26 restart state, selectively
+  validated SCHNAPS fixes, fixed-height wind diagnostics, and the restored
+  adjusted horizontal-wind tendency.
 - Qualified bounded restart reference:
   `codex/restart-noahmp-state-v26` at `246c8992`. It contains the
   discretely-adjoint solver/output lineage and the final Noah-MP snow-age
@@ -30,6 +31,12 @@ Use `$balfrin-user-environment` for generic module and partition rules. Keep sou
   coordinator recovery inventory and checksum-bound durable bundles; it is
   not active branch state.
 - Validated transport baseline: `06ba6b54` (`Fix OpenACC halo exchanges`)
+- The production pin has Git tree `6776f68c49f1f82394093058ee5571c8f377775f`,
+  byte-identical to the bounded wind-fix qualification commit `86d6f1dd`.
+  That qualification passes the isolated build, four-GPU halo suite, temporal
+  native/fixed-height wind evolution, and cross-node split/restart gate. Its
+  authoritative report is
+  `/store_new/mch/msopr/olifu/icon_downscaling/qualification/wind-tendency-fix-b514/v1/wind_tendency_fix_qualification.json`.
 
 Read `memory/project-state.md` before submitting model work. While the V29
 warm/dry surface-regime failure is open, do not submit winter, overlap, month,

@@ -71,7 +71,7 @@ def test_loader_publishes_repository_defaults():
     assert result.stdout.splitlines() == [
         "/mch-environment/v8",
         "fdb/5.19:v2",
-        "7700c97a0248abcc1db055ef04c22e1ff9ec6d22",
+        "6bd302f8b97062cd43c1b8d4e59bd3cf0dc8ae07",
     ]
 
 

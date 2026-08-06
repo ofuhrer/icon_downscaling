@@ -222,13 +222,13 @@ make test-all
 ```
 
 They are intentionally not part of public coordinator CI. The production pin
-at `7700c97a` passes the four restart-initialization checks and deliberately
-fails seven metadata/water-diagnostic checks that describe the scientifically
-failed V29 line and other unmerged output work. Do not weaken or xfail that
-explicit integration gate. No production claim follows from the union suite
-until those lines are deliberately integrated and scientifically
-requalified. A local dirty HICAR tree must never be smuggled into the outer
-repository through passing tests.
+at `6bd302f8` passes the four restart-initialization checks and the adjusted
+horizontal-wind advancement contract. It deliberately fails three cumulative-
+water metadata/diagnostic checks that describe the scientifically failed V29
+line. Do not weaken or xfail that explicit integration gate. No production
+claim follows from those V29 contracts until that line is deliberately
+integrated and scientifically requalified. A local dirty HICAR tree must never
+be smuggled into the outer repository through passing tests.
 
 Run the repository-level syntax and whitespace checks with:
 

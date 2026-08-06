@@ -9,6 +9,17 @@ WATER_BUDGET_SOURCE = (
     ROOT / "HICAR" / "src" / "physics" / "water_budget_diagnostics.F90"
 )
 CONSTANTS_SOURCE = ROOT / "HICAR" / "src" / "constants" / "icar_constants.F90"
+DOMAIN_SOURCE = ROOT / "HICAR" / "src" / "objects" / "domain_obj.F90"
+
+
+def test_adjusted_horizontal_wind_tendency_advances_model_state() -> None:
+    source = DOMAIN_SOURCE.read_text()
+    start = source.index("if (is_wind .and. .not.(is_w_real)) then")
+    stop = source.index("else if (.not.(is_wind)) then", start)
+    block = source[start:stop]
+
+    assert "var_data(i,k,j) = var_data(i,k,j) +" in block
+    assert "var_dqdt(i,k,j) * dt" in block
 
 
 def test_lwtr_is_described_as_downwelling_not_net_longwave() -> None:

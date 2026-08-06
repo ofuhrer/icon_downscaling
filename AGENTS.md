@@ -17,7 +17,7 @@ The workflow must cover source-data discovery, structured forcing conversion, st
 - HICAR remote: `git@github.com:ofuhrer/HICAR.git`
 - Production-performance branch: `feature/icon_downscaling`
 - Production HICAR pin:
-  `7700c97a0248abcc1db055ef04c22e1ff9ec6d22`
+  `6bd302f8b97062cd43c1b8d4e59bd3cf0dc8ae07`
 - Primary campaign workflow: checksum-bound short segments managed by
   `orchestration/preemptible_campaign.py`
 - Retired solver-research source: checksum-bound bundles and manifests under
