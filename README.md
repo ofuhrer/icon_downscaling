@@ -1,21 +1,26 @@
 # ICON-to-HICAR Alpine downscaling
 
-Reproducible tools and qualified case studies for dynamically downscaling
+Research tools, experiments, and validated engineering foundations for dynamically downscaling
 MeteoSwiss ICON output from roughly 1 km to 100--250 m with
 [HICAR](https://github.com/HICAR-Model/HICAR) over Alpine domains.
 
 > [!IMPORTANT]
-> This is a research and qualification workflow, not an operational forecast
-> service. The Switzerland-wide 200 m workflow is the current engineering
-> baseline; scientific and long-duration promotion gates are still active.
-> The 100 m workflow remains conditional on its capacity and physical-quality
-> gates.
+> The project is in **scientific R&D / strategy-discovery mode**, not
+> production qualification. The target application is 20 years of 100--200 m
+> downscaling over Switzerland, initially focused on wind. Current work asks
+> which downscaling method is scientifically defensible; existing workflow
+> machinery is reusable infrastructure, not a required path or a commitment to
+> the present implementation.
+>
+> [`AGENTS.md`](AGENTS.md) is the authoritative operating guidance;
+> [`memory/project-assessment.md`](memory/project-assessment.md) contains the
+> current scientific synthesis and next question.
 
-The supported operator path is for authorized MeteoSwiss Balfrin users. Start
-with the [Balfrin quickstart](docs/balfrin-quickstart.md): it checks site
-access, restores the checksum-published static input from `/store_new`, builds
-the pinned production HICAR line, freezes the runtime, and creates a bounded
-pre-emptible campaign plan.
+Authorized MeteoSwiss Balfrin users can use the
+[Balfrin quickstart](docs/balfrin-quickstart.md) when a costly experiment
+benefits from the established, recoverable execution path. Small exploratory
+analyses and cases may use narrower transparent setups while preserving
+scientific validity, cluster safety, and enough provenance to interpret them.
 
 ## What this repository provides
 
@@ -28,10 +33,10 @@ flowchart LR
     B --> C["fieldextra structured regridding"]
     C --> D["Validated HICAR forcing"]
     E["Public land data + ICON terrain"] --> F["Static HICAR domain"]
-    D --> G["Pinned HICAR run"]
+    D --> G["Controlled HICAR experiment"]
     F --> G
     G --> H["Physical, numerical, and output validation"]
-    H --> I["Qualified case manifest"]
+    H --> I["Scientific conclusion and next experiment"]
 ```
 
 It includes:
@@ -40,7 +45,7 @@ It includes:
 - static-domain generation from public land data with boundary-topography
   relaxation;
 - HICAR namelist rendering and Balfrin Slurm launchers;
-- streaming forcing, restart, and ready-marker publication contracts;
+- optional streaming forcing, restart, and ready-marker infrastructure;
 - solver, geometry, physical-budget, observational, and output validators;
 - reproducible Alpine, Switzerland 200 m, and planned Switzerland 100 m case
   studies;
@@ -64,7 +69,8 @@ validation reports are.
 | `externals/` | Locked metadata for optional external source references |
 | `fieldextra/` | Optional private fieldextra checkout, ignored by the outer repository |
 | `.agents/skills/` | Durable project procedures for source, forcing, domain, configuration, and runtime work |
-| `memory/project-state.md` | Current validated milestones, blockers, and canonical artifacts |
+| `memory/project-assessment.md` | Current synthesis, ranked goals, and next step |
+| `memory/project-state.md` | Legacy evidence ledger and canonical artifact locators |
 | `docs/architecture.md` | Design boundaries, data lifecycle, and extension rules |
 | `docs/disaster-recovery.md` | Deletion gate and clean-room rebuild procedure |
 
@@ -109,47 +115,12 @@ checked by `make balfrin-preflight` and documented in the
 [Balfrin quickstart](docs/balfrin-quickstart.md); they are not reproduced by
 the local Python environment.
 
-## Follow the workflow
-
-1. **Choose a domain.** Start with
-   [`case_studies/swiss_200m/README.md`](case_studies/swiss_200m/README.md)
-   for the national engineering baseline or
-   [`case_studies/swiss_100m/README.md`](case_studies/swiss_100m/README.md)
-   for the gated high-resolution plan.
-2. **Discover source data.** Use the case extraction scripts and the
-   `icon-balfrin-grib` procedure to resolve cycles, steps, geometry, and
-   message counts.
-3. **Build structured forcing.** The main reusable entry point is
-   [`scripts/prepare_icon_inputs.sh`](scripts/prepare_icon_inputs.sh).
-   Case-specific REA-L streaming stages live beside their case.
-4. **Build the static domain.** Use
-   [`scripts/prepare_static_inputs.py`](scripts/prepare_static_inputs.py)
-   directly or a case `prepare_static_domain.sh` wrapper.
-5. **Render and run HICAR.** Render only after the static and forcing products
-   have passed validation and acquired ready markers. Run a small
-   representative case before increasing duration, area, resolution, or node
-   count.
-6. **Validate before promotion.** Numerical convergence, geometry, source
-   identity, output schema, physical budgets, restart continuity, and
-   observational comparisons are independent gates. A fast or technically
-   complete run is not by itself a scientifically qualified run.
-
-Ready markers are publication guarantees: write to a temporary path, validate
-the finished product, atomically rename it, and create `<file>.ready` last.
-
-Legacy long Slurm chains use fixed run directories and must not be described
-as pre-emption-safe. The primary short-slice controller uses immutable
-attempts, signal-aware failure classification, external retry state, and
-globally bounded model/CPU pools. Its operating contract and current
-non-destructive lifecycle boundary are documented in
-[`orchestration/README.md`](orchestration/README.md).
-
 ## External source policy
 
 HICAR and fieldextra remain independent projects with independent histories:
 
-- `HICAR/` pins the exact production fork revision used by this workflow.
-  The production branch is `feature/icon_downscaling`; qualified and failed
+- `HICAR/` records the exact HICAR revision selected by the coordinator.
+  The validated engineering branch is `feature/icon_downscaling`; qualified and failed
   scientific evidence branches remain separate and must not be selected by
   default. HICAR changes
   are developed, tested, committed, and pushed in that repository before the
@@ -173,14 +144,18 @@ sed -n '1,80p' externals/fieldextra.lock
 ## Data and reproducibility
 
 Large inputs and products belong in campaign scratch storage, normally below
-`$SCRATCH/icon_hicar` on Balfrin. Every publishable case should retain:
+`$SCRATCH/icon_hicar` on Balfrin. An interpretable R&D result normally retains:
 
-- exact source paths, cycles, steps, and field selections;
-- external source commits and executable checksums;
-- domain and forcing configuration;
-- checksums for immutable inputs and outputs;
-- validation results and acceptance thresholds;
-- an atomic ready marker only after successful validation.
+- source commit and executed case;
+- the relevant configuration and input differences;
+- the key outputs or compact derived evidence;
+- checksums or ready markers only where exact identity or concurrent use makes
+  them material.
+
+Production releases will require stronger provenance, archival, validation,
+and recovery contracts after the scientific strategy converges. Do not rerun
+a scientifically valid experiment merely to repair bookkeeping or packaging
+that cannot affect its interpretation.
 
 Do not commit credentials, access tokens, archive payloads, local build trees,
 or model data. See [the architecture guide](docs/architecture.md) for the
@@ -221,14 +196,14 @@ make test-hicar-contract
 make test-all
 ```
 
-They are intentionally not part of public coordinator CI. The production pin
-at `7700c97a` passes the four restart-initialization checks and deliberately
-fails seven metadata/water-diagnostic checks that describe the scientifically
-failed V29 line and other unmerged output work. Do not weaken or xfail that
-explicit integration gate. No production claim follows from the union suite
-until those lines are deliberately integrated and scientifically
-requalified. A local dirty HICAR tree must never be smuggled into the outer
-repository through passing tests.
+They are intentionally not part of public coordinator CI. The current experimental baseline
+at `6bd302f8` passes the four restart-initialization checks and the adjusted
+horizontal-wind advancement contract. It deliberately fails three cumulative-
+water metadata/diagnostic checks that describe the scientifically failed V29
+line. Do not weaken or xfail that explicit integration gate. No production
+claim follows from those V29 contracts until that line is deliberately
+integrated and scientifically requalified. A local dirty HICAR tree must never
+be smuggled into the outer repository through passing tests.
 
 Run the repository-level syntax and whitespace checks with:
 
@@ -237,7 +212,8 @@ make check
 ```
 
 Before changing an operational path, read `AGENTS.md`,
-`memory/project-state.md`, and the smallest matching project skill. See
+`memory/project-assessment.md`, and the smallest matching project skill. Use
+`memory/project-state.md` only for relevant historical evidence. See
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for change ownership and validation
 expectations.
 

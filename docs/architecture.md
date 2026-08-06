@@ -2,14 +2,14 @@
 
 ## Design goals
 
-The coordinating repository must make a scientifically qualified run
+The coordinating repository must make scientifically useful runs
 reproducible without turning Git into a data archive or merging independent
 upstream projects into one history. The design therefore separates:
 
 1. reusable workflow logic;
 2. case-specific execution contracts;
 3. independently versioned external source;
-4. small, reviewable qualification evidence; and
+4. small, reviewable scientific and engineering evidence; and
 5. large campaign data stored outside Git.
 
 The current paths are stable interfaces. Many Slurm jobs, manifests, and
@@ -79,12 +79,14 @@ advance the outer gitlink in a separate, reviewable change.
 
 `AGENTS.md` routes maintainers and automated collaborators to the correct
 procedure. `.agents/skills/` records durable schemas, invariants, and cluster
-procedures. `memory/project-state.md` records only current milestones,
-validated artifacts, blockers, and next gates.
+procedures. `memory/project-assessment.md` records the current synthesis,
+ranked goals, and reassessment triggers. `memory/project-state.md` is the
+legacy evidence ledger while older facts are moved into case manifests.
 
 Do not add chronological command diaries. Reusable knowledge belongs in a
-skill; mutable project status belongs in project state; reproducible run
-details belong in a case manifest.
+skill; current scientific understanding belongs in the assessment; legacy
+locators belong in the state ledger; reproducible run details belong in a case
+manifest.
 
 ## Data lifecycle
 
@@ -242,6 +244,6 @@ checkout through:
 5. a bounded two-hour, one-chain campaign definition; and
 6. dry reconciliation before any Slurm submission.
 
-The quickstart cannot construct a production authorization. Scientific and
-long-duration promotion remain fail-closed even when all engineering
-onboarding checks pass.
+The quickstart proves engineering readiness only. It does not by itself answer
+whether a longer scientific run is the next most informative use of compute;
+that decision comes from the current project assessment.

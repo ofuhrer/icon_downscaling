@@ -1,12 +1,17 @@
-# Switzerland 200 m production-candidate case
+# Switzerland 200 m engineering foundation and R&D case
 
-This case is the national engineering baseline for dynamically downscaling
+This case is the validated national engineering foundation for dynamically downscaling
 ICON REA-L-CH1 with HICAR.  It uses the discretely adjoint variational-wind
 projection, 80 vertical levels, a 12 km model top, SLEVE decay 2/6, and the
 validated HICAR terrain split (window 5, 10 cycles).
 
-The current qualification target is a six-hour run from seven continuous,
-hourly forcing records.  It is accepted only when all of the following pass:
+The project is currently selecting a scientific strategy. Reuse this setup
+when it isolates the question of interest, but do not treat its qualification
+workflow, configuration, or planned escalation ladder as a prerequisite for
+exploratory bridge cases or as evidence that the final method has been chosen.
+
+The completed six-hour engineering test used seven continuous hourly forcing
+records. It established the following reusable numerical and capacity facts:
 
 - constructed-grid geometry: mass Jacobian at least 0.1 and interface
   thickness at least 5 m;
@@ -50,10 +55,9 @@ diagnostics, and comparisons with independent observations remain necessary.
 The 100 m resource figures in the qualification manifest remain estimates
 until an actual constructed 100 m geometry and bounded capacity run pass.
 
-The next scientific gate is defined in
+The older production-qualification ladder is recorded in
 [`config/scientific_pilot_plan.json`](config/scientific_pilot_plan.json).
-It starts from a published REA-L-derived skin/soil/snow initialization, uses
-the bounded `qualification` output profile, and escalates from summer and
-winter events to a month and then an annual seasonal cycle. A passing
-initialization converter or two-hour smoke test does not authorize the
-20-year campaign by itself.
+It is deferred reference material, not the current work queue. During R&D,
+select event, duration, domain, outputs, and initialization to distinguish the
+active hypotheses. Month, annual, archive, and promotion work resumes only
+after the downscaling strategy is scientifically convincing.

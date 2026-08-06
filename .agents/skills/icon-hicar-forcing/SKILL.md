@@ -8,6 +8,12 @@ description: Prepare, package, inspect, or validate structured NetCDF forcing fo
 Work from the current coordinator checkout; run data-heavy steps on Balfrin
 under `$SCRATCH/icon_hicar`.
 
+Preserve forcing schema, vertical coordinates, time alignment, coverage,
+finite values, and source identity because they directly affect scientific
+interpretation. Ready markers, immutable chunk plans, exhaustive checksums,
+and publication reports are needed only for concurrent/shared streams or
+costly runs that require recoverability.
+
 ## Workflow
 
 1. Select ICON dynamic and static files with `$icon-balfrin-grib`. Prefer full-column operational `lfff` or `lffm` files; use the matching `lfff00000000c` for geometry.
@@ -24,8 +30,11 @@ under `$SCRATCH/icon_hicar`.
      --load-balfrin-modules
    ```
 
-5. Validate schema, vertical order, coordinates, coverage, finite values, and the `.ready` marker before adding the file to a forcing list.
-6. Generate all forcing times before long runs, or list planned paths up front and enable HICAR ready-file waiting for streaming production.
+5. Validate schema, vertical order, coordinates, coverage, finite values, and
+   time identity before using the file. Require a `.ready` marker only when a
+   producer and consumer can overlap or the artifact is shared.
+6. Generate all forcing times before a small run, or list planned paths up
+   front and enable HICAR ready-file waiting for a streaming experiment.
 
 ## Conversion rules
 
@@ -36,7 +45,9 @@ under `$SCRATCH/icon_hicar`.
 - Reverse ICON/fieldextra top-to-bottom full and half levels into HICAR bottom-to-top order.
 - Remove singleton ensemble dimensions and stale vertical/cell-method metadata.
 - Keep winds earth-relative unless a verified vector-rotation step says otherwise.
-- Write NetCDF4. Create `<file>.ready` only after the final file is complete and validated; remove stale markers before rewriting.
+- Write NetCDF4. When a ready marker is needed, create `<file>.ready` only
+  after the final file is complete and validated; remove stale markers before
+  rewriting.
 - For REA-L-CH1, package hourly cycle-plus-step records with
   `inputinterval=3600`: geometry comes from step 0, while atmospheric fields
   and `W` come from the requested step. Record both cycle and step in the case
@@ -45,7 +56,7 @@ under `$SCRATCH/icon_hicar`.
   valid UTC hour, use that date's cycle and `step=hour`; at midnight use the
   new cycle's step 0, never the previous cycle's step 24. The two midnight
   representations are close but not byte-identical.
-- For long production, use an immutable chunk plan plus a bounded CPU array.
+- For long or costly experiments, use an immutable chunk plan plus a bounded CPU array.
   Each worker should narrowly read one atmospheric record from FDB, reuse a
   once-per-cycle `HHL/HSURF/FR_LAND` cache, regrid, validate, atomically
   publish NetCDF plus hashes, and remove native GRIB/work data. Never retain
@@ -80,9 +91,9 @@ under `$SCRATCH/icon_hicar`.
   `soil_temperature`, `soil_vwc`, `swe`, and `snow_height`; enable the
   namelist `swe_var` and `snowh_var` only for this qualified product.
 
-## Validation gate
+## Scientific trust checks
 
-Reject forcing when any of these fail:
+Do not interpret a model experiment when any relevant item below fails:
 
 - required variables or dimensions are absent;
 - `z_hl = z + 1` is false;

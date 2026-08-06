@@ -1,31 +1,17 @@
-# ICON-to-HICAR project state
+# ICON-to-HICAR legacy evidence ledger
 
-## Objective
+> [!NOTE]
+> This file preserves historical evidence and canonical locators, including
+> older transactional language. It does not define the current project mode,
+> scientific synthesis, priorities, or next experiment; those live in
+> [`AGENTS.md`](../AGENTS.md) and
+> [`project-assessment.md`](project-assessment.md). A PASS, hold, gate,
+> promotion, authorization, or use of words such as “current” and “active”
+> below must be read in its historical context, not as a standing work queue.
 
-Build a reproducible, scientifically defensible workflow to downscale the
-20-year ICON REA-L-CH1 reanalysis from about 1 km to 200 m over Switzerland
-with HICAR, with 100 m as a later application-specific option. Production must
-stream forcing and compact products without retaining a 20-year raw-output
-cache.
+## Historical evidence
 
-## Current verdict
-
-**Stop at the completed V29 72-hour summer gate. The project is not ready for
-a month, annual cycle, 20-year 200 m production, or 100 m science.**
-
-HICAR commit `5da4b1980497f20468e6e4b5b4c4a584849c3454` was tested as a
-scientifically new baseline because adding restart-persistent cumulative water
-diagnostics is not trajectory-neutral on the national GPU configuration. The
-model and all engineering gates passed, but both independent frozen
-temperature screens failed with a broad warm bias.
-
-Do not launch the prepared winter event, restart overlap, month, annual,
-20-year, or 100 m simulations. Do not relax the temperature thresholds after
-seeing the result. The next agent should use the preserved summer history for
-a bounded process diagnosis and propose a mechanism-based correction before
-rerunning seasonal events.
-
-## Current scientific problem
+## Historical V29 scientific problem
 
 The 2020-07-01 00 UTC through 2020-07-04 00 UTC V29 event completed cleanly
 with 25 three-hourly records.
@@ -401,7 +387,7 @@ It is non-promoting legacy evidence, not an active source branch.
 - Wind-climatology engineering pathway:
   `case_studies/swiss_200m/wind_climatology/PRODUCT_CONTRACT.md`.
 
-## Production authorization
+## Historical production authorization state (deferred)
 
 All of the following remain false:
 
@@ -419,7 +405,7 @@ canonical-plan preparer are fail-closed planning tools only.
 No month-long simulation should be submitted while the warm-bias problem is
 open.
 
-## Next bounded goal
+## Historical bounded goal (superseded by project-assessment.md)
 
 Diagnose the V29 warm/dry surface regime from the archived 72-hour history,
 without new national model compute.
