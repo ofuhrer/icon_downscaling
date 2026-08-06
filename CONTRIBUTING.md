@@ -1,11 +1,13 @@
 # Contributing
 
-This repository controls scientific workflow and promotion decisions, so a
-change is complete only when its affected contract has been validated.
+This repository exists to produce a scientifically useful downscaling
+capability. A change is complete when it makes the intended behavior work and
+provides evidence proportionate to its risk.
 
 ## Before editing
 
-1. Read `AGENTS.md` and `memory/project-state.md`.
+1. Read `AGENTS.md` and `memory/project-assessment.md`; consult the legacy
+   state ledger only for evidence relevant to the selected goal.
 2. Select the smallest relevant procedure from `.agents/skills/`.
 3. Check both the outer worktree and the affected external submodule for
    unrelated changes.
@@ -17,7 +19,7 @@ development.
 ## Change boundaries
 
 - Reusable multi-case logic belongs in `scripts/`.
-- Case-specific configuration, launchers, and scientific gates stay in their
+- Case-specific configuration, launchers, and scientific validators stay in their
   case directory.
 - HICAR changes belong in the HICAR repository. Commit and push them there
   before updating the outer submodule pointer.
@@ -43,23 +45,29 @@ When a change depends on active HICAR source development, also run:
 make test-hicar-contract
 ```
 
-The source-contract tests may lead the pinned production HICAR revision during
+The source-contract tests may lead the coordinator's recorded HICAR revision during
 development. Do not advance the public gitlink merely to make them pass: the
-matching HICAR commit must first be pushed and complete its own qualification.
+matching HICAR commit must first be pushed and complete the validation needed
+for its intended use.
 
-Then run the smallest relevant scientific or target-stack regression:
+Then run the smallest relevant regression needed to trust the change. The
+following are risk-based examples, not a fixed promotion ladder:
 
 - forcing changes: schema, level order, source identity, and coverage;
 - domain changes: static schema, forcing coverage, boundary relaxation, and
   constructed vertical geometry;
-- configuration changes: representative short run plus numerical and physical
-  gates;
+- configuration changes: representative short run plus relevant numerical and
+  physical evidence;
 - runtime changes: local tests followed by the relevant Balfrin CPU/GPU,
   transport, output, and benchmark gates;
-- promotion changes: focused negative fixtures proving the gate fails closed.
+- guardrail changes: focused negative fixtures proving the material risk still
+  fails safely.
 
-Document validated source paths, commits, options, checksums, and results in a
-case manifest. Record only future-relevant milestone changes in project state.
+Record provenance proportionate to the inference or engineering risk. Shared,
+costly, or production-candidate artifacts normally need a case manifest and
+checksums; a small exploratory change may need only its source revision,
+configuration delta, case, and key evidence. Update the assessment only when
+the evidence changes current scientific understanding or the next question.
 
 ## Commits and reviews
 

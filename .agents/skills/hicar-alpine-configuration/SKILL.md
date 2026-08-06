@@ -5,17 +5,14 @@ description: Choose and validate HICAR namelist, vertical-grid, terrain-coordina
 
 # HICAR Alpine configuration
 
-Treat configuration as an experiment hierarchy: prove numerical stability and physical plausibility on a small representative Alpine domain before increasing area or reducing `dx`.
+Treat every configuration choice as a hypothesis: change one parameter family
+at a time, retain an appropriate control, and analyze the causal contrast
+before scaling.
 
-The general qualification ladder below is fail-closed. Always read
-`memory/project-state.md` before advancing it. The current V29 national
-72-hour summer event failed its frozen temperature screens with a broad warm,
-dry surface regime; therefore winter, restart-overlap, month, annual,
-20-year, and 100 m science runs are not currently permitted.
+## Established experimental baseline
 
-## Current production-candidate baseline
-
-For 250 m wind-focused Alpine downscaling, use this as the current production-candidate default:
+For 200--250 m wind-focused Alpine experiments, use this as the best-supported
+starting point unless the experiment deliberately tests one of its choices:
 
 ```text
 auto_level = 1
@@ -33,7 +30,9 @@ smooth_wind_distance = 500 m
 RK3 = .True.
 ```
 
-Use `auto_level=1, nz=60, model_top_height=12000 m` as a cheaper fallback when domain size makes 80 levels too expensive. These are tested starting points and the current operational choice for new experiments; they are not a fully production-qualified final configuration until the Switzerland-scale and multi-day validation milestones pass.
+Use `auto_level=1, nz=60, model_top_height=12000 m` as a cheaper fallback when
+80 levels are not needed to answer the question. These are tested starting
+points, not frozen final choices.
 
 For the current Switzerland-scale 200 m case, retain the 80-level baseline.
 The tested 60-level fallback converged worse, and fixed low solver alpha was
@@ -44,8 +43,8 @@ the iteration cap with a reduced residual is not acceptance.
 The six-hour Switzerland 200 m engineering qualification passed with the
 discretely adjoint solver: all solver and conservation gates, two-record
 full-state output validation, and height-aware comparisons against the
-matching REA-L records passed. Treat this as the production-candidate
-engineering baseline. It is not yet a multi-day scientific baseline.
+matching REA-L records passed. Treat this as a validated engineering baseline,
+not a multi-day scientific result or a frozen final configuration.
 
 Keep the published static DEM unchanged and use the validated HICAR
 large-/small-scale terrain split (`terrain_smooth_windowsize=5`,
@@ -73,17 +72,11 @@ baseline, retain the acceptance margins `minimum_mass_jacobian >= 0.1` and
 - Tune vertical grid and model top before solver iterations, diffusion, forcing interpolation, or advection options.
 - Change one parameter family at a time and retain a common forcing/static baseline.
 
-## Validation hierarchy
+## Deferred production qualification reference
 
-1. Run a short debug smoke test and require finite required outputs.
-2. Run at least 1 h release validation and compare against the debug reference within explained optimization tolerances.
-3. Run a 24 h sensitivity case over representative high terrain.
-4. Run the 701 x 701 steep-Alpine bridge; it is a regression, not a proxy for
-   national conditioning.
-5. Run the full national geometry, solver, and conservation gates.
-6. Inspect `w`, `w_grid`, horizontal winds, temperature, humidity, pressure, precipitation, and conservation diagnostics by level and terrain class.
-7. Verify the top level does not control horizontal maxima and that large residual vertical velocities are physically localized.
-8. Only then move from 200-250 m toward 100 m or multi-day production.
+The following 100 m, month, annual, publication, and promotion requirements
+apply when consolidating a scientifically selected strategy. During R&D,
+reuse only the individual checks that are material to the active inference.
 
 For the national 100 m engineering gate, do not reuse a small-domain result
 or a four-cell scaling as evidence. First reproduce the SLEVE geometry from
@@ -104,8 +97,6 @@ restart-write wall upper bound, and validation wall. This gate also requires
 the runner's passing production-provenance block. It qualifies engineering
 capacity only; it does not establish 100 m scientific added value or authorize
 production.
-
-## Long-duration scientific qualification
 
 - Escalate duration as paired 72-hour summer/winter events, then one
   continuous month, then an annual seasonal cycle. A successful event does
