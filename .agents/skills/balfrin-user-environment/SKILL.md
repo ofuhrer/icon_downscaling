@@ -46,6 +46,9 @@ markers when payloads move within that namespace.
 - Non-pre-empting priority-zero overflow: `lowprio`.
 - Short CPU/post-processing: `pp-short`.
 - Longer CPU/post-processing: `pp-long`.
+- Submit only to reviewed partitions whose live `AllowGroups` contains
+  `ALL` or exact group `s83`. Membership in `s83opr`, `s83disp`, or another
+  supplemental group never authorizes a project submission.
 - Do not run CPU-only work on GPU nodes.
 - Do not run compute-intensive work on login nodes.
 - Do not use `balfrin-ln001`; it is reserved for operations.
@@ -71,25 +74,15 @@ Capacity limits are global, not per chain. Against 44 GPU nodes, four-node
 array capped at two active jobs rather than multiplying producers by the
 number of model chains.
 
-Run campaigns only from a checksum-bound immutable runtime release and a
-separately published, read-only Python environment tied uniquely to that
-release. Run `make balfrin-preflight CHECK_FDB=1` from a clean checkout before
-building a first campaign; the ready report must confirm the production HICAR
-pin, shared tools, `preemptible` partition, FDB view, scratch, and
-`/store_new` access. The preflight target must source the selected site record
-before it loads the Python module; after it passes, source
-`scripts/load_balfrin_site_config.sh` in the interactive shell before running
-the remaining onboarding commands. Primary wrappers must load
-`config/balfrin.env` through
-`scripts/load_balfrin_site_config.sh` before module initialization; explicit
-environment values override that shared non-secret record. Keep
-compression and journaled retirement ahead of further prefetch; cap the
-number of completed-but-unretired segments per chain. Retire forcing/raw
-output only after compression and solver publications pass, and retire a
-restart only after its adjacent successor passes. Preserve periodic and final
-checkpoints. The controlled SIGTERM/SIGKILL probe under `orchestration/`
-qualifies scheduler/controller recovery only; its report must remain
-non-promoting and cannot qualify HICAR science.
+For long, expensive, shared, or pre-emptible campaigns, use a checksum-bound
+runtime, a bounded controller, `make balfrin-preflight CHECK_FDB=1`, and the
+published Python environment so failures are recoverable and data lifecycle is
+safe. For a small exploratory job, a recorded source commit, executable path,
+module stack, configuration delta, and case are normally sufficient. In both
+modes, wrappers must load `config/balfrin.env` through
+`scripts/load_balfrin_site_config.sh`, large data stays in scratch, and outputs
+or restarts must not be deleted while a live job or unique scientific result
+depends on them.
 
 ## SSH behavior
 
@@ -116,7 +109,10 @@ user to restore passwordless access; do not invent SSH workarounds.
 
 ## End-of-investigation cleanup
 
-Treat cleanup as a publication workflow, not an ad hoc recursive delete:
+Treat cleanup as a deliberate, recoverable operation, not an ad hoc recursive
+delete. The full archival workflow is appropriate for unique or costly
+evidence; lightweight experiments need only preserve the evidence that changes
+future scientific decisions:
 
 1. List every active/held job with `squeue` and inspect dependencies with
    `scontrol show job`. Cancel obsolete held or dependency-impossible jobs
@@ -140,10 +136,11 @@ Treat cleanup as a publication workflow, not an ad hoc recursive delete:
    experiment clones and build directories only when no live job references
    them.
 6. Re-list jobs, retained paths, Git refs, and durable manifests after
-   deletion. Record counts and retained exceptions in `memory/project-state.md`
-   or a compact cleanup record, not a command transcript.
+   deletion. Record counts and retained exceptions in a compact cleanup record;
+   update `memory/project-assessment.md` only if the cleanup changes current
+   capabilities, priorities, or blockers.
 
-For a failed seasonal gate, preserve its diagnostic history before deleting
-large restart payloads. A passed checkpoint-inventory report is sufficient to
-record what existed; it is not a reason to retain every restart when no
-continuation is authorized.
+For a failed seasonal experiment, preserve the diagnostic evidence needed for
+future decisions before deleting large restart payloads. A passed
+checkpoint-inventory report is sufficient to record what existed; it is not a
+reason to retain every restart when no useful continuation is planned.

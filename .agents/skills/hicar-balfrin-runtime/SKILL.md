@@ -12,9 +12,9 @@ Use `$balfrin-user-environment` for generic module and partition rules. Keep sou
 - Coordinator checkout: the current repository root; HICAR is the pinned
   `HICAR/` submodule beneath it.
 - Remote: `git@github.com:ofuhrer/HICAR.git`
-- Production engineering branch: `feature/icon_downscaling` at
-  `6bd302f8b97062cd43c1b8d4e59bd3cf0dc8ae07`. This is the coordinator
-  submodule pin and contains the qualified V26 restart state, selectively
+- Validated engineering reference: `feature/icon_downscaling` at
+  `6bd302f8b97062cd43c1b8d4e59bd3cf0dc8ae07`. This commit contains the
+  qualified V26 restart state, selectively
   validated SCHNAPS fixes, fixed-height wind diagnostics, and the restored
   adjusted horizontal-wind tendency.
 - Qualified bounded restart reference:
@@ -38,20 +38,21 @@ Use `$balfrin-user-environment` for generic module and partition rules. Keep sou
   authoritative report is
   `/store_new/mch/msopr/olifu/icon_downscaling/qualification/wind-tendency-fix-b514/v1/wind_tendency_fix_qualification.json`.
 
-Read `memory/project-state.md` before submitting model work. While the V29
-warm/dry surface-regime failure is open, do not submit winter, overlap, month,
-annual, 20-year, or 100 m science runs. The next permitted compute is one
-minimal discriminating test derived from the preserved 72-hour diagnosis.
+Read `memory/project-assessment.md` before model work and consult
+`memory/project-state.md` only for historical evidence. Keep the model fully
+coupled unless `wind_only` is explicitly the experimental intervention; do not
+confuse a wind-focused product with a wind-only model. Choose the smallest
+experiment that distinguishes the active hypotheses.
 
 The branch uses legacy `use mpi` for compatibility with Balfrin `cray-mpich-nvhpc/8.1.30`, fixes NVHPC virtual dispatch during variable initialization, and has correct four-GPU halo exchange with both GPU-aware MPI and NCCL.
 
 ## Choose an executable
 
-- CPU production/long run: `HICAR_release`.
+- CPU throughput/long run: `HICAR_release`.
 - CPU diagnosis: `HICAR_debug`.
 - Single-node four-A100 GPU default: OpenACC with `NCCL=OFF` and GPU-aware Cray MPICH.
 - Use `NCCL=ON` only for comparison, multi-node experiments, or targeted NCCL work. On the measured single node, MPI was faster in every halo case.
-- Switzerland-wide multi-node production: OpenACC with `NCCL=ON`, four
+- Switzerland-wide multi-node baseline: OpenACC with `NCCL=ON`, four
   compute ranks plus one CPU-only I/O rank per node, and MPICH GPU support
   disabled uniformly. The executable transport and launcher contract must
   match.
@@ -188,13 +189,12 @@ about 677 MB each; their exact four-sample merge was 682.7 MB. Treat these as
 engineering throughput/storage measurements, not observational or
 climatological qualification.
 
-The primary REA-L campaign path is `orchestration/preemptible_campaign.py`,
-using immutable attempts on `preemptible`. Keep each restart-linked segment
-at no more than 24 simulation hours and each model request at no more than six
-wall-clock hours. The earlier seven-day estimate (about 10.64 wall hours at
-200 m on four nodes, and 21.29 hours at 100 m on 16 nodes) is retained only as
-capacity evidence for the legacy `normal` workflow; a seven-day job is not
-pre-emption-safe and is not the production default.
+For costly, long, or interruption-prone REA-L experiments,
+`orchestration/preemptible_campaign.py` provides bounded immutable attempts on
+`preemptible`. Keep each restart-linked segment at no more than 24 simulation
+hours and each model request at no more than six wall-clock hours. Small debug
+or bridge experiments may use a simpler explicit Slurm script on `debug` or
+`short` when restart recovery and streaming lifecycle are irrelevant.
 
 Use one sequential chain per restart trajectory and let the external
 controller retry a fresh immutable attempt from the last validator-published
@@ -228,16 +228,20 @@ forcing the static 80-level `z` field into every history file and permit a
 valid zero-count 3-D output buffer. Validate that routine files contain the
 requested 2-D diagnostics plus lat/lon/time and do not contain `z`.
 
-## Validation sequence
+## Runtime confidence sequence
 
-1. Configure and build `HICAR` and `HICAR-tester` explicitly.
-2. Run `HICAR-tester -v halo_exch` on four ranks with the production GPU mapping.
-3. Run a 5-minute debug/readiness smoke case.
-4. Run a 1-hour release case and inspect timers plus physical output.
-5. Compare CPU/GPU or transport variants with identical inputs, placement, warm-up, and synchronization boundaries.
-6. Scale duration/domain only after correctness and physicality pass.
+Use the smallest subset that controls a real risk for the experiment. A new
+source or transport change normally needs the halo test and a smoke case;
+configuration-only A/B work on an already validated executable normally does
+not. Compare implementation variants with identical inputs, placement,
+warm-up, and synchronization boundaries, and scale only when the current case
+cannot resolve the scientific question.
 
-## Ready-file execution
+## Ready-file execution when producers and consumers overlap
+
+Ready markers are required for concurrent or shared data streams. They are not
+an R&D approval token and are unnecessary for a private intermediate written
+and read sequentially by one experiment.
 
 - Set `wait_for_ready_file=.True.` independently in `&domain` and `&forcing` when producers may still be writing.
 - List all planned forcing paths before launch.

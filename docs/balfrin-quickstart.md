@@ -1,7 +1,7 @@
 # Balfrin quickstart
 
-This is the supported path from a clean checkout to a planned, bounded
-ICON REA-L-CH1 to HICAR qualification attempt. It is intended for an
+This is the supported engineering path from a clean checkout to a planned,
+bounded ICON REA-L-CH1 to HICAR run. It is intended for an
 authorized MeteoSwiss Balfrin user with access to the REA-L-CH1 FDB,
 the shared operational fieldextra installation, and the project directory
 below `/store_new/mch/msopr/olifu/icon_downscaling`.
@@ -11,12 +11,10 @@ long Slurm chains remain useful as qualification evidence, but they are not
 the recommended campaign interface.
 
 > [!IMPORTANT]
-> The repository currently carries a scientific hold after the V29 summer
-> temperature screen. The commands below may be used through campaign
-> planning and dry reconciliation. Do not submit the model watcher until
-> `memory/project-state.md` explicitly authorizes the bounded run. A
-> qualification definition never authorizes a month, annual, 20-year, or
-> 100 m campaign.
+> This path is optional during R&D. Use it when the experiment selected in
+> `memory/project-assessment.md` benefits from recoverable campaign machinery;
+> it is not a prerequisite for a smaller transparent experiment and is not a
+> reason to scale to a month, 20 years, or 100 m.
 
 ## 1. Clone and check access
 
@@ -36,7 +34,7 @@ module use "$USER_ENV_ROOT/modules"
 module load python/3.11.7
 ```
 
-The preflight checks the pinned production HICAR commit, required Slurm
+The preflight checks the declared HICAR commit, required Slurm
 commands, the `preemptible` partition, the module tree, FDB metadata,
 fieldextra resources, the ICON grid, writable scratch, and writable durable
 storage. It publishes
@@ -81,9 +79,9 @@ copies atomically, and publishes both `$STATIC.ready` and a restore report.
 Routine forcing and output caches are regenerated; they are not recovery
 artifacts.
 
-## 3. Build the production HICAR pin
+## 3. Build the validated HICAR baseline
 
-The coordinator pins one engineering production line:
+The coordinator submodule currently records this validated engineering line:
 `feature/icon_downscaling` at
 `6bd302f8b97062cd43c1b8d4e59bd3cf0dc8ae07`. This tip contains the qualified
 V26 restart state, selectively validated SCHNAPS fixes, fixed-height wind
@@ -182,10 +180,10 @@ bounded to one four-node chain, one two-hour segment, one model slot, one CPU
 slot, and three attempts. It uses `preemptible` for HICAR and `pp-short` for
 bounded forcing/post-processing.
 
-## 6. Launch only when the scientific state authorizes it
+## 6. Launch the smallest experiment selected by the assessment
 
-After reviewing the plan and current project state, the actual submission
-command is:
+After confirming that the plan is the shortest safe path to the current goal,
+the actual submission command is:
 
 ```bash
 sbatch --no-requeue \
@@ -213,4 +211,4 @@ Pause all new submissions before an intentional cancellation:
 ```
 
 See `orchestration/README.md` for recovery semantics, lifecycle retirement,
-multi-chain authorization, and production gates.
+multi-chain execution, and resource controls.
