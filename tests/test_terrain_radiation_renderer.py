@@ -37,7 +37,9 @@ def _static(path: Path, audited: bool) -> None:
     Path(f"{path}.ready").touch()
 
 
-def _render(tmp_path: Path, static: Path) -> subprocess.CompletedProcess[str]:
+def _render(
+    tmp_path: Path, static: Path, *, sparse_lbc: bool = False
+) -> subprocess.CompletedProcess[str]:
     forcing = []
     for half_hour in range(7):
         path = tmp_path / f"forcing_{half_hour}.nc"
@@ -46,8 +48,7 @@ def _render(tmp_path: Path, static: Path) -> subprocess.CompletedProcess[str]:
     forcing_list = tmp_path / "forcing.txt"
     forcing_list.write_text("".join(f'"{path}"\n' for path in forcing))
     Path(f"{forcing_list}.ready").touch()
-    return subprocess.run(
-        [
+    arguments = [
             sys.executable,
             str(RENDERER),
             "--static-file", str(static),
@@ -62,7 +63,25 @@ def _render(tmp_path: Path, static: Path) -> subprocess.CompletedProcess[str]:
             "--output-dir", str(tmp_path / "output"),
             "--restart-dir", str(tmp_path / "restart"),
             "--output", str(tmp_path / "input.nml"),
-        ],
+        ]
+    if sparse_lbc:
+        sparse = []
+        for half_hour in range(7):
+            path = tmp_path / f"lbc_{half_hour}.nc"
+            with netCDF4.Dataset(path, "w") as dataset:
+                dataset.product_type = "hicar_lateral_boundary_state"
+                minute = 30 + 30 * half_hour
+                dataset.valid_time = (
+                    np.datetime64("2020-07-20T06:00") + np.timedelta64(minute, "m")
+                ).astype("datetime64[s]").astype(str) + "Z"
+            Path(f"{path}.ready").touch()
+            sparse.append(path)
+        sparse_list = tmp_path / "sparse.txt"
+        sparse_list.write_text("".join(f'"{path}"\n' for path in sparse))
+        Path(f"{sparse_list}.ready").touch()
+        arguments.extend(("--sparse-lbc-file-list", str(sparse_list)))
+    return subprocess.run(
+        arguments,
         text=True,
         capture_output=True,
     )
@@ -91,3 +110,12 @@ def test_renderer_rejects_unaudited_terrain_geometry(tmp_path: Path) -> None:
     result = _render(tmp_path, static)
     assert result.returncode != 0
     assert "terrain-radiation static lacks audited attributes" in result.stderr
+
+
+def test_renderer_adds_matching_sparse_lbc_sequence(tmp_path: Path) -> None:
+    static = tmp_path / "static.nc"
+    _static(static, audited=True)
+    result = _render(tmp_path, static, sparse_lbc=True)
+    assert result.returncode == 0, result.stderr
+    rendered = (tmp_path / "input.nml").read_text()
+    assert "sparse_lbc_file_list = '" in rendered

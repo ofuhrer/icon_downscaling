@@ -38,6 +38,7 @@
 /
 &forcing
   forcing_file_list = '@FORCING_FILE_LIST@'
+@SPARSE_LBC_LINE@
   wait_for_ready_file = .True.
   ready_file_timeout = 1800
   inputinterval = @FORCING_INTERVAL@

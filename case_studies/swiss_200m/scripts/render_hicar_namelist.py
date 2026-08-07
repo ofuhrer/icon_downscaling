@@ -89,6 +89,11 @@ def main() -> int:
     )
     parser.add_argument("--forcing-file-list", required=True, type=Path)
     parser.add_argument(
+        "--sparse-lbc-file-list",
+        type=Path,
+        help="published target-grid sparse LBC sequence matching the forcing timestamps",
+    )
+    parser.add_argument(
         "--forcing-plan",
         type=Path,
         help="Published streaming chunk plan; permits future forcing paths.",
@@ -320,6 +325,31 @@ def main() -> int:
         raise SystemExit("forcing file list is not continuous at the configured 3600 s interval")
     if timestamps[-1] < end_time:
         raise SystemExit("forcing file list lacks a record at or after --end-date")
+    sparse_lbc_line = ""
+    if args.sparse_lbc_file_list is not None:
+        published(args.sparse_lbc_file_list, "sparse LBC file list")
+        sparse_files = [
+            Path(line.strip().strip('"'))
+            for line in args.sparse_lbc_file_list.read_text().splitlines()
+            if line.strip()
+        ]
+        if len(sparse_files) < 2:
+            raise SystemExit("sparse LBC file list must contain at least two frames")
+        sparse_times = []
+        for path in sparse_files:
+            published(path, "sparse LBC frame")
+            with netCDF4.Dataset(path) as frame:
+                if getattr(frame, "product_type", "") != "hicar_lateral_boundary_state":
+                    raise SystemExit(f"not a HICAR sparse LBC frame: {path}")
+                try:
+                    sparse_times.append(parse_timestamp(str(frame.valid_time).replace("Z", "")))
+                except (AttributeError, ValueError) as exc:
+                    raise SystemExit(f"sparse LBC frame has invalid valid_time: {path}") from exc
+        if sparse_times != timestamps:
+            raise SystemExit("sparse LBC timestamps must exactly match forcing timestamps")
+        sparse_lbc_line = (
+            f"  sparse_lbc_file_list = '{args.sparse_lbc_file_list.resolve()}'"
+        )
     restart_lines = ""
     if args.restart_interval:
         restart_lines += f"  restartinterval = {args.restart_interval}\n"
@@ -431,6 +461,7 @@ def main() -> int:
         "@END_DATE@": args.end_date,
         "@STATIC_FILE@": str(args.static_file.resolve()),
         "@FORCING_FILE_LIST@": str(args.forcing_file_list.resolve()),
+        "@SPARSE_LBC_LINE@": sparse_lbc_line,
         "@OUTPUT_DIR@": f"{args.output_dir.resolve()}/",
         "@RESTART_DIR@": f"{args.restart_dir.resolve()}/",
         "@RESTART_LINES@": restart_lines.rstrip(),
