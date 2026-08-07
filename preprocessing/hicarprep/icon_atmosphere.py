@@ -81,6 +81,23 @@ def grib_time(field, date_key: str, time_key: str) -> str:
     return parsed.replace(tzinfo=dt.timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def grib_step_hours(value: object) -> int:
+    """Normalize earthkit/ecCodes step metadata to an exact integer hour."""
+    if isinstance(value, (int, np.integer)):
+        return int(value)
+    text = str(value or "").strip().lower()
+    match = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)([smhd]?)", text)
+    if match is None:
+        raise ValueError(f"unsupported GRIB step representation {value!r}")
+    magnitude = float(match.group(1))
+    unit = match.group(2) or "h"
+    hours = magnitude * {"s": 1.0 / 3600.0, "m": 1.0 / 60.0, "h": 1.0, "d": 24.0}[unit]
+    rounded = round(hours)
+    if abs(hours - rounded) > 1.0e-9:
+        raise ValueError(f"GRIB step {value!r} is not an exact number of hours")
+    return int(rounded)
+
+
 def field_grid_uuid(field) -> str:
     direct = normalized_uuid(metadata(field, "uuidOfHGrid"))
     if direct:
@@ -139,7 +156,14 @@ def _validate_message(
     reference_time = grib_time(field, "dataDate", "dataTime")
     if expected_reference_time is not None and reference_time != expected_reference_time:
         raise ValueError(f"{spec.name} mixes reference cycles")
-    step = int(metadata(field, "step"))
+    step = grib_step_hours(metadata(field, "step"))
+    reference = dt.datetime.fromisoformat(reference_time.replace("Z", "+00:00"))
+    valid = dt.datetime.fromisoformat(valid_time.replace("Z", "+00:00"))
+    elapsed_hours = (valid - reference).total_seconds() / 3600.0
+    if elapsed_hours != step:
+        raise ValueError(
+            f"{spec.name} step={step} h disagrees with its reference/valid timestamps"
+        )
     if expected_step is not None and step != expected_step:
         raise ValueError(f"{spec.name} has step={step}, expected {expected_step}")
     uuid = field_grid_uuid(field)

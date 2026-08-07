@@ -122,6 +122,14 @@ def test_inventory_rejects_duplicate_level_and_wrong_param_id():
         )
 
 
+def test_grib_step_hours_accepts_operational_minute_metadata():
+    assert atmosphere.grib_step_hours("0m") == 0
+    assert atmosphere.grib_step_hours("60m") == 1
+    assert atmosphere.grib_step_hours("2h") == 2
+    with pytest.raises(ValueError, match="not an exact number of hours"):
+        atmosphere.grib_step_hours("30m")
+
+
 def test_operational_decode_reverses_levels_and_records_explicit_missing_qi(tmp_path, monkeypatch):
     dynamic, geometry = inventories()
     dynamic_path = tmp_path / "dynamic.grib"
