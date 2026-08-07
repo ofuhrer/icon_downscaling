@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import hashlib
+import json
 import math
 import os
 from pathlib import Path
@@ -35,7 +36,16 @@ ESA_WORLDCOVER_URL = (
     "ESA_WorldCover_10m_2021_v200_{lat_tag}{lon_tag}_Map.tif"
 )
 SOILGRIDS_VRT_URL = "https://files.isric.org/soilgrids/latest/data/{prop}/{prop}_{depth}_mean.vrt"
-SOILGRIDS_DEPTHS = ("0-5cm", "5-15cm", "15-30cm", "30-60cm")
+SOILGRIDS_DEPTH_INTERVALS_CM = {
+    "0-5cm": (0.0, 5.0),
+    "5-15cm": (5.0, 15.0),
+    "15-30cm": (15.0, 30.0),
+    "30-60cm": (30.0, 60.0),
+    "60-100cm": (60.0, 100.0),
+    "100-200cm": (100.0, 200.0),
+}
+# HICAR's Noah/Noah-MP interface uses the WRF four-layer column.
+HICAR_SOIL_LAYER_INTERVALS_CM = ((0.0, 10.0), (10.0, 30.0), (30.0, 70.0), (70.0, 150.0))
 
 WORLDCOVER_TO_USGS = {
     10: 15,  # tree cover -> mixed forest
@@ -50,6 +60,8 @@ WORLDCOVER_TO_USGS = {
     95: 17,  # mangroves -> wetland fallback for USGS
     100: 19, # moss/lichen -> sparse vegetation fallback
 }
+USGS_CATEGORY_COUNT = 24
+WORLDCOVER_USGS_CATEGORIES = tuple(sorted(set(WORLDCOVER_TO_USGS.values())))
 
 SOIL_TYPE_DEFAULT_VWC = {
     1: 0.12,   # sand
@@ -253,41 +265,100 @@ def needed_worldcover_tiles(lat: np.ndarray, lon: np.ndarray, border_deg: float 
     return [(ilat, ilon) for ilat in range(lat_min, lat_max + 1, 3) for ilon in range(lon_min, lon_max + 1, 3)]
 
 
-def cached_download(url: str, target: Path, offline: bool = False) -> Path:
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(8 * 1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def cached_download(
+    url: str,
+    target: Path,
+    offline: bool = False,
+    source_identities: list[dict[str, str | int]] | None = None,
+) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
-    if target.exists() and target.stat().st_size > 0:
-        return target
-    if offline:
-        raise SystemExit(f"cache miss in --offline mode: {target}")
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    print(f"download {url} -> {target}")
-    try:
-        urllib.request.urlretrieve(url, tmp)
-    except Exception as exc:
-        if tmp.exists():
-            tmp.unlink()
-        raise SystemExit(f"failed to download {url}: {exc}") from exc
-    tmp.replace(target)
+    if not (target.exists() and target.stat().st_size > 0):
+        if offline:
+            raise SystemExit(f"cache miss in --offline mode: {target}")
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{target.name}.", suffix=".download", dir=target.parent
+        )
+        os.close(descriptor)
+        tmp = Path(temporary_name)
+        print(f"download {url} -> {target}")
+        try:
+            urllib.request.urlretrieve(url, tmp)
+            os.replace(tmp, target)
+        except Exception as exc:
+            raise SystemExit(f"failed to download {url}: {exc}") from exc
+        finally:
+            tmp.unlink(missing_ok=True)
+
+    if source_identities is not None:
+        identity_path = Path(f"{target}.source.json")
+        identity = None
+        if identity_path.is_file():
+            try:
+                candidate = json.loads(identity_path.read_text())
+                if candidate.get("url") == url and candidate.get("size_bytes") == target.stat().st_size:
+                    identity = candidate
+            except (OSError, ValueError, TypeError):
+                identity = None
+        if identity is None:
+            identity = {
+                "url": url,
+                "cache_path": str(target),
+                "size_bytes": target.stat().st_size,
+                "sha256": file_sha256(target),
+            }
+            descriptor, identity_tmp_name = tempfile.mkstemp(
+                prefix=f".{identity_path.name}.", dir=identity_path.parent
+            )
+            try:
+                with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+                    json.dump(identity, stream, indent=2, sort_keys=True)
+                    stream.write("\n")
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(identity_tmp_name, identity_path)
+            finally:
+                Path(identity_tmp_name).unlink(missing_ok=True)
+        source_identities.append(identity)
     return target
 
 
-def copernicus_dem_tiles(lat: np.ndarray, lon: np.ndarray, cache_dir: Path, offline: bool) -> list[Path]:
+def copernicus_dem_tiles(
+    lat: np.ndarray,
+    lon: np.ndarray,
+    cache_dir: Path,
+    offline: bool,
+    source_identities: list[dict[str, str | int]] | None = None,
+) -> list[Path]:
     out = []
     for ilat, ilon in needed_1deg_tiles(lat, lon):
         lat_tag = lat_tag_1deg(ilat)
         lon_tag = lon_tag_1deg(ilon)
         url = COPERNICUS_DEM_URL.format(lat_tag=lat_tag, lon_tag=lon_tag)
-        out.append(cached_download(url, cache_dir / "copernicus_dem_glo30" / f"{lat_tag}_{lon_tag}.tif", offline))
+        out.append(cached_download(url, cache_dir / "copernicus_dem_glo30" / f"{lat_tag}_{lon_tag}.tif", offline, source_identities))
     return out
 
 
-def worldcover_tiles(lat: np.ndarray, lon: np.ndarray, cache_dir: Path, offline: bool) -> list[Path]:
+def worldcover_tiles(
+    lat: np.ndarray,
+    lon: np.ndarray,
+    cache_dir: Path,
+    offline: bool,
+    source_identities: list[dict[str, str | int]] | None = None,
+) -> list[Path]:
     out = []
     for ilat, ilon in needed_worldcover_tiles(lat, lon):
         lat_tag = lat_tag_1deg(ilat)
         lon_tag = lon_tag_1deg(ilon)
         url = ESA_WORLDCOVER_URL.format(lat_tag=lat_tag, lon_tag=lon_tag)
-        out.append(cached_download(url, cache_dir / "esa_worldcover_2021_v200" / f"{lat_tag}_{lon_tag}.tif", offline))
+        out.append(cached_download(url, cache_dir / "esa_worldcover_2021_v200" / f"{lat_tag}_{lon_tag}.tif", offline, source_identities))
     return out
 
 
@@ -338,7 +409,14 @@ def warp_to_domain(
             raise SystemExit("required command not found: gdalwarp; install GDAL tools or Python rasterio") from exc
         transform = from_origin(xmin, ymax, dx_m, dx_m)
         destination = np.full((y.size, x.size), np.nan, dtype=np.float32)
-        method = Resampling.nearest if resampling == "near" else Resampling.bilinear
+        if resampling == "near":
+            method = Resampling.nearest
+        elif resampling == "mode":
+            method = Resampling.mode
+        elif resampling == "average":
+            method = Resampling.average
+        else:
+            method = Resampling.bilinear
         for source in sources:
             source_path = str(source).replace("/vsicurl/", "")
             with rasterio.open(source_path) as ds:
@@ -354,8 +432,17 @@ def warp_to_domain(
         if np.isnan(destination).any():
             raise SystemExit(f"raster source does not fully cover requested domain: {sources}")
         profile = {"driver":"GTiff", "height":y.size, "width":x.size, "count":1, "dtype":"float32", "crs":local_crs.to_wkt(), "transform":transform, "compress":"deflate"}
-        with rasterio.open(out_tif, "w", **profile) as ds:
-            ds.write(destination, 1)
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{out_tif.name}.", suffix=".tif", dir=out_tif.parent
+        )
+        os.close(descriptor)
+        temporary_output = Path(temporary_name)
+        try:
+            with rasterio.open(temporary_output, "w", **profile) as ds:
+                ds.write(destination, 1)
+            os.replace(temporary_output, out_tif)
+        finally:
+            temporary_output.unlink(missing_ok=True)
         return destination[::-1, :]
     require_cmd("gdal_translate")
     cmd = [
@@ -379,9 +466,18 @@ def warp_to_domain(
         "-co",
         "COMPRESS=DEFLATE",
     ]
-    cmd.extend(str(src) for src in sources)
-    cmd.append(str(out_tif))
-    run_cmd(cmd)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{out_tif.name}.", suffix=".tif", dir=out_tif.parent
+    )
+    os.close(descriptor)
+    temporary_output = Path(temporary_name)
+    try:
+        cmd.extend(str(src) for src in sources)
+        cmd.append(str(temporary_output))
+        run_cmd(cmd)
+        os.replace(temporary_output, out_tif)
+    finally:
+        temporary_output.unlink(missing_ok=True)
     return raster_to_xyz_array(out_tif, x.size, y.size)
 
 
@@ -400,6 +496,88 @@ def reclass_worldcover_to_usgs(worldcover: np.ndarray) -> np.ndarray:
     for wc_value, usgs_value in WORLDCOVER_TO_USGS.items():
         landuse[rounded == wc_value] = usgs_value
     return landuse
+
+
+def _write_reclassified_worldcover_tile(
+    source: Path, target: Path, *, category: int | None = None
+) -> Path:
+    """Cache a WorldCover tile reclassified before any target-grid aggregation."""
+    if target.is_file() and target.stat().st_size:
+        return target
+    try:
+        import rasterio
+    except ImportError as exc:
+        raise SystemExit("Python rasterio is required for WorldCover aggregation") from exc
+    target.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{target.name}.", suffix=".tif", dir=target.parent
+    )
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    try:
+        with rasterio.open(source) as src:
+            original = src.read(1)
+            valid = np.ones(original.shape, dtype=bool)
+            if src.nodata is not None:
+                valid &= original != src.nodata
+            reclassified = reclass_worldcover_to_usgs(original)
+            profile = src.profile.copy()
+            profile.update(dtype="uint8", count=1, compress="deflate")
+            if category is None:
+                values = np.where(valid, reclassified, 0).astype(np.uint8)
+                profile.update(nodata=0)
+            else:
+                values = np.where(valid, reclassified == category, 255).astype(np.uint8)
+                profile.update(nodata=255)
+            with rasterio.open(temporary, "w", **profile) as dst:
+                dst.write(values, 1)
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return target
+
+
+def aggregate_worldcover_to_usgs(
+    sources: list[Path],
+    cache_dir: Path,
+    local_crs: CRS,
+    x: np.ndarray,
+    y: np.ndarray,
+    dx_m: float,
+    key: str,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Area-aggregate reclassified USGS categories and retain subgrid fractions."""
+    fractions = np.zeros((USGS_CATEGORY_COUNT, y.size, x.size), dtype=np.float32)
+    for category in WORLDCOVER_USGS_CATEGORIES:
+        binary_sources = [
+            _write_reclassified_worldcover_tile(
+                source,
+                cache_dir
+                / "reclassified_worldcover_usgs_v1"
+                / f"category_{category:02d}"
+                / source.name,
+                category=category,
+            )
+            for source in sources
+        ]
+        fractions[category - 1] = warp_to_domain(
+            binary_sources,
+            cache_dir
+            / "warped_subsets"
+            / f"esa_worldcover_2021_usgs_fraction_{category:02d}_{key}.tif",
+            local_crs,
+            x,
+            y,
+            dx_m,
+            "average",
+        )
+    fractions = np.clip(fractions, 0.0, 1.0)
+    closure = np.sum(fractions, axis=0)
+    if np.any(closure <= 0.0):
+        raise SystemExit("WorldCover category fractions do not cover the target domain")
+    fractions /= closure[np.newaxis, ...]
+    dominant = np.argmax(fractions, axis=0).astype(np.int16) + 1
+    return dominant, fractions
 
 
 def classify_usda_soil(sand_pct: np.ndarray, silt_pct: np.ndarray, clay_pct: np.ndarray) -> np.ndarray:
@@ -430,6 +608,38 @@ def texture_default_vwc(soil_type: np.ndarray) -> np.ndarray:
     return out
 
 
+def aggregate_soilgrids_depths(
+    source_by_depth: dict[str, np.ndarray],
+    target_intervals_cm: tuple[tuple[float, float], ...] = HICAR_SOIL_LAYER_INTERVALS_CM,
+) -> np.ndarray:
+    """Thickness-weight SoilGrids depth means onto the Noah-MP soil layers."""
+    if set(source_by_depth) != set(SOILGRIDS_DEPTH_INTERVALS_CM):
+        missing = sorted(set(SOILGRIDS_DEPTH_INTERVALS_CM) - set(source_by_depth))
+        extra = sorted(set(source_by_depth) - set(SOILGRIDS_DEPTH_INTERVALS_CM))
+        raise ValueError(f"unexpected SoilGrids depth set; missing={missing}, extra={extra}")
+    shape = next(iter(source_by_depth.values())).shape
+    if any(values.shape != shape for values in source_by_depth.values()):
+        raise ValueError("SoilGrids depth arrays must have identical shapes")
+
+    layers = []
+    for target_top, target_bottom in target_intervals_cm:
+        weighted = np.zeros(shape, dtype=np.float64)
+        total_weight = 0.0
+        for depth, (source_top, source_bottom) in SOILGRIDS_DEPTH_INTERVALS_CM.items():
+            overlap = max(0.0, min(target_bottom, source_bottom) - max(target_top, source_top))
+            if overlap:
+                weighted += overlap * source_by_depth[depth]
+                total_weight += overlap
+        expected = target_bottom - target_top
+        if not np.isclose(total_weight, expected):
+            raise ValueError(
+                f"SoilGrids depths do not cover target layer {target_top:g}-{target_bottom:g} cm "
+                f"(covered {total_weight:g} of {expected:g} cm)"
+            )
+        layers.append((weighted / total_weight).astype(np.float32))
+    return np.stack(layers, axis=0)
+
+
 def soilgrids_subset(
     prop: str,
     depth: str,
@@ -440,18 +650,24 @@ def soilgrids_subset(
     dx_m: float,
     offline: bool,
     key: str,
+    source_identities: list[dict[str, str | int]] | None = None,
 ) -> np.ndarray:
     url = SOILGRIDS_VRT_URL.format(prop=prop, depth=depth)
     out_tif = cache_dir / "warped_subsets" / f"soilgrids_{prop}_{depth}_{key}.tif"
-    if offline and not out_tif.exists():
-        raise SystemExit(f"cache miss in --offline mode: {out_tif}")
     if out_tif.exists():
         return warp_to_domain([], out_tif, local_crs, x, y, dx_m, "bilinear")
 
+    # ``--offline`` forbids network retrieval; it does not require every
+    # derived domain subset to have been generated already.  Rebuild a missing
+    # subset from the cached VRT and COG tiles. ``cached_download`` below is
+    # the authoritative cache gate and will still fail before any network
+    # access if one of those raw inputs is absent.
     # SoilGrids publishes global VRT mosaics whose relative source paths are
     # not resolved by Rasterio's HTTP driver on Balfrin.  Download only the
     # VRT tiles intersecting this domain, then reproject the local COGs.
-    vrt_path = cached_download(url, cache_dir / "soilgrids_vrt" / f"{prop}_{depth}.vrt", offline)
+    vrt_path = cached_download(
+        url, cache_dir / "soilgrids_vrt" / f"{prop}_{depth}.vrt", offline, source_identities
+    )
     try:
         root = ET.parse(vrt_path).getroot()
         soil_crs = CRS.from_wkt(root.findtext("SRS"))
@@ -497,7 +713,11 @@ def soilgrids_subset(
         if relative.split("/")[-2] not in selected_groups:
             continue
         source_url = f"{vrt_parent}/{relative}"
-        sources.append(cached_download(source_url, cache_dir / "soilgrids_tiles" / relative, offline))
+        sources.append(
+            cached_download(
+                source_url, cache_dir / "soilgrids_tiles" / relative, offline, source_identities
+            )
+        )
     # Sample directly in the SoilGrids projected coordinates.  Rasterio/GDAL
     # cannot safely reproject these COGs on Balfrin because their per-tile CRS
     # metadata has an anonymous datum while the VRT has WGS84.  Direct affine
@@ -539,6 +759,35 @@ def soilgrids_subset(
         from scipy.ndimage import distance_transform_edt
         _, nearest = distance_transform_edt(~valid, return_indices=True)
         destination[~valid] = destination[tuple(index[~valid] for index in nearest)]
+    # Publish the expensive domain subset for future candidates. Raster rows
+    # run north-to-south, whereas this function's y coordinate increases from
+    # south to north, so reverse the first axis on write. ``warp_to_domain``
+    # applies the inverse reversal when it reuses this file.
+    from rasterio.transform import from_origin
+    transform = from_origin(
+        float(x.min() - dx_m / 2.0), float(y.max() + dx_m / 2.0), dx_m, dx_m
+    )
+    descriptor, temporary_subset_name = tempfile.mkstemp(
+        prefix=f".{out_tif.name}.", suffix=".tif", dir=out_tif.parent
+    )
+    os.close(descriptor)
+    temporary_subset = Path(temporary_subset_name)
+    profile = {
+        "driver": "GTiff",
+        "height": y.size,
+        "width": x.size,
+        "count": 1,
+        "dtype": "float32",
+        "crs": local_crs.to_wkt(),
+        "transform": transform,
+        "compress": "deflate",
+    }
+    try:
+        with rasterio.open(temporary_subset, "w", **profile) as dataset:
+            dataset.write(destination[::-1, :], 1)
+        os.replace(temporary_subset, out_tif)
+    finally:
+        temporary_subset.unlink(missing_ok=True)
     return destination
 
 
@@ -553,36 +802,104 @@ def build_public_static(
     offline: bool,
     skip_soilgrids: bool,
     include_land_surface: bool,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray | None, np.ndarray | None, list[str]]:
+    include_topography: bool = True,
+) -> tuple[
+    np.ndarray | None,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray | None,
+    np.ndarray | None,
+    np.ndarray | None,
+    dict[str, np.ndarray] | None,
+    list[str],
+    list[dict[str, str | int]],
+]:
     cache_dir.mkdir(parents=True, exist_ok=True)
     sources = []
+    source_identities: list[dict[str, str | int]] = []
     key = domain_cache_key(lat, lon, x, y, dx_m)
 
-    dem_paths = copernicus_dem_tiles(lat, lon, cache_dir, offline)
-    topo = warp_to_domain(dem_paths, cache_dir / "warped_subsets" / f"copernicus_dem_{key}.tif", local_crs, x, y, dx_m, "bilinear")
-    sources.append("Copernicus DEM GLO-30 Public")
+    if include_topography:
+        dem_paths = copernicus_dem_tiles(lat, lon, cache_dir, offline, source_identities)
+        topo = warp_to_domain(
+            dem_paths,
+            cache_dir / "warped_subsets" / f"copernicus_dem_{key}.tif",
+            local_crs, x, y, dx_m, "average",
+        )
+        sources.append("Copernicus DEM GLO-30 Public")
+    else:
+        topo = None
 
-    wc_paths = worldcover_tiles(lat, lon, cache_dir, offline)
-    wc = warp_to_domain(wc_paths, cache_dir / "warped_subsets" / f"esa_worldcover_2021_{key}.tif", local_crs, x, y, dx_m, "near")
-    landuse = reclass_worldcover_to_usgs(wc)
-    sources.append("ESA WorldCover 2021 v200 reclassified to USGS")
+    wc_paths = worldcover_tiles(lat, lon, cache_dir, offline, source_identities)
+    # Reclassify every 10 m pixel to the target USGS taxonomy before area
+    # aggregation. Reclassifying a WorldCover mode can choose a different USGS
+    # category when multiple source classes collapse to one target class.
+    landuse, landuse_fraction = aggregate_worldcover_to_usgs(
+        wc_paths, cache_dir, local_crs, x, y, dx_m, key
+    )
+    sources.append(
+        "ESA WorldCover 2021 v200 reclassified per 10 m pixel to USGS, then area-aggregated"
+    )
 
     if not include_land_surface:
         soil_type = None
-        soil_vwc_base = None
+        soil_type_layers = None
+        soil_vwc_layers = None
+        soil_composition = None
     elif skip_soilgrids:
         soil_type = np.full(lat.shape, 8, dtype=np.int16)  # silty clay loam pragmatic fallback
-        soil_vwc_base = texture_default_vwc(soil_type)
+        soil_type_layers = np.repeat(soil_type[np.newaxis, :, :], 4, axis=0)
+        soil_vwc_layers = np.repeat(texture_default_vwc(soil_type)[np.newaxis, :, :], 4, axis=0)
+        soil_composition = None
         sources.append("constant silty-clay-loam soil fallback")
     else:
-        clay = soilgrids_subset("clay", "0-5cm", cache_dir, local_crs, x, y, dx_m, offline, key) / 10.0
-        sand = soilgrids_subset("sand", "0-5cm", cache_dir, local_crs, x, y, dx_m, offline, key) / 10.0
-        silt = soilgrids_subset("silt", "0-5cm", cache_dir, local_crs, x, y, dx_m, offline, key) / 10.0
-        soil_type = classify_usda_soil(sand, silt, clay)
-        soil_vwc_base = texture_default_vwc(soil_type)
-        sources.append("SoilGrids 250 m 0-5 cm mean texture")
+        composition_by_property = {}
+        for prop in ("sand", "silt", "clay"):
+            by_depth = {
+                depth: soilgrids_subset(
+                    prop, depth, cache_dir, local_crs, x, y, dx_m, offline, key, source_identities
+                ) / 10.0
+                for depth in SOILGRIDS_DEPTH_INTERVALS_CM
+            }
+            composition_by_property[prop] = aggregate_soilgrids_depths(by_depth)
+        sand = composition_by_property["sand"]
+        silt = composition_by_property["silt"]
+        clay = composition_by_property["clay"]
+        soil_type_layers = np.stack(
+            [classify_usda_soil(sand[layer], silt[layer], clay[layer]) for layer in range(4)],
+            axis=0,
+        )
+        soil_type = soil_type_layers[0]
+        soil_vwc_layers = np.stack(
+            [texture_default_vwc(soil_type_layers[layer]) for layer in range(4)],
+            axis=0,
+        )
+        soil_composition = composition_by_property
+        sources.append(
+            "SoilGrids 250 m mean sand/silt/clay at six depths, thickness-weighted to "
+            "Noah-MP 0-10/10-30/30-70/70-150 cm layers"
+        )
 
-    return topo, landuse, soil_type, soil_vwc_base, sources
+    normalized_identities = []
+    for identity in source_identities:
+        normalized = dict(identity)
+        try:
+            normalized["cache_path"] = str(Path(str(identity["cache_path"])).relative_to(cache_dir))
+        except (KeyError, ValueError):
+            pass
+        normalized_identities.append(normalized)
+    normalized_identities.sort(key=lambda item: (str(item.get("cache_path", "")), str(item["url"])))
+    return (
+        topo,
+        landuse,
+        landuse_fraction,
+        soil_type,
+        soil_type_layers,
+        soil_vwc_layers,
+        soil_composition,
+        sources,
+        normalized_identities,
+    )
 
 
 def put_2d(ds, name: str, data: np.ndarray, units: str, long_name: str, dtype="f4"):
@@ -597,6 +914,67 @@ def put_2d(ds, name: str, data: np.ndarray, units: str, long_name: str, dtype="f
         var.coordinates = "lon lat"
     var.grid_mapping = "azimuthal_equidistant"
     return var
+
+
+def validate_prepared_static(path: Path, expected_shape: tuple[int, int], include_land_surface: bool) -> None:
+    """Validate the minimum static publication contract before atomic rename."""
+    with netCDF4.Dataset(path) as dataset:
+        required = {
+            "x",
+            "y",
+            "lat",
+            "lon",
+            "topo",
+            "landmask",
+            "landuse",
+            "landuse_fraction",
+            "glacier_fraction",
+            "urban_fraction",
+        }
+        if include_land_surface:
+            required.update({"soil_type", "soil_type_layer", "soil_temperature", "soil_vwc"})
+        missing = sorted(required - set(dataset.variables))
+        if missing:
+            raise SystemExit(f"prepared static file lacks required variables: {missing}")
+        for name in ("lat", "lon", "topo", "landmask", "landuse"):
+            if dataset[name].shape != expected_shape:
+                raise SystemExit(
+                    f"prepared static {name} shape {dataset[name].shape} differs from {expected_shape}"
+                )
+        for name in ("lat", "lon", "topo"):
+            if not np.all(np.isfinite(dataset[name][:])):
+                raise SystemExit(f"prepared static {name} contains non-finite values")
+        landuse = np.asarray(dataset["landuse"][:])
+        landmask = np.asarray(dataset["landmask"][:])
+        if np.any((landuse < 1) | (landuse > 24)):
+            raise SystemExit("prepared static landuse contains values outside USGS 1..24")
+        if not np.array_equal(landmask == 0, landuse == USGS_WATER_CATEGORY):
+            raise SystemExit("prepared static landmask is inconsistent with USGS water category 16")
+        fractions = np.asarray(dataset["landuse_fraction"][:], dtype=np.float64)
+        if fractions.shape != (USGS_CATEGORY_COUNT, *expected_shape):
+            raise SystemExit("prepared static landuse_fraction has the wrong shape")
+        if not np.isfinite(fractions).all() or np.any((fractions < 0.0) | (fractions > 1.0)):
+            raise SystemExit("prepared static landuse_fraction contains invalid fractions")
+        if not np.allclose(np.sum(fractions, axis=0), 1.0, atol=1.0e-5):
+            raise SystemExit("prepared static landuse fractions do not close to one")
+        if not np.array_equal(np.argmax(fractions, axis=0) + 1, landuse):
+            raise SystemExit("prepared static dominant landuse differs from maximum fraction")
+        if not np.allclose(dataset["glacier_fraction"][:], fractions[23]):
+            raise SystemExit("prepared static glacier_fraction differs from USGS category 24")
+        if not np.allclose(dataset["urban_fraction"][:], fractions[0]):
+            raise SystemExit("prepared static urban_fraction differs from USGS category 1")
+        if include_land_surface:
+            soil_layers = np.asarray(dataset["soil_type_layer"][:])
+            expected_soil_shape = (len(dataset.dimensions["soil_layer"]), *expected_shape)
+            if soil_layers.shape != expected_soil_shape:
+                raise SystemExit(
+                    f"prepared static soil_type_layer shape {soil_layers.shape} differs from "
+                    f"{expected_soil_shape}"
+                )
+            if np.any((soil_layers < 1) | (soil_layers > 13)):
+                raise SystemExit("prepared static soil_type_layer contains values outside 1..13")
+            if not np.array_equal(np.asarray(dataset["soil_type"][:]), soil_layers[0]):
+                raise SystemExit("prepared static soil_type is not identical to soil_type_layer[0]")
 
 
 def main() -> int:
@@ -634,6 +1012,15 @@ def main() -> int:
         help="Skip SoilGrids and use a constant silty-clay-loam soil fallback.",
     )
     parser.add_argument("--topo-source", type=Path)
+    parser.add_argument(
+        "--preserve-topography-from",
+        type=Path,
+        help=(
+            "Copy topo and available topo_highres/topo_driving/topo_blend_weight fields "
+            "bitwise from a published static file on the identical grid. Intended for "
+            "land/soil-only attribution candidates."
+        ),
+    )
     parser.add_argument("--topo-var", default="topo")
     parser.add_argument("--source-lat-var", default="lat")
     parser.add_argument("--source-lon-var", default="lon")
@@ -674,6 +1061,14 @@ def main() -> int:
     parser.add_argument("--soil-vwc", type=float, default=0.4)
     parser.add_argument("--surface-temp-k", type=float, default=280.0)
     parser.add_argument("--soil-layers", type=int, default=4)
+    parser.add_argument(
+        "--generating-commit",
+        help="Coordinator Git commit recorded in the static generation identity.",
+    )
+    parser.add_argument(
+        "--runtime-manifest-sha256",
+        help="SHA-256 of the immutable runtime manifest containing this generator.",
+    )
     args = parser.parse_args()
 
     if args.dx_m <= 0 or args.width_km <= 0 or args.height_km <= 0:
@@ -682,12 +1077,34 @@ def main() -> int:
 
     if include_land_surface and args.soil_layers < 1:
         raise SystemExit("--soil-layers must be positive")
+    if args.public_sources and include_land_surface and args.soil_layers != 4:
+        raise SystemExit("public SoilGrids land-surface preparation requires --soil-layers 4 for Noah-MP")
     if args.public_sources and (args.topo_source or args.landuse_source):
         raise SystemExit("--public-sources cannot be combined with --topo-source or --landuse-source")
+    if args.preserve_topography_from and not args.public_sources:
+        raise SystemExit("--preserve-topography-from currently requires --public-sources")
+    if args.preserve_topography_from and args.boundary_topo_source:
+        raise SystemExit("--preserve-topography-from cannot be combined with --boundary-topo-source")
+    if args.preserve_topography_from and args.topo_source:
+        raise SystemExit("--preserve-topography-from cannot be combined with --topo-source")
+    if args.preserve_topography_from:
+        if not args.preserve_topography_from.is_file():
+            raise SystemExit(f"missing preserved topography source: {args.preserve_topography_from}")
+        if not Path(f"{args.preserve_topography_from}.ready").is_file():
+            raise SystemExit(
+                f"preserved topography source is not published: {args.preserve_topography_from}.ready"
+            )
     if args.topo_source is None and not args.public_sources and not args.allow_placeholder_static:
         raise SystemExit("provide --topo-source or set --allow-placeholder-static for a non-scientific placeholder domain")
-    if args.write_topo_blend_diagnostics and not args.boundary_topo_source:
-        raise SystemExit("--write-topo-blend-diagnostics requires --boundary-topo-source")
+    if (
+        args.write_topo_blend_diagnostics
+        and not args.boundary_topo_source
+        and not args.preserve_topography_from
+    ):
+        raise SystemExit(
+            "--write-topo-blend-diagnostics requires --boundary-topo-source or "
+            "--preserve-topography-from"
+        )
     if args.boundary_topo_source and not args.boundary_topo_source.exists():
         raise SystemExit(f"missing boundary topography source: {args.boundary_topo_source}")
     if args.boundary_topo_source and args.topo_blend_width_km <= 0:
@@ -696,11 +1113,23 @@ def main() -> int:
     x, y, lat, lon, local_crs = make_grid(args.center_lat, args.center_lon, args.width_km, args.height_km, args.dx_m)
 
     public_sources_used: list[str] = []
+    public_source_identities: list[dict[str, str | int]] = []
     topo_highres = None
     topo_driving = None
     topo_blend_weight = None
+    preserved_topography_identity = None
     if args.public_sources:
-        topo, landuse, soil_type, soil_vwc_base, public_sources_used = build_public_static(
+        (
+            topo,
+            landuse,
+            landuse_fraction,
+            soil_type,
+            soil_type_layers,
+            soil_vwc_layers,
+            soil_composition,
+            public_sources_used,
+            public_source_identities,
+        ) = build_public_static(
             lat=lat,
             lon=lon,
             x=x,
@@ -711,7 +1140,57 @@ def main() -> int:
             offline=args.offline,
             skip_soilgrids=args.skip_soilgrids,
             include_land_surface=include_land_surface,
+            include_topography=args.preserve_topography_from is None,
         )
+        if args.preserve_topography_from:
+            with netCDF4.Dataset(args.preserve_topography_from) as preserved:
+                required = {"x", "y", "lat", "lon", "topo"}
+                missing = sorted(required - set(preserved.variables))
+                if missing:
+                    raise SystemExit(
+                        f"preserved topography source lacks required variables: {missing}"
+                    )
+                if not np.array_equal(np.asarray(preserved["x"][:]), x.astype(np.float32)):
+                    raise SystemExit("preserved topography source x coordinate differs from target grid")
+                if not np.array_equal(np.asarray(preserved["y"][:]), y.astype(np.float32)):
+                    raise SystemExit("preserved topography source y coordinate differs from target grid")
+                for name, target in (("lat", lat), ("lon", lon)):
+                    values = np.asarray(preserved[name][:])
+                    if values.shape != target.shape or not np.allclose(
+                        values, target, atol=1.0e-6, rtol=0.0
+                    ):
+                        raise SystemExit(
+                            f"preserved topography source {name} differs from target grid"
+                        )
+                topo = np.asarray(preserved["topo"][:], dtype=np.float32)
+                terrain_diagnostics = {
+                    name: np.asarray(preserved[name][:], dtype=np.float32)
+                    for name in ("topo_highres", "topo_driving", "topo_blend_weight")
+                    if name in preserved.variables
+                }
+                if terrain_diagnostics and len(terrain_diagnostics) != 3:
+                    raise SystemExit(
+                        "preserved topography source must contain all or none of "
+                        "topo_highres/topo_driving/topo_blend_weight"
+                    )
+                topo_highres = terrain_diagnostics.get("topo_highres")
+                topo_driving = terrain_diagnostics.get("topo_driving")
+                topo_blend_weight = terrain_diagnostics.get("topo_blend_weight")
+            preserved_variables = ["topo"]
+            for name, values in (
+                ("topo_highres", topo_highres),
+                ("topo_driving", topo_driving),
+                ("topo_blend_weight", topo_blend_weight),
+            ):
+                if values is not None:
+                    preserved_variables.append(name)
+            preserved_topography_identity = {
+                "path": str(args.preserve_topography_from.resolve()),
+                "size_bytes": args.preserve_topography_from.stat().st_size,
+                "sha256": file_sha256(args.preserve_topography_from),
+                "variables": preserved_variables,
+            }
+            public_sources_used.append("topography copied bitwise from published baseline static")
     elif args.topo_source:
         topo = interp_to_domain(
             args.topo_source,
@@ -761,23 +1240,38 @@ def main() -> int:
     else:
         landuse = np.full(lat.shape, args.landuse_category, dtype=np.int16)
 
+    if not args.public_sources:
+        landuse_fraction = np.zeros(
+            (USGS_CATEGORY_COUNT, *landuse.shape), dtype=np.float32
+        )
+        for category in range(1, USGS_CATEGORY_COUNT + 1):
+            landuse_fraction[category - 1] = landuse == category
+
     landmask = np.where(landuse == USGS_WATER_CATEGORY, 0, 1).astype(np.int16)
     if include_land_surface and not args.public_sources:
         soil_type = np.full(lat.shape, args.soil_type, dtype=np.int16)
-        soil_vwc_base = np.full(lat.shape, args.soil_vwc, dtype=np.float32)
+        soil_type_layers = np.repeat(soil_type[np.newaxis, :, :], args.soil_layers, axis=0)
+        soil_vwc_layers = np.full((args.soil_layers, *lat.shape), args.soil_vwc, dtype=np.float32)
+        soil_composition = None
     if include_land_surface:
-        if soil_type is None or soil_vwc_base is None:
+        if soil_type is None or soil_type_layers is None or soil_vwc_layers is None:
             raise SystemExit("internal error: land-surface field set requested but soil fields were not prepared")
         surface_temp = np.full(lat.shape, args.surface_temp_k, dtype=np.float32)
         soil_t = np.repeat(surface_temp[np.newaxis, :, :], args.soil_layers, axis=0)
-        soil_vwc = np.repeat(soil_vwc_base[np.newaxis, :, :], args.soil_layers, axis=0).astype(np.float32)
+        soil_vwc = soil_vwc_layers.astype(np.float32)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     ready_file = Path(str(args.output) + ".ready")
     ready_file.unlink(missing_ok=True)
-    with netCDF4.Dataset(args.output, "w", format="NETCDF4") as ds:
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{args.output.name}.", suffix=".tmp", dir=args.output.parent
+    )
+    os.close(descriptor)
+    temporary_output = Path(temporary_name)
+    with netCDF4.Dataset(temporary_output, "w", format="NETCDF4") as ds:
         ds.createDimension("x", x.size)
         ds.createDimension("y", y.size)
+        ds.createDimension("landuse_category", USGS_CATEGORY_COUNT)
         if include_land_surface:
             ds.createDimension("soil_layer", args.soil_layers)
 
@@ -809,16 +1303,57 @@ def main() -> int:
             soil_var = ds.createVariable("soil_layer", "i4", ("soil_layer",))
             soil_var[:] = np.arange(1, args.soil_layers + 1)
             soil_var.long_name = "soil layer index"
+            if args.soil_layers == 4:
+                soil_var.bounds = "soil_layer_bounds_cm"
+                ds.createDimension("soil_bound", 2)
+                soil_bounds_var = ds.createVariable("soil_layer_bounds_cm", "f4", ("soil_layer", "soil_bound"))
+                soil_bounds_var[:, :] = HICAR_SOIL_LAYER_INTERVALS_CM
+                soil_bounds_var.units = "cm"
+                soil_bounds_var.long_name = "soil layer top and bottom depth below surface"
 
         put_2d(ds, "lat", lat, "degrees_north", "latitude")
         put_2d(ds, "lon", lon, "degrees_east", "longitude")
         put_2d(ds, "topo", topo.astype(np.float32), "m", "terrain height")
-        if args.write_topo_blend_diagnostics:
+        if args.write_topo_blend_diagnostics or topo_highres is not None:
             put_2d(ds, "topo_highres", topo_highres, "m", "unblended high-resolution terrain height")
             put_2d(ds, "topo_driving", topo_driving, "m", "driving-model terrain height interpolated to HICAR grid")
             put_2d(ds, "topo_blend_weight", topo_blend_weight, "1", "high-resolution topography blend weight")
         put_2d(ds, "landmask", landmask, "1", "land mask", dtype="i2")
-        put_2d(ds, "landuse", landuse, "1", f"{args.lu_categories} land-use category", dtype="i2")
+        landuse_var = put_2d(
+            ds, "landuse", landuse, "1", f"{args.lu_categories} land-use category", dtype="i2"
+        )
+        landuse_var.hicar_lifetime = "epoch"
+        landuse_var.epoch_valid_from = "2021-01-01T00:00:00Z"
+        category_var = ds.createVariable("landuse_category", "i2", ("landuse_category",))
+        category_var[:] = np.arange(1, USGS_CATEGORY_COUNT + 1)
+        fraction_var = ds.createVariable(
+            "landuse_fraction", "f4", ("landuse_category", "y", "x"), zlib=True
+        )
+        fraction_var[:] = landuse_fraction
+        fraction_var.units = "1"
+        fraction_var.long_name = "area fraction by USGS land-use category"
+        fraction_var.coordinates = "lon lat"
+        fraction_var.grid_mapping = "azimuthal_equidistant"
+        fraction_var.hicar_lifetime = "epoch"
+        fraction_var.epoch_valid_from = "2021-01-01T00:00:00Z"
+        glacier_fraction_var = put_2d(
+            ds,
+            "glacier_fraction",
+            landuse_fraction[23],
+            "1",
+            "USGS category 24 snow and ice area fraction",
+        )
+        glacier_fraction_var.hicar_lifetime = "epoch"
+        glacier_fraction_var.epoch_valid_from = "2021-01-01T00:00:00Z"
+        urban_fraction_var = put_2d(
+            ds,
+            "urban_fraction",
+            landuse_fraction[0],
+            "1",
+            "USGS category 1 urban area fraction",
+        )
+        urban_fraction_var.hicar_lifetime = "epoch"
+        urban_fraction_var.epoch_valid_from = "2021-01-01T00:00:00Z"
         if include_land_surface:
             put_2d(ds, "soil_type", soil_type, "1", "soil type category", dtype="i2")
             put_2d(ds, "surface_temperature", surface_temp, "K", "initial surface temperature")
@@ -840,6 +1375,29 @@ def main() -> int:
             soil_vwc_var.coordinates = "lon lat"
             soil_vwc_var.grid_mapping = "azimuthal_equidistant"
 
+            soil_type_layer_var = ds.createVariable(
+                "soil_type_layer", "i2", ("soil_layer", "y", "x"), zlib=True
+            )
+            soil_type_layer_var[:, :, :] = soil_type_layers
+            soil_type_layer_var.units = "1"
+            soil_type_layer_var.long_name = "USDA soil texture category by Noah-MP layer"
+            soil_type_layer_var.coordinates = "lon lat"
+            soil_type_layer_var.grid_mapping = "azimuthal_equidistant"
+            soil_type_layer_var.flag_values = np.arange(1, 14, dtype=np.int16)
+            soil_type_layer_var.flag_meanings = (
+                "sand loamy_sand sandy_loam silt_loam silt loam sandy_clay_loam "
+                "silty_clay_loam clay_loam sandy_clay silty_clay clay organic"
+            )
+
+            if soil_composition is not None:
+                for prop, values in soil_composition.items():
+                    var = ds.createVariable(f"soil_{prop}_percent", "f4", ("soil_layer", "y", "x"), zlib=True)
+                    var[:, :, :] = values
+                    var.units = "%"
+                    var.long_name = f"SoilGrids thickness-weighted {prop} mass percentage"
+                    var.coordinates = "lon lat"
+                    var.grid_mapping = "azimuthal_equidistant"
+
         ds.Conventions = "CF-1.8"
         ds.title = "HICAR static domain"
         ds.history = f"{dt.datetime.utcnow().isoformat(timespec='seconds')}Z: created by prepare_static_inputs.py"
@@ -850,12 +1408,81 @@ def main() -> int:
         ds.hicar_lu_categories = args.lu_categories
         ds.hicar_static_field_set = args.static_field_set
         if args.public_sources:
-            ds.hicar_static_quality = "public_source_pragmatic"
+            ds.hicar_static_quality = "public_source_research_v1"
             ds.public_sources = "; ".join(public_sources_used)
             ds.public_cache_dir = str(args.cache_dir)
+            ds.public_source_identities = json.dumps(public_source_identities, sort_keys=True)
+            ds.public_source_manifest = json.dumps(
+                {
+                    "copernicus_dem": (
+                        {
+                            "collection": "preserved from published baseline static",
+                            "processing": "bitwise copy; no terrain regeneration in this candidate",
+                            "identity": preserved_topography_identity,
+                        }
+                        if preserved_topography_identity
+                        else {"collection": "COP-DEM GLO-30", "resampling": "area average"}
+                    ),
+                    "esa_worldcover": {
+                        "collection": "ESA WorldCover 2021 v200",
+                        "valid_from": "2021-01-01T00:00:00Z",
+                        "processing": (
+                            "per-source-pixel WorldCover-to-USGS reclassification; area-average "
+                            "category fractions; dominant USGS category from maximum fraction"
+                        ),
+                    },
+                    "soil": (
+                        {
+                            "service": "SoilGrids latest 250 m mean",
+                            "properties": ["sand", "silt", "clay"],
+                            "source_depths_cm": list(SOILGRIDS_DEPTH_INTERVALS_CM.values()),
+                            "target_depths_cm": list(HICAR_SOIL_LAYER_INTERVALS_CM),
+                            "aggregation": "thickness-weighted overlap",
+                            "horizontal_sampling": "native-pixel nearest via SoilGrids VRT affine indexing",
+                        }
+                        if include_land_surface and not args.skip_soilgrids
+                        else {
+                            "service": "constant silty-clay-loam fallback"
+                            if include_land_surface
+                            else "not included in core field set"
+                        }
+                    ),
+                },
+                sort_keys=True,
+            )
+            ds.static_generation_identity = json.dumps(
+                {
+                    "generator": "scripts/prepare_static_inputs.py",
+                    "generator_script_sha256": file_sha256(Path(__file__).resolve()),
+                    "coordinator_commit": args.generating_commit or "unspecified",
+                    "runtime_manifest_sha256": args.runtime_manifest_sha256 or "unspecified",
+                    "grid": {
+                        "center_lat": args.center_lat,
+                        "center_lon": args.center_lon,
+                        "width_km": args.width_km,
+                        "height_km": args.height_km,
+                        "dx_m": args.dx_m,
+                    },
+                    "landuse_aggregation": (
+                        "worldcover_to_usgs_reclassification_before_area_fraction_aggregation"
+                    ),
+                    "soil_depth_mapping": list(HICAR_SOIL_LAYER_INTERVALS_CM),
+                    "topography_mode": (
+                        "bitwise_preserved_from_published_baseline"
+                        if preserved_topography_identity
+                        else "generated_from_public_source"
+                    ),
+                },
+                sort_keys=True,
+            )
+            if preserved_topography_identity:
+                ds.preserved_topography_identity = json.dumps(
+                    preserved_topography_identity, sort_keys=True
+                )
             if include_land_surface:
                 ds.soil_initialization = (
-                    "soil_type from SoilGrids texture with texture-dependent default volumetric water content"
+                    "soil_type_layer from six-depth SoilGrids texture; soil_type is the 0-10 cm layer; "
+                    "initial soil_vwc is texture-dependent by Noah-MP layer"
                     if not args.skip_soilgrids
                     else "constant silty-clay-loam soil fallback with texture-dependent default volumetric water content"
                 )
@@ -880,6 +1507,8 @@ def main() -> int:
         if args.landuse_source:
             ds.landuse_source = str(args.landuse_source)
 
+    validate_prepared_static(temporary_output, lat.shape, include_land_surface)
+    os.replace(temporary_output, args.output)
     ready_file.touch()
     print(args.output)
     print(ready_file)

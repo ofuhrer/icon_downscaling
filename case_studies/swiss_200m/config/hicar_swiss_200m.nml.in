@@ -18,6 +18,7 @@
   landvar = 'landmask'
   vegtype_var = 'landuse'
   soiltype_var = 'soil_type'
+@SOIL_TEXTURE_LINE@
   surface_temp_var = 'surface_temperature'
   soil_deept_var = 'soil_deep_temperature'
   soil_t_var = 'soil_temperature'
@@ -81,6 +82,9 @@
 /
 &lsm_parameters
   LU_Categories = 'USGS'
+  ! WorldCover snow/ice maps to USGS category 24.
+  ice_category = 24
+  nmp_opt_soil = @NMP_OPT_SOIL@
 /
 &cu_parameters
 /

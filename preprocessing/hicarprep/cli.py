@@ -1,0 +1,493 @@
+"""Command-line entry point for the HICAR meteorological preprocessor."""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import os
+from pathlib import Path
+import tempfile
+
+import netCDF4
+import numpy as np
+
+from .boundary import write_boundary_sequence_manifest
+from .geometry import SleveConfig
+from .external import append_epoch
+from .pipeline import (
+    convert_water_to_hicar_mixing_ratios,
+    load_valid_time_inputs,
+    read_coordinate,
+    manifest_identity,
+    transform_icon_state,
+    write_boundary_condition,
+    write_initial_condition,
+)
+from .products import (
+    assemble_hicar_runtime_domain,
+    append_sleve_geometry,
+    partition_domain_inputs,
+    sha256,
+    validate_product_set,
+)
+from .registry import FieldRegistry
+from .remap import RBFWeights, VectorRBFWeights, build_rbf_weights, build_vector_rbf_weights
+from .surface import (
+    SOIL_WATER_METHODS,
+    TEMPERATURE_HEIGHT_METHODS,
+    WATER_SNOW_POLICIES,
+    prepare_surface_state,
+)
+from .surface_validation import validate_surface_case
+
+
+def _datetime(value: str) -> dt.datetime:
+    parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed
+
+
+def _registry(path: Path | None) -> FieldRegistry:
+    return FieldRegistry.from_json(path) if path else FieldRegistry.default()
+
+
+def _build_domain(args: argparse.Namespace) -> int:
+    registry = _registry(args.registry)
+    inventory = partition_domain_inputs(
+        args.source,
+        static_path=args.static,
+        external_path=args.external,
+        initial_surface_path=args.initial_surface,
+        epoch_valid_from=args.epoch_valid_from,
+        initial_valid_time=args.initial_valid_time,
+        registry=registry,
+    )
+    config = SleveConfig(
+        nz=args.nz,
+        model_top_m=args.model_top_m,
+        lowest_layer_m=args.lowest_layer_m,
+        stretch_factor=args.stretch_factor,
+        decay_rate_large=args.decay_rate_large,
+        decay_rate_small=args.decay_rate_small,
+        exponent=args.sleve_exponent,
+        smooth_window_radius=args.smooth_window_radius,
+        smooth_cycles=args.smooth_cycles,
+        minimum_jacobian=args.minimum_jacobian,
+        minimum_layer_thickness_m=args.minimum_layer_thickness_m,
+    )
+    append_sleve_geometry(args.static, config=config)
+    validate_product_set(args.static, args.external, args.initial_surface, registry)
+    print(json.dumps(inventory, indent=2, sort_keys=True))
+    return 0
+
+
+def _build_weights(args: argparse.Namespace) -> int:
+    with netCDF4.Dataset(args.icon_grid) as source:
+        source_lat = read_coordinate(source, args.source_lat)
+        source_lon = read_coordinate(source, args.source_lon)
+    with netCDF4.Dataset(args.static) as target:
+        target_lat = np.asarray(target["lat"][:])
+        target_lon = np.asarray(target["lon"][:])
+    operator = build_rbf_weights(
+        source_lat,
+        source_lon,
+        target_lat,
+        target_lon,
+        donors=args.donors,
+        shape_factor=args.shape_factor,
+        maximum_distance_factor=args.maximum_distance_factor,
+    )
+    operator.write(args.output)
+    return 0
+
+
+def _build_vector_weights(args: argparse.Namespace) -> int:
+    with netCDF4.Dataset(args.icon_grid) as source:
+        source_lat = read_coordinate(source, args.source_lat)
+        source_lon = read_coordinate(source, args.source_lon)
+        normal_east = np.asarray(source[args.normal_east][:], dtype=np.float64)
+        normal_north = np.asarray(source[args.normal_north][:], dtype=np.float64)
+    with netCDF4.Dataset(args.static) as target:
+        target_lat = np.asarray(target["lat"][:])
+        target_lon = np.asarray(target["lon"][:])
+    operator = build_vector_rbf_weights(
+        source_lat,
+        source_lon,
+        normal_east,
+        normal_north,
+        target_lat,
+        target_lon,
+        donors=args.donors,
+        shape_factor=args.shape_factor,
+        maximum_distance_factor=args.maximum_distance_factor,
+    )
+    operator.write(args.output)
+    return 0
+
+
+def _append_epoch(args: argparse.Namespace) -> int:
+    names = append_epoch(
+        args.external,
+        args.source,
+        valid_from=args.valid_from,
+        registry=_registry(args.registry),
+    )
+    print(json.dumps({"appended_epoch_fields": names}, indent=2))
+    return 0
+
+
+def _prepare_surface(args: argparse.Namespace) -> int:
+    diagnostics = prepare_surface_state(
+        args.icon_surface,
+        args.static,
+        args.output,
+        weights=RBFWeights.read(args.weights),
+        noahmp_table=args.noahmp_table,
+        soil_water_method=args.soil_water_method,
+        water_snow_policy=args.water_snow_policy,
+        glacier_landuse_category=args.glacier_landuse_category,
+        external_path=args.external,
+        allow_static_epoch_back_extrapolation=args.allow_static_epoch_back_extrapolation,
+        temperature_height_method=args.temperature_height_method,
+        climatological_lapse_rate_k_m=args.climatological_lapse_rate_k_m,
+        valid_time=args.valid_time,
+    )
+    print(json.dumps(diagnostics.__dict__, indent=2, sort_keys=True))
+    return 0
+
+
+def _assemble_runtime_domain(args: argparse.Namespace) -> int:
+    assemble_hicar_runtime_domain(
+        args.static,
+        args.surface,
+        args.output,
+        external_path=args.external,
+        valid_time=args.valid_time,
+    )
+    print(args.output)
+    return 0
+
+
+def _method_path(value: str) -> tuple[str, Path]:
+    method, separator, path = value.partition("=")
+    if not separator or method not in SOIL_WATER_METHODS or not path:
+        raise argparse.ArgumentTypeError(
+            "surface product must be METHOD=PATH with METHOD one of "
+            + ", ".join(SOIL_WATER_METHODS)
+        )
+    return method, Path(path)
+
+
+def _validate_surface_case(args: argparse.Namespace) -> int:
+    products = dict(args.product)
+    if len(products) != len(args.product):
+        raise ValueError("each soil-water method may be supplied only once")
+    payload = validate_surface_case(
+        args.icon_surface,
+        args.static,
+        products,
+        noahmp_table=args.noahmp_table,
+        report_path=args.report,
+    )
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0 if payload["status"] == "PASS_INPUT_PLAUSIBILITY" else 1
+
+
+def _validate_boundaries(args: argparse.Namespace) -> int:
+    payload = write_boundary_sequence_manifest(
+        args.boundary,
+        args.manifest,
+        maximum_interval_seconds=args.maximum_interval_seconds,
+        allow_unbalanced_research=args.allow_unbalanced_research,
+    )
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0
+
+
+def _transform(args: argparse.Namespace) -> int:
+    weights = RBFWeights.read(args.weights)
+    vector_weights = VectorRBFWeights.read(args.vector_weights) if args.vector_weights else None
+    state, diagnostics = transform_icon_state(
+        args.icon_state, args.static, weights, vector_weights=vector_weights
+    )
+    water_representation = "ICON tracer mass fraction (specific humidity for QV)"
+    if not args.retain_icon_water_for_research:
+        state = convert_water_to_hicar_mixing_ratios(state)
+        water_representation = "dry-air mixing ratio"
+    supplemental = load_valid_time_inputs(
+        valid_time=str(diagnostics["valid_time"]),
+        target_shape=state["lat"].shape,
+        surface_path=args.surface_state,
+        external_path=args.external,
+    )
+    write_initial_condition(
+        args.initial,
+        state,
+        diagnostics,
+        static_path=args.static,
+        weights=weights,
+        allow_unprojected_wind=args.research_unprojected_wind,
+        supplemental_fields=supplemental,
+        water_representation=water_representation,
+    )
+    with netCDF4.Dataset(args.static) as static:
+        x = np.asarray(static["x"][:])
+        y = np.asarray(static["y"][:])
+    write_boundary_condition(
+        args.boundary,
+        state,
+        x=x,
+        y=y,
+        boundary_width_m=args.boundary_width_m,
+        initial_condition_path=args.initial,
+        valid_time=str(diagnostics["valid_time"]),
+        water_representation=water_representation,
+        allow_unbalanced_state=args.research_unprojected_wind,
+        include_lateral_w=args.lbc_w_policy == "relax",
+    )
+    manifest = {
+        "schema": "hicarprep-manifest-v1",
+        "source": {"path": str(args.icon_state), "sha256": sha256(args.icon_state)},
+        "static": {"path": str(args.static), "sha256": sha256(args.static)},
+        "weights": {"path": str(args.weights), "sha256": sha256(args.weights)},
+        "initial": {"path": str(args.initial), "sha256": sha256(args.initial)},
+        "boundary": {"path": str(args.boundary), "sha256": sha256(args.boundary)},
+        "product_set_identity": manifest_identity(args.initial, args.boundary),
+        "diagnostics": diagnostics,
+        "hicar_pressure_adjustment": "NOT_APPLIED_RESEARCH_PRODUCT",
+        "wind_balance": "NOT_APPLIED_RESEARCH_PRODUCT",
+        "water_representation": water_representation,
+        "hicar_water_conversion": (
+            "APPLIED_JOINT_ALL_WATER_SPECIES"
+            if water_representation == "dry-air mixing ratio"
+            else "NOT_APPLIED_RESEARCH_PRODUCT"
+        ),
+        "surface_state": (
+            {"path": str(args.surface_state), "sha256": sha256(args.surface_state)}
+            if args.surface_state
+            else None
+        ),
+        "external": (
+            {"path": str(args.external), "sha256": sha256(args.external)} if args.external else None
+        ),
+    }
+    if args.vector_weights:
+        manifest["vector_weights"] = {
+            "path": str(args.vector_weights),
+            "sha256": sha256(args.vector_weights),
+        }
+    args.manifest.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{args.manifest.name}.", suffix=".partial", dir=args.manifest.parent
+    )
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    try:
+        temporary.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+        os.replace(temporary, args.manifest)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return 0
+
+
+def parser() -> argparse.ArgumentParser:
+    result = argparse.ArgumentParser(
+        prog="hicarprep",
+        description="Direct native-grid ICON to target-coordinate HICAR preprocessing",
+    )
+    commands = result.add_subparsers(dest="command", required=True)
+
+    domain = commands.add_parser(
+        "build-domain", help="split field lifetimes and add HICAR geometry"
+    )
+    domain.add_argument("--source", type=Path, required=True)
+    domain.add_argument("--static", type=Path, required=True)
+    domain.add_argument("--external", type=Path, required=True)
+    domain.add_argument("--initial-surface", type=Path, required=True)
+    domain.add_argument("--epoch-valid-from", type=_datetime, required=True)
+    domain.add_argument(
+        "--initial-valid-time",
+        type=_datetime,
+        help="valid time of initial-only soil/snow/skin state (defaults to epoch-valid-from)",
+    )
+    domain.add_argument("--registry", type=Path)
+    domain.add_argument("--nz", type=int, default=80)
+    domain.add_argument("--model-top-m", type=float, default=12_000.0)
+    domain.add_argument("--lowest-layer-m", type=float, default=15.0)
+    domain.add_argument("--stretch-factor", type=float, default=0.65)
+    domain.add_argument("--decay-rate-large", type=float, default=2.0)
+    domain.add_argument("--decay-rate-small", type=float, default=6.0)
+    domain.add_argument("--sleve-exponent", type=float, default=1.35)
+    domain.add_argument("--smooth-window-radius", type=int, default=5)
+    domain.add_argument("--smooth-cycles", type=int, default=10)
+    domain.add_argument("--minimum-jacobian", type=float, default=0.0)
+    domain.add_argument("--minimum-layer-thickness-m", type=float, default=0.0)
+    domain.set_defaults(func=_build_domain)
+
+    weights = commands.add_parser("build-weights", help="cache direct native ICON RBF weights")
+    weights.add_argument("--icon-grid", type=Path, required=True)
+    weights.add_argument("--static", type=Path, required=True)
+    weights.add_argument("--output", type=Path, required=True)
+    weights.add_argument("--source-lat", default="clat")
+    weights.add_argument("--source-lon", default="clon")
+    weights.add_argument("--donors", type=int, default=10)
+    weights.add_argument("--shape-factor", type=float, default=1.0)
+    weights.add_argument("--maximum-distance-factor", type=float, default=3.0)
+    weights.set_defaults(func=_build_weights)
+
+    vector_weights = commands.add_parser(
+        "build-vector-weights", help="cache native ICON edge-normal vector RBF weights"
+    )
+    vector_weights.add_argument("--icon-grid", type=Path, required=True)
+    vector_weights.add_argument("--static", type=Path, required=True)
+    vector_weights.add_argument("--output", type=Path, required=True)
+    vector_weights.add_argument("--source-lat", default="edge_lat")
+    vector_weights.add_argument("--source-lon", default="edge_lon")
+    vector_weights.add_argument("--normal-east", default="edge_normal_east")
+    vector_weights.add_argument("--normal-north", default="edge_normal_north")
+    vector_weights.add_argument("--donors", type=int, default=9)
+    vector_weights.add_argument("--shape-factor", type=float, default=1.0)
+    vector_weights.add_argument("--maximum-distance-factor", type=float, default=3.0)
+    vector_weights.set_defaults(func=_build_vector_weights)
+
+    epoch = commands.add_parser(
+        "append-epoch", help="append later land-cover/glacier/urban fields for multi-year runs"
+    )
+    epoch.add_argument("--external", type=Path, required=True)
+    epoch.add_argument("--source", type=Path, required=True)
+    epoch.add_argument("--valid-from", type=_datetime, required=True)
+    epoch.add_argument("--registry", type=Path)
+    epoch.set_defaults(func=_append_epoch)
+
+    surface = commands.add_parser(
+        "prepare-surface", help="map one native ICON land state to the HICAR target grid"
+    )
+    surface.add_argument("--icon-surface", type=Path, required=True)
+    surface.add_argument("--static", type=Path, required=True)
+    surface.add_argument("--weights", type=Path, required=True)
+    surface.add_argument("--output", type=Path, required=True)
+    surface.add_argument("--noahmp-table", type=Path, required=True)
+    surface.add_argument("--soil-water-method", choices=SOIL_WATER_METHODS, default="smi")
+    surface.add_argument(
+        "--water-snow-policy", choices=WATER_SNOW_POLICIES, default="zero"
+    )
+    surface.add_argument(
+        "--temperature-height-method",
+        choices=TEMPERATURE_HEIGHT_METHODS,
+        default="int2lm_climatological",
+    )
+    surface.add_argument("--climatological-lapse-rate-k-m", type=float, default=0.007)
+    surface.add_argument("--glacier-landuse-category", type=int, default=24)
+    surface.add_argument(
+        "--external",
+        type=Path,
+        help="lifetime-partitioned external product when landuse is not in immutable static",
+    )
+    surface.add_argument(
+        "--allow-static-epoch-back-extrapolation",
+        action="store_true",
+        help=(
+            "research-only: explicitly use a static epoch before its valid-from time; "
+            "the exception is recorded in the surface product"
+        ),
+    )
+    surface.add_argument("--valid-time", help="required only when source lacks valid_time")
+    surface.set_defaults(func=_prepare_surface)
+
+    runtime_domain = commands.add_parser(
+        "assemble-runtime-domain",
+        help="merge a prepared surface state into the single domain file HICAR reads",
+    )
+    runtime_domain.add_argument("--static", type=Path, required=True)
+    runtime_domain.add_argument("--surface", type=Path, required=True)
+    runtime_domain.add_argument("--output", type=Path, required=True)
+    runtime_domain.add_argument(
+        "--external", type=Path, help="lifetime-partitioned external parameters to materialize"
+    )
+    runtime_domain.add_argument(
+        "--valid-time", type=_datetime, help="must equal the prepared surface valid time"
+    )
+    runtime_domain.set_defaults(func=_assemble_runtime_domain)
+
+    surface_validation = commands.add_parser(
+        "validate-surface-case",
+        help="compare all soil-water transfers for one ICON valid time",
+    )
+    surface_validation.add_argument("--icon-surface", type=Path, required=True)
+    surface_validation.add_argument("--static", type=Path, required=True)
+    surface_validation.add_argument("--noahmp-table", type=Path, required=True)
+    surface_validation.add_argument(
+        "--product",
+        action="append",
+        type=_method_path,
+        required=True,
+        help="repeat as smi=PATH, relative_saturation=PATH, and absolute_w_so=PATH",
+    )
+    surface_validation.add_argument("--report", type=Path, required=True)
+    surface_validation.set_defaults(func=_validate_surface_case)
+
+    boundary_sequence = commands.add_parser(
+        "validate-boundaries", help="validate and index an ordered LBC time sequence"
+    )
+    boundary_sequence.add_argument("--boundary", type=Path, action="append", required=True)
+    boundary_sequence.add_argument("--manifest", type=Path, required=True)
+    boundary_sequence.add_argument("--maximum-interval-seconds", type=float)
+    boundary_sequence.add_argument(
+        "--allow-unbalanced-research",
+        action="store_true",
+        help="index marked research states without HICAR balance certificates",
+    )
+    boundary_sequence.set_defaults(func=_validate_boundaries)
+
+    transform = commands.add_parser("transform", help="construct one target IC and sparse LBC")
+    transform.add_argument("--icon-state", type=Path, required=True)
+    transform.add_argument("--static", type=Path, required=True)
+    transform.add_argument("--weights", type=Path, required=True)
+    transform.add_argument(
+        "--vector-weights",
+        type=Path,
+        help="required when the canonical ICON state supplies edge-normal VN instead of U/V",
+    )
+    transform.add_argument("--initial", type=Path, required=True)
+    transform.add_argument("--boundary", type=Path, required=True)
+    transform.add_argument("--manifest", type=Path, required=True)
+    transform.add_argument("--boundary-width-m", type=float, default=10_000.0)
+    transform.add_argument(
+        "--lbc-w-policy",
+        choices=("diagnose", "relax"),
+        default="diagnose",
+        help="omit W for model-side diagnosis, or store projected interface W for relaxation",
+    )
+    transform.add_argument(
+        "--surface-state",
+        type=Path,
+        help="valid-time target-grid soil/snow/skin state from prepare-surface",
+    )
+    transform.add_argument(
+        "--external",
+        type=Path,
+        help="lifetime-aware external product evaluated at the atmospheric valid time",
+    )
+    transform.add_argument(
+        "--retain-icon-water-for-research",
+        action="store_true",
+        help="do not convert ICON moist-mass fractions to HICAR dry-air mixing ratios",
+    )
+    transform.add_argument(
+        "--research-unprojected-wind",
+        action="store_true",
+        help="write a marked research state before shared HICAR pressure/wind balance operators",
+    )
+    transform.set_defaults(func=_transform)
+    return result
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parser().parse_args(argv)
+    return int(args.func(args))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

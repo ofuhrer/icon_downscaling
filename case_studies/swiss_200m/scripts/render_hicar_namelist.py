@@ -79,6 +79,14 @@ def main() -> int:
         action="store_true",
         help="Read SWE and snow height from the published static initialization file.",
     )
+    parser.add_argument(
+        "--depth-varying-soil",
+        action="store_true",
+        help=(
+            "Use the four-layer soil_type_layer field with Noah-MP nmp_opt_soil=2. "
+            "This is a controlled sensitivity option, not the production default."
+        ),
+    )
     parser.add_argument("--forcing-file-list", required=True, type=Path)
     parser.add_argument(
         "--forcing-plan",
@@ -137,6 +145,19 @@ def main() -> int:
     if args.alpha_const is not None and not 0.01 <= args.alpha_const <= 1.0:
         raise SystemExit("--alpha-const must be 0.01..1.0")
     published(args.static_file, "static file")
+    if args.depth_varying_soil:
+        try:
+            import netCDF4
+        except ModuleNotFoundError as exc:
+            raise SystemExit("--depth-varying-soil requires Python netCDF4 for schema validation") from exc
+        with netCDF4.Dataset(args.static_file) as static:
+            if "soil_type_layer" not in static.variables:
+                raise SystemExit("--depth-varying-soil requires static variable soil_type_layer")
+            soil_texture = static.variables["soil_type_layer"]
+            if soil_texture.ndim != 3 or soil_texture.shape[0] != 4:
+                raise SystemExit(
+                    "soil_type_layer must have NetCDF dimensions (soil_layer, y, x) with four layers"
+                )
     if not args.forcing_file_list.is_file():
         raise SystemExit(f"forcing file list is missing: {args.forcing_file_list}")
     forcing_list_marker = Path(f"{args.forcing_file_list}.ready")
@@ -235,6 +256,10 @@ def main() -> int:
             if args.rea_l_land_initialization
             else ""
         ),
+        "@SOIL_TEXTURE_LINE@": (
+            "  soiltexture_var = 'soil_type_layer'" if args.depth_varying_soil else ""
+        ),
+        "@NMP_OPT_SOIL@": "2" if args.depth_varying_soil else "1",
         "@OUTPUT_INTERVAL@": str(args.output_interval),
         "@OUTPUT_VARS@": output_variables[args.output_profile],
         "@NZ@": str(args.nz),

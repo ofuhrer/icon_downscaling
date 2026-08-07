@@ -1,0 +1,32 @@
+{
+  "candidate": "/scratch/mch/olifu/icon_hicar/qualification/hicarprep_static_fractional_v1/domain_static_alpine_bridge_200m_fractional_v1.nc",
+  "candidate_sha256": "2b74a1cb9cd5cb07c73333c138155851f81b7dba973e0617b7bfd606e5dc662b",
+  "depth_varying_soil_cell_count": 103914,
+  "depth_varying_soil_land_cell_count": 97827,
+  "dominant_category_mismatch_count": 0,
+  "fraction_closure_max_abs_error": 1.448206603527069e-07,
+  "glacier_fraction_cell_count": 74770,
+  "grid_shape": [
+    701,
+    701
+  ],
+  "mixed_category_cell_count": 395197,
+  "schema": "hicarprep-static-fractional-validation-v1",
+  "soil_layer_difference_cell_counts": [
+    0,
+    22400,
+    67404,
+    91396
+  ],
+  "soil_texture_sum_percent_maximum": 100.10000610351562,
+  "soil_texture_sum_percent_minimum": 99.89999389648438,
+  "soil_type_layer_shape": [
+    4,
+    701,
+    701
+  ],
+  "status": "PASS_STATIC_AGGREGATION_SCHEMA_AND_PLAUSIBILITY",
+  "topography_bitwise_preserved": true,
+  "urban_fraction_cell_count": 72410,
+  "validation_job": "5039253"
+}

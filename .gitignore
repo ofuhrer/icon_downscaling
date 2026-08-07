@@ -22,6 +22,7 @@ htmlcov/
 .cache/
 .codebase-memory/
 tmp_diagnostics/
+tmp/
 
 # Optional private source-reference checkout. Its exact revision is recorded
 # in externals/fieldextra.lock without making public clones depend on access.
