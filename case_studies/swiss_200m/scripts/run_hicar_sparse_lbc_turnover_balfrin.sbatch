@@ -25,7 +25,7 @@ renderer=$coordinator/case_studies/swiss_200m/scripts/render_hicar_namelist.py
 wrapper=$coordinator/case_studies/swiss_200m/scripts/gpu_rank_wrapper.sh
 exe=$build_root/HICAR_gpu
 sparse_list=$root/sparse_lbc/sparse_lbc_list.txt
-run=$root/turnover
+run=${HICAR_LBC_TURNOVER_RUN:-$root/turnover}
 
 . "$coordinator/scripts/load_balfrin_site_config.sh"
 [ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
