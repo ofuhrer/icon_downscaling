@@ -1,0 +1,32 @@
+{
+  "artifacts": {
+    "domain_static_swiss_200m_modal_wc_soil4_v1.nc": {
+      "sha256": "7b470441eecbcbc45818a8479d87d2ab33603a24d7bd1baf6db76cfad8f89144",
+      "size_bytes": 109229558
+    },
+    "python-static-abc-fcc0f19c6dfd88fa.environment.json": {
+      "sha256": "b3ec2dce5ca3d107bcfb3e7666b74ccf12ab6ad6a55e2de871eff746b9abc3fc",
+      "size_bytes": 802
+    },
+    "runtime_manifest.json": {
+      "sha256": "00c8397b2b831b36b7a9bbc62be939dff584b58a8224c7919138e51400832e35",
+      "size_bytes": 2018
+    },
+    "static_abc_audit_v2_verified.json": {
+      "sha256": "c1e58450d7178e17bfc8f2a64454ce9e2f8e9541e7678b5ad9fe2fe4d5b4ffc5",
+      "size_bytes": 432368
+    }
+  },
+  "audit_sha256": "c1e58450d7178e17bfc8f2a64454ce9e2f8e9541e7678b5ad9fe2fe4d5b4ffc5",
+  "candidate_build_job": 5019323,
+  "candidate_build_postpublication_status": "wrapper failed only after candidate publication because first minimal runtime omitted domain.json",
+  "candidate_sha256": "7b470441eecbcbc45818a8479d87d2ab33603a24d7bd1baf6db76cfad8f89144",
+  "decision": "STATIC_AUDIT_PASS_PAIRED_COUPLED_CASES_REQUIRED",
+  "decisive_audit_job": 5019543,
+  "promotion_limit": "Passing this audit permits bounded paired process cases only; it does not promote B or C to national production and does not validate nmp_opt_soil=2 physics.",
+  "python_environment_manifest_sha256": "b3ec2dce5ca3d107bcfb3e7666b74ccf12ab6ad6a55e2de871eff746b9abc3fc",
+  "runtime_manifest_sha256": "00c8397b2b831b36b7a9bbc62be939dff584b58a8224c7919138e51400832e35",
+  "schema": "hicar-static-abc-qualification-release/v1",
+  "shared_source_cache": "/scratch/mch/olifu/icon_hicar/cache/hicar_static_public",
+  "verified_source_files": 600
+}

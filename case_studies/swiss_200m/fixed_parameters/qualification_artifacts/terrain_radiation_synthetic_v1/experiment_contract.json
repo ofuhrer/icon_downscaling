@@ -1,0 +1,126 @@
+{
+  "analytic_expectations": {
+    "at_blocked_azimuth": [
+      {
+        "direct_flux_ratio": 0.0,
+        "solar_elevation_degrees": 29.0,
+        "visible": false
+      },
+      {
+        "solar_elevation_degrees": 30.0,
+        "visible": true
+      },
+      {
+        "solar_elevation_degrees": 31.0,
+        "visible": true
+      }
+    ],
+    "blocked_diffuse_flux_ratio": 0.9972222222222222,
+    "flat_open_diffuse_flux_ratio": 1.0,
+    "hicar_visibility_rule": "solar_elevation_radians >= (90 - hlm_degrees) * pi/180",
+    "raw_horizontal_direct_and_diffuse_are_invariant_across_profiles": true
+  },
+  "artifacts": {
+    "base": {
+      "path": "/Users/fuhrer/Work/agentic/icon_hicar/case_studies/swiss_200m/fixed_parameters/qualification_artifacts/terrain_radiation_synthetic_v1/base_flat.nc",
+      "sha256": "db88e08f553792cc0b89d360b1253e5880e332e2531f5140222de9d79b8b379c"
+    },
+    "blocked_geometry": {
+      "path": "/Users/fuhrer/Work/agentic/icon_hicar/case_studies/swiss_200m/fixed_parameters/qualification_artifacts/terrain_radiation_synthetic_v1/geometry_single_sector_blocked.nc",
+      "sha256": "392dd609b5c174d2529565edda3a5cdb21c276ecd7f30d65c313ed1117bcdbaa"
+    },
+    "blocked_manifest": {
+      "path": "/Users/fuhrer/Work/agentic/icon_hicar/case_studies/swiss_200m/fixed_parameters/qualification_artifacts/terrain_radiation_synthetic_v1/static_single_sector_blocked.manifest.json",
+      "sha256": "6ed6b82931911874694c05f05af61d7b6c2cc22ed495e566c42422b8e80a2dd2"
+    },
+    "blocked_static": {
+      "path": "/Users/fuhrer/Work/agentic/icon_hicar/case_studies/swiss_200m/fixed_parameters/qualification_artifacts/terrain_radiation_synthetic_v1/static_single_sector_blocked.nc",
+      "sha256": "43d72d1f97ce1dd6fa477d1a7bc23b5daf5e23d73878149b9f343185b33d87e6"
+    },
+    "flat_geometry": {
+      "path": "/Users/fuhrer/Work/agentic/icon_hicar/case_studies/swiss_200m/fixed_parameters/qualification_artifacts/terrain_radiation_synthetic_v1/geometry_flat_open.nc",
+      "sha256": "264eeabfd59c550497fb2e60a8f814fe01b60ef724577b2174cc2769c3f3158e"
+    },
+    "flat_manifest": {
+      "path": "/Users/fuhrer/Work/agentic/icon_hicar/case_studies/swiss_200m/fixed_parameters/qualification_artifacts/terrain_radiation_synthetic_v1/static_flat_open.manifest.json",
+      "sha256": "c874b5963c216945181ddf773b1ff1ead34a3b02b5f28abe3c4cd79726e9ff40"
+    },
+    "flat_static": {
+      "path": "/Users/fuhrer/Work/agentic/icon_hicar/case_studies/swiss_200m/fixed_parameters/qualification_artifacts/terrain_radiation_synthetic_v1/static_flat_open.nc",
+      "sha256": "d227210f4e91dbddb1b914ebde220e8acaa9fd8a4606641767f7bc69ccd21af2"
+    }
+  },
+  "gates": {
+    "blocked_threshold": "direct shortwave must be zero below and nonzero at/above the analytic horizon threshold when raw direct is positive",
+    "causal_components": "raw horizontal direct/diffuse must be identical; only corrected components may differ",
+    "flat_identity": "flat_direct and flat_direct_diffuse must match flat_off within configured numerical tolerance",
+    "restart": "continuous and split trajectories must agree for every saved field at common times"
+  },
+  "geometry": {
+    "azimuth_convention": "degrees clockwise from north; sectors start at 0 degrees",
+    "blocked_azimuth_degrees": 88.0,
+    "blocked_fortran_sector": 23,
+    "blocked_svf": 0.9972222222222222,
+    "blocked_zero_based_sector": 22,
+    "flat_open_svf": 1.0,
+    "hlm_zenith_angle_degrees": 60.0,
+    "horizon_elevation_degrees": 30.0
+  },
+  "hicar_source": {
+    "atm_utilities_sha256": "8fc0a8c3e324265c40847b58400e35d11458d341249c3d80fee84ee80de9eedf",
+    "commit": "b5146a3c67612bd7d29abcd7c480ae4ae1bd31a2",
+    "ra_driver_sha256": "bb143a153f8a92618d9f249dcd1fa2cbdf25a63328f05244dbd9247bcdd857e3"
+  },
+  "model_experiment_matrix": [
+    {
+      "case": "flat_off",
+      "static": "flat_static",
+      "terrain_radiation_profile": "off"
+    },
+    {
+      "case": "flat_direct",
+      "static": "flat_static",
+      "terrain_radiation_profile": "direct"
+    },
+    {
+      "case": "flat_direct_diffuse",
+      "static": "flat_static",
+      "terrain_radiation_profile": "direct-diffuse"
+    },
+    {
+      "case": "blocked_direct",
+      "static": "blocked_static",
+      "terrain_radiation_profile": "direct"
+    },
+    {
+      "case": "blocked_direct_diffuse",
+      "static": "blocked_static",
+      "terrain_radiation_profile": "direct-diffuse"
+    }
+  ],
+  "promotion_limit": "These fixtures qualify geometry expectations only; they do not qualify national terrain radiation.",
+  "remaining_inputs_before_model_execution": [
+    "forcing on this exact synthetic grid with a sun path crossing the blocked sector",
+    "rendered profile namelists bound to the chosen HICAR executable",
+    "checksum-bound continuous and split-run plans"
+  ],
+  "restart_design": {
+    "comparison": "bitwise where deterministic, otherwise the project restart tolerance",
+    "comparison_times_minutes": [
+      90,
+      100,
+      110,
+      120,
+      130,
+      140,
+      150,
+      160,
+      170,
+      180
+    ],
+    "continuous_duration_minutes": 180,
+    "split_at_minutes": 90
+  },
+  "schema": "hicar-terrain-radiation-synthetic-gate/v1",
+  "scope": "analytic_geometry_and_experiment_design_no_model_run"
+}

@@ -27,7 +27,17 @@ Inspect the current CLI before running:
 python3 scripts/prepare_static_inputs.py --help
 ```
 
-For public-source construction, use Copernicus DEM GLO-30, ESA WorldCover 2021, and SoilGrids with cache reuse under `$SCRATCH/icon_hicar/cache/hicar_static_public`. The script maps WorldCover to USGS categories; set HICAR/NoahMP `LU_Categories='USGS'`.
+For public-source construction, use Copernicus DEM GLO-30, ESA WorldCover 2021, and SoilGrids with cache reuse under `$SCRATCH/icon_hicar/cache/hicar_static_public`. Aggregate WorldCover to the model grid with the modal source category before mapping it to USGS; never use one nearest 10 m pixel to represent a 100-250 m cell. Set HICAR/NoahMP `LU_Categories='USGS'`.
+
+Prepare SoilGrids sand/silt/clay from all six standard depth intervals and thickness-weight them onto Noah-MP's 0-10, 10-30, 30-70, and 70-150 cm layers. Retain `soil_type` as the surface-layer compatibility field and write `soil_type_layer` plus layer bounds and composition diagnostics. Use dominant soil (`nmp_opt_soil=1`) as the established control; test `nmp_opt_soil=2` only as an explicit paired intervention. The latter requires the HICAR `soiltexture_var` namelist entry and exactly four layers.
+
+For a land-cover/soil-only attribution candidate on an existing grid, use
+`--preserve-topography-from` with the published baseline rather than
+regenerating the DEM. The candidate must copy `topo`, `topo_highres`,
+`topo_driving`, and `topo_blend_weight` bitwise, bind the baseline checksum,
+and pass a zero-tolerance terrain comparison. B (`nmp_opt_soil=1`) and C
+(`nmp_opt_soil=2`) then share the same candidate NetCDF bytes; their physical
+difference belongs in the runtime configuration and paired process test.
 
 When ICON-derived `HSURF` is available, pass it as the boundary topography source and retain the generated blend diagnostics. Boundary relaxation is the established control; disable it only as an explicit sensitivity.
 
@@ -68,6 +78,7 @@ Or let `scripts/prepare_icon_inputs.sh --domain-file ...` call the helper. Treat
 - Confirm projected coordinates, latitude/longitude, dimensions, spacing, and orientation.
 - Require finite terrain, land-use, soil, and initialization fields.
 - Inspect terrain min/max, slopes, water/land fractions, category ranges, and soil-layer dimensions.
+- Require soil categories 1-13, `soil_type == soil_type_layer[0]`, and sand+silt+clay closure within 95-105% at every layer/cell for the research static schema.
 - Verify the high-resolution terrain converges smoothly to driving `HSURF` near every boundary.
 - Verify forcing coverage with no extrapolation into the HICAR domain or boundary zone.
 - Estimate total cells and expected output volume before submitting large 100 m domains.

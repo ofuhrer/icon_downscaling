@@ -1,0 +1,139 @@
+{
+  "base_angle_ranges": {
+    "aspect_angle": {
+      "maximum": 0.0,
+      "minimum": 0.0
+    },
+    "slope_angle": {
+      "maximum": 0.0,
+      "minimum": 0.0
+    }
+  },
+  "base_static": {
+    "path": "/Users/fuhrer/Work/agentic/icon_hicar/case_studies/swiss_200m/fixed_parameters/qualification_artifacts/terrain_radiation_synthetic_v1/base_flat.nc",
+    "sha256": "db88e08f553792cc0b89d360b1253e5880e332e2531f5140222de9d79b8b379c"
+  },
+  "geometry": {
+    "azimuth_degrees": [
+      0.0,
+      4.0,
+      8.0,
+      12.0,
+      16.0,
+      20.0,
+      24.0,
+      28.0,
+      32.0,
+      36.0,
+      40.0,
+      44.0,
+      48.0,
+      52.0,
+      56.0,
+      60.0,
+      64.0,
+      68.0,
+      72.0,
+      76.0,
+      80.0,
+      84.0,
+      88.0,
+      92.0,
+      96.0,
+      100.0,
+      104.0,
+      108.0,
+      112.0,
+      116.0,
+      120.0,
+      124.0,
+      128.0,
+      132.0,
+      136.0,
+      140.0,
+      144.0,
+      148.0,
+      152.0,
+      156.0,
+      160.0,
+      164.0,
+      168.0,
+      172.0,
+      176.0,
+      180.0,
+      184.0,
+      188.0,
+      192.0,
+      196.0,
+      200.0,
+      204.0,
+      208.0,
+      212.0,
+      216.0,
+      220.0,
+      224.0,
+      228.0,
+      232.0,
+      236.0,
+      240.0,
+      244.0,
+      248.0,
+      252.0,
+      256.0,
+      260.0,
+      264.0,
+      268.0,
+      272.0,
+      276.0,
+      280.0,
+      284.0,
+      288.0,
+      292.0,
+      296.0,
+      300.0,
+      304.0,
+      308.0,
+      312.0,
+      316.0,
+      320.0,
+      324.0,
+      328.0,
+      332.0,
+      336.0,
+      340.0,
+      344.0,
+      348.0,
+      352.0,
+      356.0
+    ],
+    "path": "/Users/fuhrer/Work/agentic/icon_hicar/case_studies/swiss_200m/fixed_parameters/qualification_artifacts/terrain_radiation_synthetic_v1/geometry_flat_open.nc",
+    "provenance": {
+      "generator": "prepare_synthetic_terrain_radiation_gate.py",
+      "generator_version": "1",
+      "horizon_convention": "hlm_zenith_angle_degrees_flat_90",
+      "search_distance_km": 1.0,
+      "source_dem_sha256": "f9a8c9b949a6f1bb9a980b9575944abeaeac8907c22d7386c95909c67e11982a",
+      "vertical_datum": "synthetic_zero_reference"
+    },
+    "ranges": {
+      "hlm": {
+        "maximum": 90.0,
+        "minimum": 90.0
+      },
+      "svf": {
+        "maximum": 1.0,
+        "minimum": 1.0
+      }
+    },
+    "sha256": "264eeabfd59c550497fb2e60a8f814fe01b60ef724577b2174cc2769c3f3158e",
+    "shape_yx": [
+      21,
+      21
+    ]
+  },
+  "output": {
+    "path": "/Users/fuhrer/Work/agentic/icon_hicar/case_studies/swiss_200m/fixed_parameters/qualification_artifacts/terrain_radiation_synthetic_v1/static_flat_open.nc",
+    "sha256": "d227210f4e91dbddb1b914ebde220e8acaa9fd8a4606641767f7bc69ccd21af2"
+  },
+  "schema": "icon-hicar-terrain-radiation-static-v1"
+}
