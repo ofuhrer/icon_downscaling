@@ -9,12 +9,14 @@
 #SBATCH --time=00:15:00
 
 set -euo pipefail
-[ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
-module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
-
 repo_root=${REPO_ROOT:-$SCRATCH/icon_hicar}
+# shellcheck source=scripts/load_balfrin_site_config.sh
+. "$repo_root/scripts/load_balfrin_site_config.sh"
+[ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
+module use "$USER_ENV_ROOT/modules"
+
 uenv_bin=${UENV_BIN:-/usr/bin/uenv}
-image=${REA_FDB_IMAGE:-fdb/5.19:v2}
+image=${REA_FDB_IMAGE:?REA_FDB_IMAGE is required}
 output=${REA_L_SURFACE_AUDIT_REPORT:-$repo_root/case_studies/swiss_200m/validation/rea_l_surface_reference_inventory.txt}
 mkdir -p "$(dirname "$output")" "$repo_root/tmp"
 work=$(mktemp -d "$repo_root/tmp/rea_l_surface_audit.XXXXXX")

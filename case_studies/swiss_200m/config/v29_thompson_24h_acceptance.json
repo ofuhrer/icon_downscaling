@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "status": "PREDECLARED",
+  "purpose": "Objective promotion criterion from the V29 baseline to the Thompson 72-hour summer gate.",
+  "baseline_assessment": "/scratch/mch/olifu/icon_hicar/causal_resolution/v1/baseline_20200701/causal_resolution_assessment.json",
+  "candidate_assessment": "/scratch/mch/olifu/icon_hicar/causal_resolution/v3/thompson_20200701/causal_resolution_assessment.json",
+  "endpoints": {
+    "2020-07-01T06:00:00": {
+      "baseline_cloud_deficit": -0.05929622004179996,
+      "baseline_rain_deficit": -0.11825014886055642
+    },
+    "2020-07-01T09:00:00": {
+      "baseline_cloud_deficit": -0.18957574037546393,
+      "baseline_rain_deficit": -0.3273638642348928
+    }
+  },
+  "pass_condition": "At each endpoint, the candidate strictly reduces absolute cloud_deficit and absolute rain_deficit relative to the listed baseline values; the candidate report must be PASS_NON_PROMOTING and CLOUD_PATHWAY_CORRECTION; and the candidate model publication must be PASS with its ready marker.",
+  "failure_action": "Record the Thompson correction as a falsified mechanism-specific intervention. Do not start the summer gate or claim an inconclusive causal result."
+}

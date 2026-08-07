@@ -9,14 +9,16 @@
 #SBATCH --time=00:30:00
 
 set -euo pipefail
-[ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
-module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
-
 repo_root=${REPO_ROOT:-$SCRATCH/icon_hicar}
+# shellcheck source=scripts/load_balfrin_site_config.sh
+. "$repo_root/scripts/load_balfrin_site_config.sh"
+[ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
+module use "$USER_ENV_ROOT/modules"
+
 date=${REA_L_AUDIT_DATE:-20200101}
 report=${REA_L_LAND_REPORT:-$repo_root/case_studies/swiss_200m/validation/rea_l_land_state_inventory.json}
 uenv_bin=${UENV_BIN:-/usr/bin/uenv}
-image=${REA_FDB_IMAGE:-fdb/5.19:v2}
+image=${REA_FDB_IMAGE:?REA_FDB_IMAGE is required}
 work=$(mktemp -d "$repo_root/tmp/rea_l_land_state.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 

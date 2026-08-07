@@ -37,6 +37,9 @@ RAP = re.compile(
     rf"(?: level \d+)?: host_stencil=\s*({FLOAT})"
     rf"\s+device_halo=\s*({FLOAT})\s+device_stencil=\s*({FLOAT})"
 )
+RAP_HIERARCHY = re.compile(
+    r"HICAR exact Galerkin hierarchy ready: total coarse levels=\s*(\d+)"
+)
 TERMINAL_GATE = re.compile(
     rf"HICAR terminal collective solve gate:.*?"
     rf"iterations=(\d+)\s+relative_residual=\s*({FLOAT})"
@@ -93,6 +96,7 @@ def evaluate(text: str, expected_hours: int) -> dict:
         tuple(float(match.group(index)) for index in range(1, 4))
         for match in RAP.finditer(text)
     ]
+    rap_hierarchy = [int(match.group(1)) for match in RAP_HIERARCHY.finditer(text)]
     terminal_gate = [
         {
             "iterations": int(match.group(1)),
@@ -162,9 +166,20 @@ def evaluate(text: str, expected_hours: int) -> dict:
         or sleve[0]["minimum_interface_thickness_m"] <= 0.0
     ):
         failures.append("SLEVE geometry gate is not positive")
-    if len(rap) != 9:
-        failures.append(f"parsed {len(rap)} exact-RAP verification levels; expected 9")
-    elif max(abs(value) for record in rap for value in record) > 1.0e-12:
+    declared_rap_levels = rap_hierarchy[0] if len(rap_hierarchy) == 1 else None
+    if len(rap_hierarchy) != 1:
+        failures.append(
+            "parsed "
+            f"{len(rap_hierarchy)} exact-Galerkin hierarchy declarations; expected 1"
+        )
+    elif declared_rap_levels <= 0:
+        failures.append("exact-Galerkin hierarchy declared no coarse levels")
+    elif len(rap) != declared_rap_levels:
+        failures.append(
+            f"parsed {len(rap)} exact-RAP verification levels; "
+            f"hierarchy declared {declared_rap_levels}"
+        )
+    if rap and max(abs(value) for record in rap for value in record) > 1.0e-12:
         failures.append("an exact-RAP verification error exceeds 1e-12")
     if len(terminal_gate) != 1:
         failures.append(
@@ -225,6 +240,8 @@ def evaluate(text: str, expected_hours: int) -> dict:
         "sleve_geometry": sleve,
         "exact_rap": {
             "level_count": len(rap),
+            "declared_level_count": declared_rap_levels,
+            "hierarchy_declaration_count": len(rap_hierarchy),
             "maximum_absolute_error": max(
                 (abs(value) for record in rap for value in record),
                 default=None,

@@ -10,8 +10,11 @@
 #SBATCH --time=00:30:00
 
 set -euo pipefail
+repo_root=${REPO_ROOT:-$SCRATCH/icon_hicar}
+# shellcheck source=scripts/load_balfrin_site_config.sh
+. "$repo_root/scripts/load_balfrin_site_config.sh"
 [ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
-module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
+module use "$USER_ENV_ROOT/modules"
 module load nco/5.0.1-gcc netcdf-c/4.8.1-gcc >/dev/null
 
 plan=${STREAM_PLAN:?Set STREAM_PLAN to a published chunk_plan.json}
@@ -20,13 +23,12 @@ reference_index=${REFERENCE_INDEX:-${SLURM_ARRAY_TASK_ID:-}}
   echo "reference array index is required" >&2
   exit 2
 }
-repo_root=${REPO_ROOT:-$SCRATCH/icon_hicar}
 python=${HICAR_VALIDATION_PYTHON:-$repo_root/venv_static/bin/python}
 case_root=$repo_root/case_studies/swiss_200m
 packager=$case_root/validation/package_rea_l_surface_reference.py
 target_grid_file=$case_root/config/fieldextra_target_grid.txt
 uenv_bin=${UENV_BIN:-/usr/bin/uenv}
-image=${REA_FDB_IMAGE:-fdb/5.19:v2}
+image=${REA_FDB_IMAGE:?REA_FDB_IMAGE is required}
 fieldextra=${FIELD_EXTRA_BIN:-/oprusers/osm/opr.inn/abs/fieldextra_gnu_opt_omp-16.0.0-gcc-12.3.0}
 resources=${FIELD_EXTRA_RESOURCES:-/oprusers/osm/opr.inn/config/resources}
 sample=${FIELD_EXTRA_SAMPLE:-/oprusers/osm/opr.inn/modules/eccodes_cosmo_resources/2.36.0.3/samples/COSMO_GRIB2_default.tmpl}
@@ -42,6 +44,7 @@ IFS=$'\t' read -r chunk_root record_index cycle_date cycle_time step valid_time 
   precip_end_date precip_end_step < <(
   "$python" - "$plan" "$reference_index" <<'PY'
 import json
+import os
 import pathlib
 import sys
 from datetime import datetime, timedelta
@@ -59,7 +62,8 @@ valid = datetime.fromisoformat(record["valid_time"])
 if valid.minute or valid.second or valid.hour % 3:
     raise SystemExit(f"reference time is not on a three-hour boundary: {valid}")
 interval_start = valid if record_index == 0 else valid - timedelta(hours=3)
-reference_dir = pathlib.Path(plan["chunk_root"]) / "reference"
+chunk_root = pathlib.Path(os.environ.get("HICAR_REFERENCE_CHUNK_ROOT", plan["chunk_root"]))
+reference_dir = chunk_root / "reference"
 stamp = valid.strftime("%Y%m%d_%H%M")
 final = reference_dir / f"rea_l_surface_reference_{stamp}.nc"
 manifest = reference_dir / f"rea_l_surface_reference_{stamp}.manifest.json"
@@ -79,7 +83,7 @@ else:
     precip_start_step = "21"
     precip_end_step = "24"
 print(
-    plan["chunk_root"],
+    chunk_root,
     record_index,
     record["cycle_date"],
     record["cycle_time"],
@@ -215,15 +219,15 @@ retrieve,
   date=$cycle_date,
   time=$cycle_time,
   levtype=sfc,
-  param=500000/500011/500017/500027/500029/500044/500045,
+  param=500000/500011/500017/500027/500029/500044/500045/500046,
   step=$step
 EOF
 "$uenv_bin" run --view=rea-l-ch1 "$image" -- \
   fdb-read --statistics "$work/current.mars" "$work/current.grib"
 test "$("$uenv_bin" run --view=rea-l-ch1 "$image" -- \
-  grib_count "$work/current.grib" | tail -n 1)" = 7
+  grib_count "$work/current.grib" | tail -n 1)" = 8
 run_fieldextra current "$work/current.grib" \
-  PS T_2M TD_2M U_10M V_10M H_SNOW W_SNOW
+  PS T_2M TD_2M U_10M V_10M H_SNOW W_SNOW CLCT
 drop_singleton_dimensions "$work/current.raw.nc"
 
 geometry="$chunk_root/reference/cache/geometry.nc"
@@ -300,18 +304,26 @@ retrieve,
   date=$endpoint_date,
   time=0000,
   levtype=sfc,
-  param=500041,
+  param=500041/500480/500481/503135/500078/500080/500086/500087/500053/500134/500146,
   step=$endpoint_step
 EOF
     "$uenv_bin" run --view=rea-l-ch1 "$image" -- \
       fdb-read --statistics "$work/precip_${endpoint}.mars" \
       "$work/precip_${endpoint}.grib"
-    run_fieldextra "precip_${endpoint}" "$work/precip_${endpoint}.grib" TOT_PREC
+    test "$("$uenv_bin" run --view=rea-l-ch1 "$image" -- \
+      grib_count "$work/precip_${endpoint}.grib" | tail -n 1)" = 11
+    run_fieldextra "precip_${endpoint}" "$work/precip_${endpoint}.grib" \
+      TOT_PREC ASWDIR_S ASWDIFD_S ATHD_S ASOB_S ATHB_S ALHFL_S ASHFL_S \
+      SNOW_GSP RAIN_GSP GRAU_GSP
     drop_singleton_dimensions "$work/precip_${endpoint}.raw.nc"
   done
   packager_args+=(
     --precip-start "$work/precip_start.raw.nc"
     --precip-end "$work/precip_end.raw.nc"
+    --diagnostics-start "$work/precip_start.raw.nc"
+    --diagnostics-end "$work/precip_end.raw.nc"
+    --diagnostics-start-hours "$precip_start_step"
+    --diagnostics-end-hours "$precip_end_step"
   )
 fi
 "$python" "$packager" "${packager_args[@]}"

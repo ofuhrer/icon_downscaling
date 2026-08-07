@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "status": "FROZEN_BEFORE_HICAR_DIFFERENCE_INSPECTION",
+  "case_id": "plateau-inversion",
+  "source_case_selection": "bridge_spinup_case_selection_v1.json",
+  "period": {
+    "start_exclusive": "2014-11-21T00:00:00",
+    "end_inclusive": "2014-11-22T00:00:00",
+    "cadence_seconds": 3600,
+    "expected_hours": 24
+  },
+  "plateau_mask": {
+    "minimum_land_fraction": 0.5,
+    "minimum_latitude_degrees_north": 46.7,
+    "maximum_latitude_degrees_north": 47.2,
+    "minimum_longitude_degrees_east": 7.5,
+    "maximum_longitude_degrees_east": 9.35,
+    "maximum_source_terrain_m": 700.0
+  },
+  "calmness": {
+    "field": "sqrt(U_10M**2 + V_10M**2)",
+    "hourly_statistic": "median over the frozen plateau mask",
+    "maximum_m_s": 2.0
+  },
+  "stability": {
+    "field": "theta=T*(100000/P)**(287.05/1004.0)",
+    "lower_level": "lowest forcing mass level",
+    "upper_level": "first mass level at least 300 m above the local lowest mass level",
+    "hourly_statistic": "median upper-minus-lower potential temperature over the frozen plateau mask",
+    "minimum_change_k_exclusive": 0.0
+  },
+  "required_hour_fraction": 0.75,
+  "selection_data": "ICON REA-L-CH1 only; HICAR output is not read by this gate",
+  "failure_action": "Do not inspect plateau HICAR spin-up differences; replace the case under the previously frozen selection principle."
+}

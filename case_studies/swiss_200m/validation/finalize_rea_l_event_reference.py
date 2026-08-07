@@ -14,6 +14,21 @@ from tempfile import NamedTemporaryFile
 import netCDF4
 
 
+DIAGNOSTIC_REQUIRED = {
+    "sw_direct_down_interval_ref",
+    "sw_diffuse_down_interval_ref",
+    "lw_down_interval_ref",
+    "sw_net_interval_ref",
+    "lw_net_interval_ref",
+    "latent_heat_flux_interval_ref",
+    "sensible_heat_flux_interval_ref",
+    "rain_interval_ref",
+    "snow_interval_ref",
+    "graupel_interval_ref",
+    "cloud_area_fraction_ref",
+}
+
+
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -35,10 +50,15 @@ def write_atomic(path: Path, content: str) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", type=Path, required=True)
+    parser.add_argument(
+        "--reference-dir",
+        type=Path,
+        help="Override plan chunk_root/reference for an additive diagnostic publication",
+    )
     args = parser.parse_args()
     plan = json.loads(args.plan.read_text())
     records = plan["records"][::3]
-    reference_dir = Path(plan["chunk_root"]) / "reference"
+    reference_dir = args.reference_dir or Path(plan["chunk_root"]) / "reference"
     failures: list[str] = []
     publications = []
     required = {
@@ -53,7 +73,7 @@ def main() -> int:
         "swe_ref",
         "source_terrain",
     }
-    for record in records:
+    for record_index, record in enumerate(records):
         valid = datetime.fromisoformat(record["valid_time"])
         stamp = valid.strftime("%Y%m%d_%H%M")
         data = reference_dir / f"rea_l_surface_reference_{stamp}.nc"
@@ -83,6 +103,12 @@ def main() -> int:
                 missing = required - set(dataset.variables)
                 if missing:
                     failures.append(f"{data} missing variables {sorted(missing)}")
+                if record_index:
+                    missing_diagnostics = DIAGNOSTIC_REQUIRED - set(dataset.variables)
+                    if missing_diagnostics:
+                        failures.append(
+                            f"{data} missing diagnostics {sorted(missing_diagnostics)}"
+                        )
                 if len(dataset.dimensions["time"]) != 1:
                     failures.append(f"{data} does not have one time record")
             publications.append(
@@ -102,9 +128,10 @@ def main() -> int:
             f"validated {len(publications)} records, expected {expected_count}"
         )
     report = {
-        "schema_version": 1,
+        "schema_version": 2,
         "status": "FAIL" if failures else "PASS",
         "source_plan": str(args.plan.resolve()),
+        "reference_dir": str(reference_dir.resolve()),
         "chunk_id": plan["chunk_id"],
         "start": records[0]["valid_time"],
         "end": records[-1]["valid_time"],

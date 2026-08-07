@@ -19,4 +19,8 @@ finalizer=$repo_root/case_studies/swiss_200m/validation/finalize_rea_l_event_ref
 for path in "$plan" "$plan.ready" "$python" "$finalizer"; do
   test -e "$path" || { echo "missing required path: $path" >&2; exit 2; }
 done
-"$python" "$finalizer" --plan "$plan"
+args=(--plan "$plan")
+if test -n "${HICAR_REFERENCE_CHUNK_ROOT:-}"; then
+  args+=(--reference-dir "$HICAR_REFERENCE_CHUNK_ROOT/reference")
+fi
+"$python" "$finalizer" "${args[@]}"

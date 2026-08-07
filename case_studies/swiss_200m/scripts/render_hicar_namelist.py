@@ -110,10 +110,15 @@ def main() -> int:
     )
     parser.add_argument(
         "--output-profile",
-        choices=("routine", "qualification", "terrain_radiation_gate", "wind_climatology", "engineering"),
+        choices=(
+            "routine", "qualification", "mechanism_diagnosis",
+            "causal_surface_30min", "terrain_radiation_gate",
+            "static_process_case", "wind_climatology", "engineering",
+        ),
         default="routine",
         help=(
             "Routine production fields, land-surface qualification diagnostics, "
+            "mechanism-diagnosis state, "
             "fixed-height wind-climatology fields, or the full start/end "
             "engineering state."
         ),
@@ -133,6 +138,21 @@ def main() -> int:
                         help="maximum initial variational-wind iterations")
     parser.add_argument("--alpha-const", type=float,
                         help="optional fixed wind-equation alpha (0.01..1.0); omit for dynamic alpha")
+    parser.add_argument(
+        "--sx",
+        choices=("on", "off"),
+        default="on",
+        help="enable or disable Sx terrain sheltering; defaults to production on",
+    )
+    parser.add_argument(
+        "--advect-density",
+        choices=("on", "off"),
+        default="on",
+        help=(
+            "enable or disable density-weighted advection and wind projection; "
+            "defaults to production on"
+        ),
+    )
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--restart-dir", required=True, type=Path)
     parser.add_argument(
@@ -144,6 +164,14 @@ def main() -> int:
     parser.add_argument(
         "--restart-from",
         help="Restart timestamp; must equal --start-date when supplied.",
+    )
+    parser.add_argument(
+        "--restart-override-check",
+        action="store_true",
+        help=(
+            "allow a deliberate configuration change across a restart; "
+            "intended only for controlled sensitivity experiments"
+        ),
     )
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
@@ -161,6 +189,8 @@ def main() -> int:
         raise SystemExit("--forcing-interval must be positive")
     if args.radiation_update_interval <= 0:
         raise SystemExit("--radiation-update-interval must be positive")
+    if args.output_profile == "causal_surface_30min" and args.output_interval != 1800:
+        raise SystemExit("causal_surface_30min requires --output-interval 1800")
     if args.restart_interval < 0:
         raise SystemExit("--restart-interval must be non-negative")
     if args.nz not in (60, 80):
@@ -169,20 +199,30 @@ def main() -> int:
         raise SystemExit("--wind-solver-iterations must be 100..5000")
     if args.alpha_const is not None and not 0.01 <= args.alpha_const <= 1.0:
         raise SystemExit("--alpha-const must be 0.01..1.0")
+    if args.output_profile in {
+        "qualification", "mechanism_diagnosis", "causal_surface_30min",
+        "static_process_case",
+    } and not args.rea_l_land_initialization:
+        raise SystemExit(
+            "selected land/surface process profile requires --rea-l-land-initialization; "
+            "cold starts are restricted to engineering smoke profiles"
+        )
     published(args.static_file, "static file")
-    if args.depth_varying_soil:
-        try:
-            import netCDF4
-        except ModuleNotFoundError as exc:
-            raise SystemExit("--depth-varying-soil requires Python netCDF4 for schema validation") from exc
+    try:
+        import netCDF4
+    except ModuleNotFoundError as exc:
+        raise SystemExit("Python netCDF4 is required to validate the runtime domain") from exc
+    monthly_vegfrac = False
+    # Several lightweight renderer tests use an empty published path because
+    # they exercise timestamp/template logic only. Real runtime domains are
+    # non-empty and receive the full schema inspection here.
+    if args.static_file.stat().st_size:
         with netCDF4.Dataset(args.static_file) as static:
-            if "soil_type_layer" not in static.variables:
-                raise SystemExit("--depth-varying-soil requires static variable soil_type_layer")
-            soil_texture = static.variables["soil_type_layer"]
-            if soil_texture.ndim != 3 or soil_texture.shape[0] != 4:
-                raise SystemExit(
-                    "soil_type_layer must have NetCDF dimensions (soil_layer, y, x) with four layers"
-                )
+            if "VEGFRA" in static.variables:
+                vegfrac = static["VEGFRA"]
+                if vegfrac.dimensions != ("month", "y", "x") or vegfrac.shape[0] != 12:
+                    raise SystemExit("VEGFRA must have dimensions (month, y, x) with 12 months")
+                monthly_vegfrac = True
     if args.terrain_radiation_profile != "off":
         try:
             import netCDF4
@@ -226,6 +266,19 @@ def main() -> int:
                 values = np.asarray(static.variables[name][:])
                 if not np.all(np.isfinite(values)) or np.any(values < lower) or np.any(values > upper):
                     raise SystemExit(f"{name} contains non-finite or out-of-range values")
+    if args.depth_varying_soil:
+        try:
+            import netCDF4
+        except ModuleNotFoundError as exc:
+            raise SystemExit("--depth-varying-soil requires Python netCDF4 for schema validation") from exc
+        with netCDF4.Dataset(args.static_file) as static:
+            if "soil_type_layer" not in static.variables:
+                raise SystemExit("--depth-varying-soil requires static variable soil_type_layer")
+            soil_texture = static.variables["soil_type_layer"]
+            if soil_texture.ndim != 3 or soil_texture.shape[0] != 4:
+                raise SystemExit(
+                    "soil_type_layer must have NetCDF dimensions (soil_layer, y, x) with four layers"
+                )
     if not args.forcing_file_list.is_file():
         raise SystemExit(f"forcing file list is missing: {args.forcing_file_list}")
     forcing_list_marker = Path(f"{args.forcing_file_list}.ready")
@@ -280,7 +333,8 @@ def main() -> int:
         restart_lines += (
             "  restart_run = .True.\n"
             f"  restart_date = '{args.restart_from}'\n"
-            "  override_check = .False.\n"
+            f"  override_check = "
+            f"{'.True.' if args.restart_override_check else '.False.'}\n"
         )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -307,6 +361,10 @@ def main() -> int:
             f"  terrain_refl_radius = {terrain_radius:.1f}",
         )
     )
+    terrain_output_variables = (
+        ", 'swtr', 'shortwave_direct_horizontal', 'shortwave_diffuse_horizontal'"
+        if terrain_master else ""
+    )
     output_variables = {
         "routine": (
             "'precipitation', 'psfc', 'taix', 'hus2m', "
@@ -322,10 +380,40 @@ def main() -> int:
             "'evaporation_net_cumulative', 'water_aquifer', 'storage_gw', "
             "'wetland_h20_store'"
         ),
+        "mechanism_diagnosis": (
+            "'precipitation', 'snowfall', 'graupel', 'psfc', 'taix', 'hus2m', "
+            "'rsds', 'swtb', 'swtd'" + terrain_output_variables + ", "
+            "'swcf', 'lwtr', 'rlus', 'lwcf', "
+            "'tend_th_swrad', 'tend_th_lwrad', 'cldfrac', 'qc', 'qi', 'qr', "
+            "'qs', 'qg', 'hfss', 'hfls', 'tsfe', 'albedo', 'snow_height', "
+            "'soil_column_total_water', 'soil_water_content', 'soil_temperature'"
+        ),
+        # Bounded V29 causal instrumentation: 2-D-only fields at a fixed
+        # 30-minute cadence.  It preserves V29 physics but avoids the five
+        # 80-level hydrometeor histories that would make time integration
+        # impracticable on the national domain.
+        "causal_surface_30min": (
+            "'precipitation', 'snowfall', 'graupel', 'psfc', 'taix', 'hus2m', "
+            "'rsds', 'swtb', 'swtd'" + terrain_output_variables + ", "
+            "'swcf', 'lwtr', 'rlus', 'lwcf', "
+            "'cldfrac', 'hfss', 'hfls', 'tsfe', 'albedo', "
+            "'soil_column_total_water'"
+        ),
+        # Small synthetic causal gate. Five-minute radiation/output cadence
+        # resolves the deliberately narrow 4-degree blocked azimuth sector;
+        # no 3-D histories are needed for this component/restart test.
         "terrain_radiation_gate": (
             "'rsds', 'swtb', 'swtd', 'swtr', "
             "'shortwave_direct_horizontal', 'shortwave_diffuse_horizontal', "
             "'cosz', 'lwtr', 'tsfe', 'hfss', 'hfls'"
+        ),
+        "static_process_case": (
+            "'precipitation', 'snowfall', 'psfc', 'taix', 'hus2m', "
+            "'u10m', 'v10m', 'u_agl', 'v_agl', 'rho_agl', 'ustar', "
+            "'surface_roughness', 'sfc_Ri', 'hpbl', "
+            "'rsds', 'lwtr', 'rlus', 'hfgs', 'hfss', 'hfls', "
+            "'tsfe', 'albedo', 'snow_height', 'soil_column_total_water', "
+            "'soil_water_content', 'soil_temperature'"
         ),
         "wind_climatology": (
             "'u10m', 'v10m', 'u_agl', 'v_agl', 'rho_agl', "
@@ -349,10 +437,6 @@ def main() -> int:
             if args.rea_l_land_initialization
             else ""
         ),
-        "@SOIL_TEXTURE_LINE@": (
-            "  soiltexture_var = 'soil_type_layer'" if args.depth_varying_soil else ""
-        ),
-        "@NMP_OPT_SOIL@": "2" if args.depth_varying_soil else "1",
         "@TERRAIN_RADIATION_DOMAIN_LINES@": (
             "  svf_var = 'svf'\n"
             "  hlm_var = 'hlm'\n"
@@ -361,14 +445,30 @@ def main() -> int:
             if terrain_master else ""
         ),
         "@TERRAIN_RADIATION_LINES@": terrain_radiation_lines,
+        "@SOIL_TEXTURE_LINE@": (
+            "  soiltexture_var = 'soil_type_layer'" if args.depth_varying_soil else ""
+        ),
+        "@VEGETATION_DOMAIN_LINES@": (
+            "  vegfrac_var = 'VEGFRA'" if monthly_vegfrac else ""
+        ),
+        "@VEGETATION_LSM_LINES@": (
+            "  monthly_vegfrac = .True." if monthly_vegfrac else ""
+        ),
+        "@NMP_OPT_SOIL@": "2" if args.depth_varying_soil else "1",
         "@OUTPUT_INTERVAL@": str(args.output_interval),
         "@FORCING_INTERVAL@": str(args.forcing_interval),
         "@RADIATION_UPDATE_INTERVAL@": str(args.radiation_update_interval),
         "@OUTPUT_VARS@": output_variables[args.output_profile],
         "@NZ@": str(args.nz),
         "@WIND_SOLVER_ITERATIONS@": str(args.wind_solver_iterations),
+        "@SX_ENABLED@": ".True." if args.sx == "on" else ".False.",
+        "@ADVECT_DENSITY@": (
+            ".True." if args.advect_density == "on" else ".False."
+        ),
         "@ALPHA_CONST_LINE@": (
-            f"  alpha_const = {args.alpha_const}\n" if args.alpha_const is not None else ""
+            # Freeze the effective production-pin default.  A missing value is
+            # otherwise version-dependent and the V29 baseline used 1.0.
+            f"  alpha_const = {args.alpha_const if args.alpha_const is not None else 1.0}\n"
         ),
     }
     for token, value in values.items():

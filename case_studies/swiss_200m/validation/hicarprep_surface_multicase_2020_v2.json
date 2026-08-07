@@ -1,0 +1,392 @@
+{
+  "cases": {
+    "2020-01-15T00:00:00Z": {
+      "hard_failures": [],
+      "methods": {
+        "absolute_w_so": {
+          "cross_surface_in_stencil_fallback_count": 1922,
+          "fallback_distance_p99_km": 2.2671279893813194,
+          "global_finite_fallback_count": 272,
+          "hydraulic_clip_rate": 0.0069060929662446684,
+          "maximum_fallback_distance_km": 2.5810028900270203,
+          "product_sha256": "0b2a95d9c6e5a3ed46caefa260c2366d42bec40252fbca43a09527646a8aad6b",
+          "transfer_index_boundary_jump_p99_by_layer": [
+            0.09437902776395485,
+            0.09057912348541393,
+            0.0929008305764514,
+            0.09478526490088023
+          ],
+          "vwc_boundary_jump_p99_by_layer": [
+            0.09437902776395485,
+            0.09057912348541393,
+            0.09284773224450418,
+            0.0940189008094539
+          ],
+          "vwc_median_by_layer": [
+            0.2793115457826215,
+            0.29131079760414114,
+            0.3083998687144406,
+            0.3386639360073217
+          ]
+        },
+        "relative_saturation": {
+          "cross_surface_in_stencil_fallback_count": 1922,
+          "fallback_distance_p99_km": 2.2671279893813194,
+          "global_finite_fallback_count": 272,
+          "hydraulic_clip_rate": 0.0,
+          "maximum_fallback_distance_km": 2.5810028900270203,
+          "product_sha256": "c26c63f106c7ddf056937b65530cf9dc1754ea40b28766f5699d8f5baaf6b4a6",
+          "transfer_index_boundary_jump_p99_by_layer": [
+            0.14941206396308043,
+            0.1254968145768097,
+            0.12416163810136537,
+            0.12038425806978446
+          ],
+          "vwc_boundary_jump_p99_by_layer": [
+            0.0730495090862013,
+            0.0630598040432989,
+            0.06240734416778842,
+            0.06145088598178046
+          ],
+          "vwc_median_by_layer": [
+            0.2762957115313072,
+            0.28683904802937377,
+            0.30236247837810337,
+            0.3316502088746298
+          ]
+        },
+        "smi": {
+          "cross_surface_in_stencil_fallback_count": 1922,
+          "fallback_distance_p99_km": 2.2671279893813194,
+          "global_finite_fallback_count": 272,
+          "hydraulic_clip_rate": 0.023685948319922566,
+          "maximum_fallback_distance_km": 2.5810028900270203,
+          "product_sha256": "6344cde15ae4bdd195f7596ba39cc074d075bf2f39eae773d193e45bcd4d2f08",
+          "transfer_index_boundary_jump_p99_by_layer": [
+            0.2783672486581827,
+            0.24560883296961677,
+            0.2676344713321557,
+            0.29290536040409176
+          ],
+          "vwc_boundary_jump_p99_by_layer": [
+            0.10947264918214882,
+            0.10179823587181204,
+            0.10494077167315279,
+            0.10196111663540262
+          ],
+          "vwc_median_by_layer": [
+            0.3001394611239377,
+            0.3151047373840921,
+            0.3327450436327646,
+            0.3641692333754166
+          ]
+        }
+      },
+      "native_icon_relative_saturation_median_by_layer": [
+        0.5908001910199177,
+        0.5929129464285715,
+        0.5984776535313645,
+        0.6135411897130646,
+        0.6394993894993896,
+        0.6180057675784172,
+        0.618018812463257,
+        0.6180141018103981
+      ],
+      "native_icon_smi_median_by_layer": [
+        0.7380371093749999,
+        0.7442467730978263,
+        0.7611243206521737,
+        0.7940596846846845,
+        0.8511850845410626,
+        0.8022259125067096,
+        0.8022119341563787,
+        0.8022305719568196
+      ],
+      "pairwise_vwc": {
+        "absolute_w_so_minus_relative_saturation": {
+          "absolute_difference_p95_m3_m3": 0.05235479707558125,
+          "maximum_absolute_difference_m3_m3": 0.13494047738125808,
+          "mean_m3_m3": -0.0015470053156410087,
+          "rmse_m3_m3": 0.025928149989737914
+        },
+        "absolute_w_so_minus_smi": {
+          "absolute_difference_p95_m3_m3": 0.16933380319056232,
+          "maximum_absolute_difference_m3_m3": 0.2956361219618056,
+          "mean_m3_m3": -0.03488972727482952,
+          "rmse_m3_m3": 0.08649171727749984
+        },
+        "relative_saturation_minus_smi": {
+          "absolute_difference_p95_m3_m3": 0.12381800936659892,
+          "maximum_absolute_difference_m3_m3": 0.24032055259157148,
+          "mean_m3_m3": -0.03334272195918851,
+          "rmse_m3_m3": 0.06523284499101652
+        }
+      },
+      "report": ".qualification_runtime/hicarprep_surface_cases_v9/20200115/validation.json",
+      "source_sha256": "1a869b548de9a6d24f21e98d42bca0175e86bd39492cdf3423817bec96615d13",
+      "static_sha256": "8a7b294d7d40a5cd352aed1f1abf7a53cb324e57c7377115f2744ce10cb797f1",
+      "status": "PASS_INPUT_PLAUSIBILITY",
+      "warnings": []
+    },
+    "2020-07-02T00:00:00Z": {
+      "hard_failures": [],
+      "methods": {
+        "absolute_w_so": {
+          "cross_surface_in_stencil_fallback_count": 1922,
+          "fallback_distance_p99_km": 2.2671279893813194,
+          "global_finite_fallback_count": 272,
+          "hydraulic_clip_rate": 0.004662672836072025,
+          "maximum_fallback_distance_km": 2.5810028900270203,
+          "product_sha256": "8e00e63c366de07e92fa213dc032cafcb3fe3d2656e753908b4a1fdfacb2e6fe",
+          "transfer_index_boundary_jump_p99_by_layer": [
+            0.09045944126346227,
+            0.08612811479808005,
+            0.08846769605363435,
+            0.0944702764812877
+          ],
+          "vwc_boundary_jump_p99_by_layer": [
+            0.09012446696570277,
+            0.08612811479808005,
+            0.08840117027630355,
+            0.09397388713892933
+          ],
+          "vwc_median_by_layer": [
+            0.2863941118524712,
+            0.2794212462838874,
+            0.29600573662215374,
+            0.3312466168338437
+          ]
+        },
+        "relative_saturation": {
+          "cross_surface_in_stencil_fallback_count": 1922,
+          "fallback_distance_p99_km": 2.2671279893813194,
+          "global_finite_fallback_count": 272,
+          "hydraulic_clip_rate": 0.00014247527036378687,
+          "maximum_fallback_distance_km": 2.5810028900270203,
+          "product_sha256": "881045b48dd0cbba5f9fb2d91fba75b2f65cfdd0c0a68154ac3c6255998122c8",
+          "transfer_index_boundary_jump_p99_by_layer": [
+            0.11355911980630244,
+            0.11073969403437,
+            0.11131416113759211,
+            0.11463873964753035
+          ],
+          "vwc_boundary_jump_p99_by_layer": [
+            0.059276213426749776,
+            0.05735778746520798,
+            0.058348278477470594,
+            0.06000969859962767
+          ],
+          "vwc_median_by_layer": [
+            0.2881896564509342,
+            0.2831752142557764,
+            0.29451559443537717,
+            0.32644967518570656
+          ]
+        },
+        "smi": {
+          "cross_surface_in_stencil_fallback_count": 1922,
+          "fallback_distance_p99_km": 2.2671279893813194,
+          "global_finite_fallback_count": 272,
+          "hydraulic_clip_rate": 0.030377763002564555,
+          "maximum_fallback_distance_km": 2.5810028900270203,
+          "product_sha256": "68ef387da285b520340c046384a63fee64fdfb42464341616ef1fe55c1e79bbc",
+          "transfer_index_boundary_jump_p99_by_layer": [
+            0.26072981126652184,
+            0.21258856765928544,
+            0.24527658589355658,
+            0.2776275039761589
+          ],
+          "vwc_boundary_jump_p99_by_layer": [
+            0.10294787829069586,
+            0.09533678404224745,
+            0.09904359796174514,
+            0.09489919739140809
+          ],
+          "vwc_median_by_layer": [
+            0.32401153974157826,
+            0.31606860480447385,
+            0.3316983100505695,
+            0.3675593279279469
+          ]
+        }
+      },
+      "native_icon_relative_saturation_median_by_layer": [
+        0.31403267205550855,
+        0.3365384615384616,
+        0.3751027960526316,
+        0.395422149122807,
+        0.4501249618437118,
+        0.614379833129833,
+        0.614372767150545,
+        0.6143821884562625
+      ],
+      "native_icon_smi_median_by_layer": [
+        0.1503481657608696,
+        0.17251230215097405,
+        0.22801319067028983,
+        0.28277191558441545,
+        0.3948487854737855,
+        0.7961453301127214,
+        0.7961626850515741,
+        0.796154649012942
+      ],
+      "pairwise_vwc": {
+        "absolute_w_so_minus_relative_saturation": {
+          "absolute_difference_p95_m3_m3": 0.05381719748063808,
+          "maximum_absolute_difference_m3_m3": 0.12455305775496528,
+          "mean_m3_m3": -0.0021651986432332793,
+          "rmse_m3_m3": 0.026494240032287432
+        },
+        "absolute_w_so_minus_smi": {
+          "absolute_difference_p95_m3_m3": 0.17484993042581423,
+          "maximum_absolute_difference_m3_m3": 0.3005416804617773,
+          "mean_m3_m3": -0.034588203194899594,
+          "rmse_m3_m3": 0.08923264183450628
+        },
+        "relative_saturation_minus_smi": {
+          "absolute_difference_p95_m3_m3": 0.12796220803654698,
+          "maximum_absolute_difference_m3_m3": 0.24393741547024553,
+          "mean_m3_m3": -0.032423004551666315,
+          "rmse_m3_m3": 0.0669171078622982
+        }
+      },
+      "report": ".qualification_runtime/hicarprep_surface_cases_v9/20200702/validation.json",
+      "source_sha256": "f12937dc35217309fa8acc6d52068ba412e1ece6fe9257c2934ece8e495933c4",
+      "static_sha256": "8a7b294d7d40a5cd352aed1f1abf7a53cb324e57c7377115f2744ce10cb797f1",
+      "status": "PASS_INPUT_PLAUSIBILITY",
+      "warnings": []
+    },
+    "2020-11-15T00:00:00Z": {
+      "hard_failures": [],
+      "methods": {
+        "absolute_w_so": {
+          "cross_surface_in_stencil_fallback_count": 1922,
+          "fallback_distance_p99_km": 2.2671279893813194,
+          "global_finite_fallback_count": 272,
+          "hydraulic_clip_rate": 0.0025967814157971153,
+          "maximum_fallback_distance_km": 2.5810028900270203,
+          "product_sha256": "60278eb8aa9143b25e008c9853f92b49ec60804f3a4fe294c655418199903741",
+          "transfer_index_boundary_jump_p99_by_layer": [
+            0.08623694495387534,
+            0.0880429681797131,
+            0.09119671844023668,
+            0.09302247961513002
+          ],
+          "vwc_boundary_jump_p99_by_layer": [
+            0.08623694495387534,
+            0.0880429681797131,
+            0.0911771528462346,
+            0.09222961986981316
+          ],
+          "vwc_median_by_layer": [
+            0.2725209306801267,
+            0.2869482421874999,
+            0.308275462962963,
+            0.33563982928240743
+          ]
+        },
+        "relative_saturation": {
+          "cross_surface_in_stencil_fallback_count": 1922,
+          "fallback_distance_p99_km": 2.2671279893813194,
+          "global_finite_fallback_count": 272,
+          "hydraulic_clip_rate": 7.349914740989004e-06,
+          "maximum_fallback_distance_km": 2.5810028900270203,
+          "product_sha256": "761b21929f47b05857ec8fcb48028be14f8afa93f9cdcb0b0c5b4adfc69419c7",
+          "transfer_index_boundary_jump_p99_by_layer": [
+            0.12311250627553258,
+            0.11690755421829772,
+            0.11677950173364288,
+            0.10994912747438976
+          ],
+          "vwc_boundary_jump_p99_by_layer": [
+            0.06073924779318339,
+            0.05969769885622273,
+            0.06051840650614181,
+            0.05925976681373013
+          ],
+          "vwc_median_by_layer": [
+            0.26851579254146063,
+            0.282212314611757,
+            0.30169096285869135,
+            0.32972648908236885
+          ]
+        },
+        "smi": {
+          "cross_surface_in_stencil_fallback_count": 1922,
+          "fallback_distance_p99_km": 2.2671279893813194,
+          "global_finite_fallback_count": 272,
+          "hydraulic_clip_rate": 0.025189288573483317,
+          "maximum_fallback_distance_km": 2.5810028900270203,
+          "product_sha256": "b25a62b70937021812051607a9824c8a48140302ae1d5549dd032f47fd3f4f5d",
+          "transfer_index_boundary_jump_p99_by_layer": [
+            0.20267553486380144,
+            0.22930261618857706,
+            0.27590411517483476,
+            0.2887344125629595
+          ],
+          "vwc_boundary_jump_p99_by_layer": [
+            0.09213693844927111,
+            0.0990986530156244,
+            0.10672166105492985,
+            0.09796987666356835
+          ],
+          "vwc_median_by_layer": [
+            0.2885111447220337,
+            0.30882852914693665,
+            0.3335707421649947,
+            0.3664681832203761
+          ]
+        }
+      },
+      "native_icon_relative_saturation_median_by_layer": [
+        0.4863336113061798,
+        0.4893785112359551,
+        0.4985655620421245,
+        0.5142036782661782,
+        0.5222323972323972,
+        0.5802087572920905,
+        0.5802016913128025,
+        0.5802016913128023
+      ],
+      "native_icon_smi_median_by_layer": [
+        0.5441045346467389,
+        0.5497412743506495,
+        0.5664840919384058,
+        0.6013877615440114,
+        0.5985054347826085,
+        0.700072128287708,
+        0.7000581499373771,
+        0.7000739315554129
+      ],
+      "pairwise_vwc": {
+        "absolute_w_so_minus_relative_saturation": {
+          "absolute_difference_p95_m3_m3": 0.05268082873743144,
+          "maximum_absolute_difference_m3_m3": 0.13529596470991026,
+          "mean_m3_m3": -0.001655223111646696,
+          "rmse_m3_m3": 0.02576058443775478
+        },
+        "absolute_w_so_minus_smi": {
+          "absolute_difference_p95_m3_m3": 0.1713655824080335,
+          "maximum_absolute_difference_m3_m3": 0.28612523818610197,
+          "mean_m3_m3": -0.03325960962803362,
+          "rmse_m3_m3": 0.08647006368191949
+        },
+        "relative_saturation_minus_smi": {
+          "absolute_difference_p95_m3_m3": 0.12414431132530217,
+          "maximum_absolute_difference_m3_m3": 0.2470897701908863,
+          "mean_m3_m3": -0.031604386516386924,
+          "rmse_m3_m3": 0.06501867913134765
+        }
+      },
+      "report": ".qualification_runtime/hicarprep_surface_cases_v9/20201115/validation.json",
+      "source_sha256": "7a77055f5c4a215da02b6325b2a0dab5886e305b32f1d48984dc831e68ab996a",
+      "static_sha256": "8a7b294d7d40a5cd352aed1f1abf7a53cb324e57c7377115f2744ce10cb797f1",
+      "status": "PASS_INPUT_PLAUSIBILITY",
+      "warnings": []
+    }
+  },
+  "interpretation": "This matrix screens invalid inputs and quantifies method sensitivity. It does not select SMI or relative saturation without controlled HICAR response evidence.",
+  "schema": "hicarprep-surface-multicase-summary-v2",
+  "scientific_policy_selection": "INDETERMINATE",
+  "status": "PASS_ALL_INPUT_PLAUSIBILITY"
+}

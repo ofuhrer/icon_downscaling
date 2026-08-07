@@ -21,7 +21,7 @@ index=${STREAM_INDEX:-${SLURM_ARRAY_TASK_ID:-}}
 source_case=${HICAR_FORCING_CASE:-$repo_root/case_studies/swiss_100m}
 python=${HICAR_VALIDATION_PYTHON:?Set HICAR_VALIDATION_PYTHON to the published runtime interpreter}
 uenv_bin=${UENV_BIN:-/usr/bin/uenv}
-image=${REA_FDB_IMAGE:-fdb/5.19:v2}
+image=${REA_FDB_IMAGE:?REA_FDB_IMAGE is required}
 validator=${HICAR_FORCING_VALIDATOR:-$repo_root/case_studies/swiss_200m/validation/validate_forcing.py}
 case_name=$(basename "$source_case")
 static_domain=${HICAR_STATIC_DOMAIN:-$source_case/static/domain_static_${case_name}.nc}
@@ -33,7 +33,7 @@ for path in "$plan" "$plan.ready" "$python" "$uenv_bin" "$validator" \
   test -e "$path" || { echo "missing required path: $path" >&2; exit 2; }
 done
 
-IFS=$'\t' read -r chunk_id chunk_root cycle_date cycle_time step valid_time final < <(
+IFS=$'\t' read -r chunk_id chunk_root producer_root cycle_date cycle_time step valid_time final < <(
   "$python" - "$plan" "$index" <<'PY'
 import json
 import pathlib
@@ -48,6 +48,7 @@ record = records[index]
 print(
     plan["chunk_id"],
     plan["chunk_root"],
+    plan.get("producer_root", plan["chunk_root"]),
     record["cycle_date"],
     record["cycle_time"],
     record["step_hours"],
@@ -63,7 +64,7 @@ base=${final%.nc}
 ready="$final.ready"
 report="$base.validation.json"
 manifest="$base.manifest.json"
-mkdir -p "$final_dir" "$chunk_root/work" "$chunk_root/cache"
+mkdir -p "$final_dir" "$producer_root/work" "$producer_root/cache"
 
 verify_stream_publication() {
   "$python" - "$final" "$report" "$manifest" "$valid_time" <<'PY'
@@ -100,7 +101,7 @@ if test -s "$final" && test -s "$report" && test -s "$manifest"; then
   exit 0
 fi
 if test -e "$final" || test -e "$report" || test -e "$manifest"; then
-  recovery="$chunk_root/recovery/record_${index}_$(date -u +%Y%m%dT%H%M%S)_${SLURM_JOB_ID:-$$}"
+  recovery="$producer_root/recovery/record_${index}_$(date -u +%Y%m%dT%H%M%S)_${SLURM_JOB_ID:-$$}"
   mkdir -p "$recovery"
   for path in "$final" "$report" "$manifest"; do
     if test -e "$path"; then
@@ -110,7 +111,7 @@ if test -e "$final" || test -e "$report" || test -e "$manifest"; then
   echo "quarantined incomplete stream publication under $recovery"
 fi
 
-work=$(mktemp -d "$chunk_root/work/record_${index}.XXXXXX")
+work=$(mktemp -d "$producer_root/work/record_${index}.XXXXXX")
 partial=""
 report_partial=""
 manifest_partial=""
@@ -125,7 +126,7 @@ cleanup() {
 trap cleanup EXIT
 start_epoch=$(date +%s)
 
-static_dir="$chunk_root/cache/$cycle_date"
+static_dir="$producer_root/cache/$cycle_date"
 static="$static_dir/rea_l_static_${cycle_date}_${cycle_time}.grib"
 static_ready="$static.ready"
 static_manifest="$static_dir/static_manifest.json"
@@ -277,14 +278,37 @@ retrieve,
   param=500032,
   step=$step
 EOF
+surface_wind_args=()
+dynamic_parts=("$work/full.grib" "$work/w.grib")
+expected_dynamic_count=481
+if test "${HICAR_INCLUDE_SURFACE_WIND:-0}" = 1; then
+  cat > "$work/surface_wind.mars" <<EOF
+retrieve,
+  class=rd,
+  stream=reanl,
+  expver=r001,
+  model=icon-rea-l-ch1,
+  type=cf,
+  date=$cycle_date,
+  time=$cycle_time,
+  levtype=sfc,
+  param=500027/500029,
+  step=$step
+EOF
+  "$uenv_bin" run --view=rea-l-ch1 "$image" -- \
+    fdb-read --statistics "$work/surface_wind.mars" "$work/surface_wind.grib"
+  surface_wind_args=(--include-surface-wind)
+  dynamic_parts+=("$work/surface_wind.grib")
+  expected_dynamic_count=483
+fi
 "$uenv_bin" run --view=rea-l-ch1 "$image" -- \
   fdb-read --statistics "$work/full.mars" "$work/full.grib"
 "$uenv_bin" run --view=rea-l-ch1 "$image" -- \
   fdb-read --statistics "$work/w.mars" "$work/w.grib"
-cat "$work/full.grib" "$work/w.grib" > "$work/dynamic.grib"
+cat "${dynamic_parts[@]}" > "$work/dynamic.grib"
 dynamic_count=$("$uenv_bin" run --view=rea-l-ch1 "$image" -- \
   grib_count "$work/dynamic.grib" | tail -n 1)
-test "$dynamic_count" = 481
+test "$dynamic_count" = "$expected_dynamic_count"
 dynamic_sha=$(sha256sum "$work/dynamic.grib" | awk '{print $1}')
 dynamic_bytes=$(stat -c %s "$work/dynamic.grib")
 extract_epoch=$(date +%s)
@@ -301,6 +325,7 @@ manifest_partial="$manifest.partial.${SLURM_JOB_ID}"
   --model-name rea-l-ch1 \
   --expver 639 \
   --load-balfrin-modules \
+  "${surface_wind_args[@]}" \
   --compression 1 \
   --work-dir "$work/converter"
 test -s "$partial"

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "status": "SELECTED_FROM_CAUSAL_DECISION",
+  "selection_evidence": "/scratch/mch/olifu/icon_hicar/causal_resolution/v1/baseline_20200701/causal_resolution_assessment.json",
+  "required_decision": "CLOUD_PATHWAY_CORRECTION",
+  "correction": {
+    "name": "thompson_microphysics_cloud_pathway",
+    "single_change": {"physics.mp": {"from": "morrison", "to": "thompson"}},
+    "rationale": "The common-grid assessment finds a persistent negative cloud and rain anomaly from 03:00 UTC, before the land-state divergence threshold. The correction therefore changes the hydrometeor conversion pathway only."
+  },
+  "frozen_controls": [
+    "REA-L forcing publication and all forcing variables",
+    "REA-L initialized static domain and land model",
+    "RRTMGP radiation settings",
+    "YSU, surface, wind solver, terrain, vertical grid, time step, and output cadence",
+    "frozen summer physical thresholds"
+  ],
+  "validation_sequence": [
+    "24-hour causal-profile model publication",
+    "common-grid causal assessor with the same contract and reference",
+    "only if the 24-hour correction reduces the leading cloud/rain deficit without an engineering or physical failure: frozen 72-hour summer gate"
+  ]
+}

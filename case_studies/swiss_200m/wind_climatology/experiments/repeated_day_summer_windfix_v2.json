@@ -1,0 +1,97 @@
+{
+  "schema_version": 2,
+  "status": "PASS",
+  "decision": "Measure whether a continuously evolving coupled HICAR state becomes statistically stationary under one repeated 24-hour REA-L forcing and calendar cycle after restoring horizontal-wind state advancement.",
+  "case_id": "summer-convective-20200701T0100-windfix",
+  "model_interval": {
+    "start": "2020-07-01T01:00:00",
+    "end": "2020-07-02T01:00:00",
+    "hours": 24,
+    "forcing_semantics": "Every cycle reuses the same immutable 25 hourly REA-L records.",
+    "calendar_semantics": "Each exact-end restart is copied and only its scalar time coordinate is relabelled to the interval start. All atmospheric, cloud, PBL, snow, soil, and scheduler-phase state continues without reset."
+  },
+  "execution": {
+    "domain": "701x701 Alpine bridge at 200 m with 80 levels",
+    "hicar_commit": "86d6f1dd771d404a0a4a42f2b8868c14c8b97601",
+    "hicar_parent": "b5146a3c67612bd7d29abcd7c480ae4ae1bd31a2",
+    "source_change": "Apply the already-computed adjusted horizontal u/v tendency in domain_t.apply_forcing.",
+    "wind_fix_qualification": "/scratch/mch/olifu/icon_hicar/qualification/wind-tendency-fix-b514/v1/wind_tendency_fix_qualification.json",
+    "physics": "Morrison + YSU + Noah-MP + revised MM5 + RRTMGP",
+    "wind_only": false,
+    "field_tapering_or_blending": false,
+    "partition": "preemptible",
+    "nodes_per_cycle": 2,
+    "maximum_segment_hours": 24,
+    "initial_cycles": 7,
+    "extension_cycles_if_not_bracketed": 14,
+    "cycle_root": "/scratch/mch/olifu/icon_hicar/qualification/repeated-day-summer-windfix-b514/v2"
+  },
+  "restart_interpretation": {
+    "criterion": "Each branch must pass the hash-bound HICAR restart integration tolerance on a different node allocation.",
+    "exact_reproducibility": "Reported as a diagnostic, not assumed across preemptible allocations.",
+    "noise_floor": "The corrected-wind cross-node continuation gate defines the restart/allocation perturbation floor. Repeated-day contraction must be interpreted relative to it.",
+    "reason": "Preemptible jobs may relocate. A same-node restart check is insufficient for the intended workflow."
+  },
+  "interpretation": {
+    "primary_target": "statistical equilibration to a periodically forced attractor",
+    "not_assumed": "pixelwise convergence to a deterministic 24-hour limit cycle",
+    "reason": "Resolved small-scale turbulent circulations may remain chaotic even when phase-conditioned moments and slow stores are stationary.",
+    "production_scope": "mechanism diagnosis only; an artificial repeated day cannot qualify real multi-day skill or a production spin-up length"
+  },
+  "diagnostics": {
+    "phase_matched_wind": [
+      "u10m",
+      "v10m",
+      "u_agl",
+      "v_agl",
+      "rho_agl",
+      "ustar",
+      "sfc_Ri",
+      "hpbl"
+    ],
+    "daily_boundary_atmosphere": [
+      "u",
+      "v",
+      "pressure",
+      "potential_temperature",
+      "temperature",
+      "qv",
+      "density"
+    ],
+    "daily_boundary_land": [
+      "soil_temperature",
+      "soil_water_content",
+      "soil_column_total_water",
+      "canopy_water",
+      "snow_water_equivalent",
+      "snow_height",
+      "surface_rad_temperature",
+      "ground_surf_temperature"
+    ]
+  },
+  "equilibration_rule": {
+    "consecutive_passing_transitions": 2,
+    "wind_phase_mean_vector_rmse_m_s": 0.2,
+    "wind_daily_mean_speed_change_m_s": 0.1,
+    "soil_temperature_boundary_rmse_K": 0.1,
+    "soil_water_boundary_rmse_m3_m3": 0.002,
+    "soil_column_water_mean_change_kg_m2": 1.0,
+    "slow_store_monotonic_trend": "none exceeding its absolute threshold over the final three cycles",
+    "full_field_rule": "Report full-field day-to-day RMSE and spatial correlation, but do not fail statistical equilibration solely because chaotic small-scale structures do not phase-lock."
+  },
+  "result": {
+    "decision": "SLOW_STORE_DRIFT_DETECTED",
+    "cycles_completed": 7,
+    "wind_interpretation": "All prescribed wind thresholds pass for cycle 1 to 2 and remain far below threshold thereafter. Two consecutive passing atmospheric transitions confirm a statistically stationary wind response by 48 hours for this case.",
+    "coupled_interpretation": "The complete coupled state did not equilibrate within seven days. Domain-mean soil-column water increased on every transition and still gained 2.30304875120915 kg m-2 from cycle 6 to 7; soil-temperature and soil-water boundary RMSE also remained above threshold.",
+    "final_wind_phase_mean_vector_rmse_range_m_s": [
+      1.528128764507969e-06,
+      6.021051477138944e-05
+    ],
+    "final_soil_temperature_boundary_rmse_K": 0.21543531320164275,
+    "final_soil_water_boundary_rmse_m3_m3": 0.004148382657328699,
+    "final_soil_column_water_mean_change_kg_m2": 2.30304875120915,
+    "durable_manifest": "/store_new/mch/msopr/olifu/icon_downscaling/qualification/repeated-day-summer-windfix-b514/v2/manifest.json",
+    "durable_manifest_sha256": "585ba704c26441f5c8014be35674125ef53a1d39652a1c04739973564c7f6820"
+  }
+}

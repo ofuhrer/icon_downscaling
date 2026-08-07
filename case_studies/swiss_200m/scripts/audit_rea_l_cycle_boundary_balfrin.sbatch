@@ -10,14 +10,17 @@
 #SBATCH --time=00:20:00
 
 set -euo pipefail
+repo_root=${REPO_ROOT:-$SCRATCH/icon_hicar}
+# shellcheck source=scripts/load_balfrin_site_config.sh
+. "$repo_root/scripts/load_balfrin_site_config.sh"
 [ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
-module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
+module use "$USER_ENV_ROOT/modules"
 
 previous_date=${REA_PREVIOUS_DATE:-20091231}
 next_date=${REA_NEXT_DATE:-20100101}
-image=${REA_FDB_IMAGE:-fdb/5.19:v2}
+image=${REA_FDB_IMAGE:?REA_FDB_IMAGE is required}
 uenv_bin=${UENV_BIN:-/usr/bin/uenv}
-case_root=${HICAR_SWISS_CASE:-$SCRATCH/icon_hicar/case_studies/swiss_200m}
+case_root=${HICAR_SWISS_CASE:-$repo_root/case_studies/swiss_200m}
 comparator="$case_root/validation/compare_rea_l_cycle_boundary.py"
 report="$case_root/validation/rea_l_cycle_boundary_${previous_date}_${next_date}.json"
 tmp_parent="$SCRATCH/icon_hicar/tmp"

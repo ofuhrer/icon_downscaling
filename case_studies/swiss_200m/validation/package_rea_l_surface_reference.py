@@ -16,6 +16,29 @@ import numpy as np
 
 
 PRECIPITATION_ROUNDOFF_TOLERANCE_KG_M2 = 0.01
+# Independently regridding two cycle-mean source fields and then differencing
+# them can create bounded negative leakage around a zero-shortwave contour.
+# The tolerance is a reference-packaging limit only; its per-record extent is
+# retained in the manifest, and anything beyond it remains a hard failure.
+RADIATION_ROUNDOFF_TOLERANCE_W_M2 = 15.0
+
+# Fields averaged or accumulated from the REA-L cycle start.  Preserve the
+# source semantics by reconstructing each three-hour interval from two cycle
+# endpoints; never compare a 0--step mean directly with an output interval.
+MEAN_DIAGNOSTICS = (
+    ("ASWDIR_S", "sw_direct_down_interval_ref", "surface_downwelling_shortwave_flux_in_air", "REA-L direct downwelling shortwave flux over time_bounds", "W m-2", 0.0, 2000.0),
+    ("ASWDIFD_S", "sw_diffuse_down_interval_ref", "surface_downwelling_shortwave_flux_in_air", "REA-L diffuse downwelling shortwave flux over time_bounds", "W m-2", 0.0, 2000.0),
+    ("ATHD_S", "lw_down_interval_ref", "surface_downwelling_longwave_flux_in_air", "REA-L downwelling longwave flux over time_bounds", "W m-2", 50.0, 800.0),
+    ("ASOB_S", "sw_net_interval_ref", None, "REA-L net shortwave surface flux over time_bounds", "W m-2", -400.0, 2000.0),
+    ("ATHB_S", "lw_net_interval_ref", None, "REA-L net longwave surface flux over time_bounds", "W m-2", -1500.0, 1500.0),
+    ("ALHFL_S", "latent_heat_flux_interval_ref", "surface_upward_latent_heat_flux", "REA-L surface latent heat flux over time_bounds", "W m-2", -2000.0, 2000.0),
+    ("ASHFL_S", "sensible_heat_flux_interval_ref", "surface_upward_sensible_heat_flux", "REA-L surface sensible heat flux over time_bounds", "W m-2", -2000.0, 2000.0),
+)
+ACCUMULATED_DIAGNOSTICS = (
+    ("RAIN_GSP", "rain_interval_ref", "lwe_thickness_of_rainfall_amount", "REA-L grid-scale rain accumulated over time_bounds"),
+    ("SNOW_GSP", "snow_interval_ref", "lwe_thickness_of_snowfall_amount", "REA-L grid-scale snow accumulated over time_bounds"),
+    ("GRAU_GSP", "graupel_interval_ref", None, "REA-L grid-scale graupel accumulated over time_bounds"),
+)
 
 
 def _read(dataset: netCDF4.Dataset, name: str) -> np.ndarray:
@@ -104,6 +127,10 @@ def main() -> int:
     parser.add_argument("--geometry", type=Path, required=True)
     parser.add_argument("--precip-start", type=Path)
     parser.add_argument("--precip-end", type=Path)
+    parser.add_argument("--diagnostics-start", type=Path)
+    parser.add_argument("--diagnostics-end", type=Path)
+    parser.add_argument("--diagnostics-start-hours", type=float)
+    parser.add_argument("--diagnostics-end-hours", type=float)
     parser.add_argument("--valid-time", required=True)
     parser.add_argument("--interval-start", required=True)
     parser.add_argument("--initial-record", action="store_true")
@@ -126,6 +153,22 @@ def main() -> int:
             raise SystemExit("initial record must not provide precipitation endpoints")
     elif args.precip_start is None or args.precip_end is None:
         raise SystemExit("non-initial record requires precipitation endpoints")
+    diagnostic_arguments = (
+        args.diagnostics_start,
+        args.diagnostics_end,
+        args.diagnostics_start_hours,
+        args.diagnostics_end_hours,
+    )
+    if any(value is not None for value in diagnostic_arguments) and any(
+        value is None for value in diagnostic_arguments
+    ):
+        raise SystemExit("diagnostic endpoints and endpoint hours must be supplied together")
+    if (
+        args.diagnostics_start_hours is not None
+        and args.diagnostics_end_hours is not None
+        and args.diagnostics_end_hours <= args.diagnostics_start_hours
+    ):
+        raise SystemExit("diagnostic endpoint hours must increase")
 
     with netCDF4.Dataset(args.current) as current:
         latitude = _coordinate(current, ("lat_1", "lat", "latitude"), axis=0)
@@ -137,6 +180,7 @@ def main() -> int:
         wind_v = _read_2d(current, "V_10M")
         snow_height = _read_2d(current, "H_SNOW")
         snow_water_equivalent = _read_2d(current, "W_SNOW")
+        cloud_cover = _read_2d(current, "CLCT") if args.diagnostics_end else None
     with netCDF4.Dataset(args.geometry) as geometry:
         terrain = _read_2d(geometry, "HSURF")
 
@@ -181,6 +225,50 @@ def main() -> int:
         }
         precipitation = np.maximum(precipitation, 0.0)
 
+    interval_diagnostics: dict[str, np.ndarray] = {}
+    radiation_roundoff: dict[str, dict[str, float | int]] = {}
+    if args.diagnostics_start is not None and args.diagnostics_end is not None:
+        assert args.diagnostics_start_hours is not None
+        assert args.diagnostics_end_hours is not None
+        with netCDF4.Dataset(args.diagnostics_start) as start, netCDF4.Dataset(
+            args.diagnostics_end
+        ) as end:
+            start_hours = args.diagnostics_start_hours
+            end_hours = args.diagnostics_end_hours
+            duration_hours = end_hours - start_hours
+            for source, output, _standard, _long_name, _units, _lower, _upper in MEAN_DIAGNOSTICS:
+                interval_diagnostics[output] = (
+                    _read_2d(end, source) * end_hours
+                    - _read_2d(start, source) * start_hours
+                ) / duration_hours
+            for output in (
+                "sw_direct_down_interval_ref",
+                "sw_diffuse_down_interval_ref",
+                "sw_net_interval_ref",
+            ):
+                values = interval_diagnostics[output]
+                minimum = float(np.min(values))
+                if minimum < -RADIATION_ROUNDOFF_TOLERANCE_W_M2:
+                    raise SystemExit(
+                        f"REA-L {output} is negative beyond interpolation tolerance: {minimum}"
+                    )
+                radiation_roundoff[output] = {
+                    "minimum_raw_w_m2": minimum,
+                    "clipped_negative_cells": int(np.count_nonzero(values < 0.0)),
+                    "tolerance_w_m2": RADIATION_ROUNDOFF_TOLERANCE_W_M2,
+                }
+                interval_diagnostics[output] = np.maximum(values, 0.0)
+            for source, output, _standard, _long_name in ACCUMULATED_DIAGNOSTICS:
+                values = _read_2d(end, source) - _read_2d(start, source)
+                minimum = float(np.min(values))
+                if minimum < -PRECIPITATION_ROUNDOFF_TOLERANCE_KG_M2:
+                    raise SystemExit(
+                        f"REA-L {source} interval decreases by more than tolerance: {minimum}"
+                    )
+                interval_diagnostics[output] = np.maximum(values, 0.0)
+        assert cloud_cover is not None
+        interval_diagnostics["cloud_area_fraction_ref"] = cloud_cover / 100.0
+
     humidity = _specific_humidity_from_dewpoint(dewpoint, pressure)
     ranges = {
         "surface_pressure_pa": _require_range("PS", pressure, 20_000.0, 120_000.0),
@@ -200,6 +288,15 @@ def main() -> int:
         ),
         "source_terrain_m": _require_range("HSURF", terrain, -1000.0, 6000.0),
     }
+    for source, output, _standard, _long_name, _units, lower, upper in MEAN_DIAGNOSTICS:
+        ranges[output] = _require_range(output, interval_diagnostics[output], lower, upper) if output in interval_diagnostics else None
+    for _source, output, _standard, _long_name in ACCUMULATED_DIAGNOSTICS:
+        ranges[output] = _require_range(output, interval_diagnostics[output], 0.0, 1000.0) if output in interval_diagnostics else None
+    ranges["cloud_area_fraction_ref"] = (
+        _require_range("CLCT", interval_diagnostics["cloud_area_fraction_ref"], 0.0, 1.0)
+        if "cloud_area_fraction_ref" in interval_diagnostics
+        else None
+    )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     partial = args.output.with_suffix(args.output.suffix + f".partial.{os.getpid()}")
@@ -327,6 +424,19 @@ def main() -> int:
             "REA-L source-grid terrain elevation",
             "m",
         )
+        if interval_diagnostics:
+            for _source, output, standard_name, long_name, units, _lower, _upper in MEAN_DIAGNOSTICS:
+                write(output, interval_diagnostics[output], standard_name, long_name, units, "time: mean")
+            for _source, output, standard_name, long_name in ACCUMULATED_DIAGNOSTICS:
+                write(output, interval_diagnostics[output], standard_name, long_name, "kg m-2", "time: sum")
+            write(
+                "cloud_area_fraction_ref",
+                interval_diagnostics["cloud_area_fraction_ref"],
+                "cloud_area_fraction",
+                "REA-L total cloud cover at valid_time",
+                "1",
+                "time: point",
+            )
         target.title = "REA-L surface reference for HICAR scientific validation"
         target.source = "ICON REA-L-CH1 FDB"
         target.source_cycle = args.source_cycle
@@ -335,7 +445,7 @@ def main() -> int:
 
     os.replace(partial, args.output)
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "status": "PASS",
         "source": "ICON REA-L-CH1 FDB",
         "source_cycle": args.source_cycle,
@@ -351,11 +461,23 @@ def main() -> int:
         "precip_end_regridded": (
             str(args.precip_end.resolve()) if args.precip_end else None
         ),
+        "diagnostics_start_regridded": (
+            str(args.diagnostics_start.resolve()) if args.diagnostics_start else None
+        ),
+        "diagnostics_end_regridded": (
+            str(args.diagnostics_end.resolve()) if args.diagnostics_end else None
+        ),
+        "diagnostic_endpoint_hours": (
+            [args.diagnostics_start_hours, args.diagnostics_end_hours]
+            if args.diagnostics_start_hours is not None
+            else None
+        ),
         "output": str(args.output.resolve()),
         "output_size_bytes": args.output.stat().st_size,
         "output_sha256": _sha256(args.output),
         "ranges": ranges,
         "precipitation_roundoff": precipitation_roundoff,
+        "radiation_roundoff": radiation_roundoff,
         "transformations": {
             "specific_humidity": (
                 "Bolton saturation vapor pressure at TD_2M; "
@@ -364,6 +486,12 @@ def main() -> int:
             "precipitation": (
                 "difference of cycle-cumulative TOT_PREC endpoints; "
                 "negative roundoff clipped only within 0.01 kg m-2"
+            ),
+            "surface_diagnostics": (
+                "cycle-mean fluxes reconstructed as endpoint-weighted means; "
+                "cycle-accumulated hydrometeors differenced between endpoints"
+                if interval_diagnostics
+                else "not available for initial record"
             ),
         },
     }

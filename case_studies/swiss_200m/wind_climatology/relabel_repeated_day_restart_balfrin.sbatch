@@ -1,0 +1,26 @@
+#!/bin/bash -l
+#SBATCH --job-name=repeat-day-clock
+#SBATCH --partition=pp-short
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --time=01:00:00
+
+set -euo pipefail
+: "${HICAR_ANALYSIS_RUNTIME:?set HICAR_ANALYSIS_RUNTIME}"
+: "${HICAR_ANALYSIS_PYTHON:?set HICAR_ANALYSIS_PYTHON}"
+: "${HICAR_REPEAT_SOURCE_RESTART:?set HICAR_REPEAT_SOURCE_RESTART}"
+: "${HICAR_REPEAT_SOURCE_REPORT:?set HICAR_REPEAT_SOURCE_REPORT}"
+: "${HICAR_REPEAT_TARGET_RESTART:?set HICAR_REPEAT_TARGET_RESTART}"
+: "${HICAR_REPEAT_TARGET_TIME:?set HICAR_REPEAT_TARGET_TIME}"
+: "${HICAR_REPEAT_SOURCE_COMMIT:?set HICAR_REPEAT_SOURCE_COMMIT}"
+: "${HICAR_REPEAT_REPORT:?set HICAR_REPEAT_REPORT}"
+
+exec "$HICAR_ANALYSIS_PYTHON" \
+  "$HICAR_ANALYSIS_RUNTIME/case_studies/swiss_200m/wind_climatology/relabel_repeated_day_restart.py" \
+  --source "$HICAR_REPEAT_SOURCE_RESTART" \
+  --source-report "$HICAR_REPEAT_SOURCE_REPORT" \
+  --target "$HICAR_REPEAT_TARGET_RESTART" \
+  --target-time "$HICAR_REPEAT_TARGET_TIME" \
+  --expected-source-commit "$HICAR_REPEAT_SOURCE_COMMIT" \
+  --report "$HICAR_REPEAT_REPORT"

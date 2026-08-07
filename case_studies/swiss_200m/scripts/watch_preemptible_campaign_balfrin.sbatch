@@ -17,7 +17,7 @@ module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
 
 python=${HICAR_VALIDATION_PYTHON:?Set HICAR_VALIDATION_PYTHON to the published runtime interpreter}
 campaign=${HICAR_CAMPAIGN_PLAN:?Set HICAR_CAMPAIGN_PLAN}
-controller="$repo_root/orchestration/preemptible_campaign.py"
+controller=${HICAR_CAMPAIGN_CONTROLLER:-$repo_root/orchestration/preemptible_campaign.py}
 
 for path in "$python" "$campaign" "$campaign.ready" "$controller"; do
   test -e "$path" || { echo "missing campaign controller input: $path" >&2; exit 2; }
@@ -46,8 +46,9 @@ case "${HICAR_CAMPAIGN_CHAIN_WATCHER:-1}" in
       successor=""
       for _attempt in 1 2 3; do
         if successor=$(sbatch --parsable --no-requeue \
+          --partition=pp-long \
           --dependency="afterany:${SLURM_JOB_ID:?}" \
-          --export="ALL,REPO_ROOT=$repo_root,HICAR_CAMPAIGN_PLAN=$campaign,HICAR_CAMPAIGN_POLL_SECONDS=${HICAR_CAMPAIGN_POLL_SECONDS:-60},HICAR_CAMPAIGN_WATCH_SECONDS=${HICAR_CAMPAIGN_WATCH_SECONDS:-82800},HICAR_CAMPAIGN_CHAIN_WATCHER=1" \
+          --export="ALL,REPO_ROOT=$repo_root,HICAR_CAMPAIGN_PLAN=$campaign,HICAR_CAMPAIGN_CONTROLLER=$controller,HICAR_CAMPAIGN_POLL_SECONDS=${HICAR_CAMPAIGN_POLL_SECONDS:-60},HICAR_CAMPAIGN_WATCH_SECONDS=${HICAR_CAMPAIGN_WATCH_SECONDS:-82800},HICAR_CAMPAIGN_CHAIN_WATCHER=1" \
           "$0"); then
           break
         fi

@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "status": "PASS",
+  "campaign_id": "native-land-cold-start-july-v1",
+  "campaign_root": "/scratch/mch/olifu/icon_hicar/qualification/native-land-cold-start-july/v1/campaign",
+  "incident": {
+    "failed_cpu_batch": "cpu-f67cf2d9e4b5",
+    "failed_slurm_array": "5029795",
+    "failed_task_index": 2,
+    "failed_task_kind": "segment_retirement",
+    "root_cause": "The controller accepted ready forcing records while their producer Slurm array was still active. Four producer tasks later atomically replaced already-finalized cache records and invalidated the forcing publication checksums."
+  },
+  "restored_records": [
+    {
+      "name": "rea_l_hicar_20200702_0000.nc",
+      "published_sha256": "35b24f747534e8119fa5844cc5e5cb37ed7e9d1e3bfa2973acc0b223e188914c",
+      "late_replacement_sha256": "1eb4d8152821749dacea7e9342bb35dcd2574578f290472787e0c702a03e626a"
+    },
+    {
+      "name": "rea_l_hicar_20200702_0100.nc",
+      "published_sha256": "2d82e31d9ca05d78e82082b6bbb092c2911f05b3d4aabd952d0ae945d7c3bd48",
+      "late_replacement_sha256": "c3904a203b97c9158263587a958d894bbf546cdb388bbfb3837b350ea40c38bc"
+    },
+    {
+      "name": "rea_l_hicar_20200702_0200.nc",
+      "published_sha256": "431672fddf04efbd29f6f0a988cd617a5a63b34469831a82d57103b67031fe4f",
+      "late_replacement_sha256": "7a9bc2d9a4b0251498381f34a4baeff07e945d55e2802fa008931efa549e44c3"
+    },
+    {
+      "name": "rea_l_hicar_20200702_0300.nc",
+      "published_sha256": "0cf7229f03d71089ef15f48025a368ef79ef3713cacb8e401a31db82dba5f9c5",
+      "late_replacement_sha256": "f8232a7916e8e146d0e0d2bcf432e760c320145a3d6969247e4a9a21d1186748"
+    }
+  ],
+  "recovery": {
+    "preserved_late_replacements": "/scratch/mch/olifu/icon_hicar/qualification/native-land-cold-start-july/v1/campaign/recovery/setup-cache-race-20260807T0125Z",
+    "retirement_replay_job": "5029849",
+    "retirement_replay_state": "COMPLETED",
+    "retirement_report": "/scratch/mch/olifu/icon_hicar/qualification/native-land-cold-start-july/v1/campaign/chains/native-origin-20200702/segments/00001_20200702T000000/lifecycle/segment_retirement.json",
+    "watcher_job": "5029952",
+    "dependent_assessment_job": "5029973"
+  },
+  "controller_fix": {
+    "source": "orchestration/preemptible_campaign.py",
+    "source_sha256": "4d4d886b34ced65a5fbea66a959560e76649bd849da4c45b47a7cf8858809e4a",
+    "behavior": [
+      "Query each Balfrin array parent separately so numeric JobIDRaw children remain associated with their parent.",
+      "Do not clear a ready CPU batch while Slurm still reports any part of the batch active.",
+      "Clear a lifecycle retry blocker only after its exact retirement publication validates.",
+      "Retain the explicit recover-cpu-batch command for checksum-bound operator recovery."
+    ],
+    "verification": {
+      "controller_tests_passed": 17,
+      "broader_orchestration_tests_passed": 48,
+      "ruff": "PASS",
+      "diff_check": "PASS"
+    }
+  }
+}

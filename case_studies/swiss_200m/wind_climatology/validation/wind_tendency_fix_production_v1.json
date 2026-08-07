@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "status": "PASS",
+  "purpose": "production-horizontal-wind-tendency-fix-promotion",
+  "hicar": {
+    "branch": "feature/icon_downscaling",
+    "production_commit": "6bd302f8b97062cd43c1b8d4e59bd3cf0dc8ae07",
+    "parent_commit": "b5146a3c67612bd7d29abcd7c480ae4ae1bd31a2",
+    "production_tree": "6776f68c49f1f82394093058ee5571c8f377775f",
+    "qualified_commit": "86d6f1dd771d404a0a4a42f2b8868c14c8b97601",
+    "qualified_tree": "6776f68c49f1f82394093058ee5571c8f377775f",
+    "production_tree_matches_qualified_tree": true,
+    "remote_branch_tip_verified": true
+  },
+  "coordinator": {
+    "pin_commit": "d806e037974d6ba536d80d7506b4153053798879",
+    "branch": "main",
+    "submodule_pin": "6bd302f8b97062cd43c1b8d4e59bd3cf0dc8ae07",
+    "site_default_pin": "6bd302f8b97062cd43c1b8d4e59bd3cf0dc8ae07",
+    "remote_main_pin_verified": true
+  },
+  "qualification": {
+    "manifest": "/store_new/mch/msopr/olifu/icon_downscaling/qualification/wind-tendency-fix-b514/v1/manifest.json",
+    "manifest_sha256": "8d8e69eb76489600eff92f2fdbb1c1c16705207295b59c590cd99f729c8d34c0",
+    "report": "/store_new/mch/msopr/olifu/icon_downscaling/qualification/wind-tendency-fix-b514/v1/wind_tendency_fix_qualification.json",
+    "report_sha256": "c38b1093084bc2b7671f013cd3be5dd44ff0dc07f281e617be38a233c54e1ed2",
+    "gates": [
+      "isolated clean build",
+      "four-GPU halo suite",
+      "native horizontal wind evolution",
+      "10 m and every fixed-height wind evolution",
+      "cross-node restart equivalence",
+      "cross-node final-output equivalence"
+    ]
+  },
+  "balfrin_preflight": {
+    "report": "/scratch/mch/olifu/icon_hicar/qualification/production-wind-fix-promotion/v1/balfrin_preflight.json",
+    "report_sha256": "5b0e8e82be133cde31e1fed15d9666a2826f18d59bbe284ed679969c7423c940",
+    "check_fdb": true,
+    "failed_required_checks": 0
+  },
+  "coordinator_tests": {
+    "portable": {
+      "passed": 297,
+      "failed": 0
+    },
+    "production_pin_and_wind_contract": {
+      "passed": 5,
+      "failed": 0
+    },
+    "known_unmerged_v29_contracts": {
+      "failed": 3,
+      "interpretation": "Expected cumulative-water contracts from the scientifically failed V29 line; not part of the production pin."
+    },
+    "repository_check": "PASS"
+  },
+  "decision": "The frozen horizontal-wind defect is fixed in the production HICAR branch, coordinator submodule pin, Balfrin site default, and regression contract."
+}

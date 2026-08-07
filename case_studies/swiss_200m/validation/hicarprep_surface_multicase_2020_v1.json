@@ -1,0 +1,275 @@
+{
+  "cases": {
+    "2020-01-15T00:00:00Z": {
+      "hard_failures": [],
+      "methods": {
+        "absolute_w_so": {
+          "global_finite_fallback_count": 0,
+          "hydraulic_clip_rate": 0.02311134456435239,
+          "product_sha256": "4868426b0c01ca142879be54badfa0c502e1a0431523433bb51eca0d25f8c8ab",
+          "transfer_index_boundary_jump_p99": 0.09385996333913488,
+          "vwc_boundary_jump_p99": 0.09364603436872224,
+          "vwc_median_by_layer": [
+            0.27887414620156586,
+            0.29068876292663365,
+            0.3076606093014761,
+            0.33724395952464303
+          ]
+        },
+        "relative_saturation": {
+          "global_finite_fallback_count": 4952,
+          "hydraulic_clip_rate": 0.0,
+          "product_sha256": "ad28036aacacffe563b59fa39c801c0ec1082029ac6d67876a36e7897ab5c695",
+          "transfer_index_boundary_jump_p99": 0.1329256387988713,
+          "vwc_boundary_jump_p99": 0.06597262174090036,
+          "vwc_median_by_layer": [
+            0.2767220478006582,
+            0.28697293007703184,
+            0.302146894001949,
+            0.3309405902618793
+          ]
+        },
+        "smi": {
+          "global_finite_fallback_count": 4952,
+          "hydraulic_clip_rate": 0.022597127542663697,
+          "product_sha256": "9ca453fdc536a0271a9adef76b7be0b6e286791bbe4eaa33543c4874068ca719",
+          "transfer_index_boundary_jump_p99": 0.27569082960818286,
+          "vwc_boundary_jump_p99": 0.10525543867380191,
+          "vwc_median_by_layer": [
+            0.2998447016179654,
+            0.3144200448505817,
+            0.33123666465378426,
+            0.3612448715676093
+          ]
+        }
+      },
+      "native_icon_relative_saturation_median_by_layer": [
+        0.5908001910199177,
+        0.5929129464285715,
+        0.5984776535313645,
+        0.6135411897130646,
+        0.6394993894993896,
+        0.6180057675784172,
+        0.618018812463257,
+        0.6180141018103981
+      ],
+      "native_icon_smi_median_by_layer": [
+        0.7380371093749999,
+        0.7442467730978263,
+        0.7611243206521737,
+        0.7940596846846845,
+        0.8511850845410626,
+        0.8022259125067096,
+        0.8022119341563787,
+        0.8022305719568196
+      ],
+      "pairwise_vwc": {
+        "absolute_w_so_minus_relative_saturation": {
+          "absolute_difference_p95_m3_m3": 0.05876351107943484,
+          "maximum_absolute_difference_m3_m3": 0.33497179564684443,
+          "mean_m3_m3": -0.005392786879476226,
+          "rmse_m3_m3": 0.03790394948801776
+        },
+        "absolute_w_so_minus_smi": {
+          "absolute_difference_p95_m3_m3": 0.17199880578031418,
+          "maximum_absolute_difference_m3_m3": 0.373,
+          "mean_m3_m3": -0.03655340444655895,
+          "rmse_m3_m3": 0.08842042005622018
+        },
+        "relative_saturation_minus_smi": {
+          "absolute_difference_p95_m3_m3": 0.12269837348096004,
+          "maximum_absolute_difference_m3_m3": 0.2768887669176576,
+          "mean_m3_m3": -0.031160617567082723,
+          "rmse_m3_m3": 0.06350857585608172
+        }
+      },
+      "report": ".qualification_runtime/hicarprep_surface_cases_v4/20200115/validation.json",
+      "source_sha256": "b741a65677d1afee1e2005f388bdb1649e5b514731a013509a0d44f98b8ae480",
+      "static_sha256": "8a7b294d7d40a5cd352aed1f1abf7a53cb324e57c7377115f2744ce10cb797f1",
+      "status": "PASS_INPUT_PLAUSIBILITY",
+      "warnings": []
+    },
+    "2020-07-02T00:00:00Z": {
+      "hard_failures": [],
+      "methods": {
+        "absolute_w_so": {
+          "global_finite_fallback_count": 0,
+          "hydraulic_clip_rate": 0.020524469782776205,
+          "product_sha256": "9a392392c37cee6dcc83fd398b2954b1819d04ff45db3f6e06da6e520ce5b1ae",
+          "transfer_index_boundary_jump_p99": 0.09041305358793746,
+          "vwc_boundary_jump_p99": 0.09022410694578648,
+          "vwc_median_by_layer": [
+            0.28566012725006973,
+            0.27917467630202153,
+            0.29572619848392867,
+            0.3302503939822109
+          ]
+        },
+        "relative_saturation": {
+          "global_finite_fallback_count": 4952,
+          "hydraulic_clip_rate": 0.00013263325431479134,
+          "product_sha256": "df30b8d63386fd9ac4fa207d0198211e2e3f3d03f7741a9b1d56b4431da7ecc3",
+          "transfer_index_boundary_jump_p99": 0.11502291646338204,
+          "vwc_boundary_jump_p99": 0.05965789763034755,
+          "vwc_median_by_layer": [
+            0.28882083118704205,
+            0.28431439350579973,
+            0.2954425548558345,
+            0.3264888515549301
+          ]
+        },
+        "smi": {
+          "global_finite_fallback_count": 4952,
+          "hydraulic_clip_rate": 0.02954405739861977,
+          "product_sha256": "3e7452f97605c143b98f9d81601ba4d224590305a3c51d001e8570b3afda9acf",
+          "transfer_index_boundary_jump_p99": 0.2548011236124416,
+          "vwc_boundary_jump_p99": 0.099200363607279,
+          "vwc_median_by_layer": [
+            0.32324993967291954,
+            0.3162007410920368,
+            0.3318061938580842,
+            0.36630162581073616
+          ]
+        }
+      },
+      "native_icon_relative_saturation_median_by_layer": [
+        0.31403267205550855,
+        0.3365384615384616,
+        0.3751027960526316,
+        0.395422149122807,
+        0.4501249618437118,
+        0.614379833129833,
+        0.614372767150545,
+        0.6143821884562625
+      ],
+      "native_icon_smi_median_by_layer": [
+        0.1503481657608696,
+        0.17251230215097405,
+        0.22801319067028983,
+        0.28277191558441545,
+        0.3948487854737855,
+        0.7961453301127214,
+        0.7961626850515741,
+        0.796154649012942
+      ],
+      "pairwise_vwc": {
+        "absolute_w_so_minus_relative_saturation": {
+          "absolute_difference_p95_m3_m3": 0.06221052890974771,
+          "maximum_absolute_difference_m3_m3": 0.35696687398249893,
+          "mean_m3_m3": -0.006427086851743185,
+          "rmse_m3_m3": 0.040656428124531324
+        },
+        "absolute_w_so_minus_smi": {
+          "absolute_difference_p95_m3_m3": 0.17971612500094747,
+          "maximum_absolute_difference_m3_m3": 0.373,
+          "mean_m3_m3": -0.036990227883345723,
+          "rmse_m3_m3": 0.09209039655581158
+        },
+        "relative_saturation_minus_smi": {
+          "absolute_difference_p95_m3_m3": 0.1264230977393471,
+          "maximum_absolute_difference_m3_m3": 0.26579753668581085,
+          "mean_m3_m3": -0.030563141031602545,
+          "rmse_m3_m3": 0.06512158870896491
+        }
+      },
+      "report": ".qualification_runtime/hicarprep_surface_cases_v4/20200702/validation.json",
+      "source_sha256": "d0a69b9552bd3933ef58c3416f38cbf7576f79cf19e8bb16a0430a0d35ffcd27",
+      "static_sha256": "8a7b294d7d40a5cd352aed1f1abf7a53cb324e57c7377115f2744ce10cb797f1",
+      "status": "PASS_INPUT_PLAUSIBILITY",
+      "warnings": []
+    },
+    "2020-11-15T00:00:00Z": {
+      "hard_failures": [],
+      "methods": {
+        "absolute_w_so": {
+          "global_finite_fallback_count": 0,
+          "hydraulic_clip_rate": 0.01906708295262677,
+          "product_sha256": "dcd25f93c83625022addf44500daf6ce0b460df1c2fe478dc2892473cdb6c25c",
+          "transfer_index_boundary_jump_p99": 0.09018789413491858,
+          "vwc_boundary_jump_p99": 0.09000481034611311,
+          "vwc_median_by_layer": [
+            0.2721335672924439,
+            0.2865467833933465,
+            0.3076965873536155,
+            0.3341020628980619
+          ]
+        },
+        "relative_saturation": {
+          "global_finite_fallback_count": 4952,
+          "hydraulic_clip_rate": 6.84219169084241e-06,
+          "product_sha256": "e256d9fc3cc7f0ef2594d9abd508e91787a1eed6ba8fb27cfd787a5d2c5fa346",
+          "transfer_index_boundary_jump_p99": 0.11897596834989171,
+          "vwc_boundary_jump_p99": 0.06102161373850175,
+          "vwc_median_by_layer": [
+            0.2689791098202202,
+            0.2824388485863095,
+            0.30154795871488227,
+            0.3291133447638225
+          ]
+        },
+        "smi": {
+          "global_finite_fallback_count": 4952,
+          "hydraulic_clip_rate": 0.024236095613839333,
+          "product_sha256": "b79e72b8d194198b6ab75d2eeaacbf442339a6e7bc62f2265e7fb34f8a0b9a2b",
+          "transfer_index_boundary_jump_p99": 0.2557124446258989,
+          "vwc_boundary_jump_p99": 0.09985263884700765,
+          "vwc_median_by_layer": [
+            0.28848051548407627,
+            0.3083099704102896,
+            0.33219410160295504,
+            0.3642215337917645
+          ]
+        }
+      },
+      "native_icon_relative_saturation_median_by_layer": [
+        0.4863336113061798,
+        0.4893785112359551,
+        0.4985655620421245,
+        0.5142036782661782,
+        0.5222323972323972,
+        0.5802087572920905,
+        0.5802016913128025,
+        0.5802016913128023
+      ],
+      "native_icon_smi_median_by_layer": [
+        0.5441045346467389,
+        0.5497412743506495,
+        0.5664840919384058,
+        0.6013877615440114,
+        0.5985054347826085,
+        0.700072128287708,
+        0.7000581499373771,
+        0.7000739315554129
+      ],
+      "pairwise_vwc": {
+        "absolute_w_so_minus_relative_saturation": {
+          "absolute_difference_p95_m3_m3": 0.05832970362147904,
+          "maximum_absolute_difference_m3_m3": 0.3429953380766369,
+          "mean_m3_m3": -0.005505217904141289,
+          "rmse_m3_m3": 0.03792573258538776
+        },
+        "absolute_w_so_minus_smi": {
+          "absolute_difference_p95_m3_m3": 0.17384097132614587,
+          "maximum_absolute_difference_m3_m3": 0.373,
+          "mean_m3_m3": -0.03506877168334247,
+          "rmse_m3_m3": 0.08845491072058541
+        },
+        "relative_saturation_minus_smi": {
+          "absolute_difference_p95_m3_m3": 0.12321482573304296,
+          "maximum_absolute_difference_m3_m3": 0.2801725695207909,
+          "mean_m3_m3": -0.02956355377920119,
+          "rmse_m3_m3": 0.06330850113982445
+        }
+      },
+      "report": ".qualification_runtime/hicarprep_surface_cases_v4/20201115/validation.json",
+      "source_sha256": "95ffd059075c55e27ba6592808ff8a6a12352d5cdcec99b5a0f7a64ec8bd77b2",
+      "static_sha256": "8a7b294d7d40a5cd352aed1f1abf7a53cb324e57c7377115f2744ce10cb797f1",
+      "status": "PASS_INPUT_PLAUSIBILITY",
+      "warnings": []
+    }
+  },
+  "interpretation": "This matrix screens invalid inputs and quantifies method sensitivity. It does not select SMI or relative saturation without controlled HICAR response evidence.",
+  "schema": "hicarprep-surface-multicase-summary-v1",
+  "scientific_policy_selection": "INDETERMINATE",
+  "status": "PASS_ALL_INPUT_PLAUSIBILITY"
+}

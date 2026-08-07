@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "campaign_id": "native-land-cold-start-july-v1",
+  "purpose": "experiment",
+  "campaign_root": "/scratch/mch/olifu/icon_hicar/qualification/native-land-cold-start-july/v1/campaign",
+  "runtime_release": "/scratch/mch/olifu/icon_hicar/qualification/chronological-overlap-summer-202007/v1/runtime-release-v4/runtime_release.json",
+  "python_environment": "/scratch/mch/olifu/icon_hicar/qualification/chronological-overlap-summer-202007/v1/python_environment_v4.json",
+  "goal": {
+    "outcome": "Determine whether direct native ICON remapping plus soil-type-aware SMI translation materially reduces the July 2 and 3 cold-start slow-state bias against the established continuous reference.",
+    "why_now": "The chronological overlap experiment isolated material soil and surface reset bias, while the existing cold start used two spatial interpolations and mapped absolute water across different source and target soil classes.",
+    "resource_rationale": "Only the two demonstrated reset origins are rerun; two independent two-node trajectories fill a bounded four-node preemptible budget and reuse the validated forcing cache and continuous reference.",
+    "evidence_needed": [
+      "Retained-day soil water, soil temperature, and surface temperature bias against the unchanged continuous reference",
+      "Retained-day wind and PBL response under the improved cold start",
+      "Exact provenance of native-grid weights, ICON external parameters, and NoahMP hydraulic mapping"
+    ],
+    "stop_conditions": [
+      "Stop if either SMI-aware static initialization fails finite/range validation",
+      "Stop if the corrected production HICAR pin or frozen-wind regression contract is absent",
+      "Do not expand beyond the July 2 and 3 origins before the retained-day comparison is interpretable"
+    ]
+  },
+  "model": {
+    "expected_hicar_commit": "6bd302f8b97062cd43c1b8d4e59bd3cf0dc8ae07",
+    "hicar_root": "/scratch/mch/olifu/icon_hicar/qualification/chronological-overlap-summer-202007/v1/coordinator/HICAR",
+    "build_root": "/scratch/mch/olifu/icon_hicar/qualification/chronological-overlap-summer-202007/v1/build-gpu-nccl",
+    "case_root": "/scratch/mch/olifu/icon_hicar/qualification/chronological-overlap-summer-202007/v1/runtime-release-v4/case_studies/swiss_200m",
+    "static_file": "/scratch/mch/olifu/icon_hicar/qualification/native_land_init_v1/initialized-20200702-v6/domain_static_alpine_bridge_200m_rea_l_native_20200702000000.nc",
+    "partition": "preemptible",
+    "nodes": 2,
+    "time_limit": "01:15:00",
+    "output_profile": "static_process_case",
+    "output_interval_seconds": 1800
+  },
+  "policy": {
+    "segment_hours": 6,
+    "model_node_budget": 4,
+    "model_slots": 2,
+    "cpu_partition": "pp-short",
+    "cpu_slots": 4,
+    "cpu_cpus_per_task": 4,
+    "cpu_retry_max_cpus_per_task": 16,
+    "max_cpu_attempts": 3,
+    "max_cpu_batch_tasks": 32,
+    "max_model_attempts": 3,
+    "input_task_weight": 3,
+    "post_task_weight": 1,
+    "prefetch_segments_per_chain": 2,
+    "rolling_retirement": true,
+    "preserve_restart_every_segments": 1,
+    "max_unretired_segments_per_chain": 2
+  },
+  "chains": [
+    {
+      "chain_id": "native-origin-20200702",
+      "start": "2020-07-02T00:00:00",
+      "end": "2020-07-05T00:00:00",
+      "rea_l_land_initialization": true,
+      "static_file": "/scratch/mch/olifu/icon_hicar/qualification/native_land_init_v1/initialized-20200702-v6/domain_static_alpine_bridge_200m_rea_l_native_20200702000000.nc"
+    },
+    {
+      "chain_id": "native-origin-20200703",
+      "start": "2020-07-03T00:00:00",
+      "end": "2020-07-06T00:00:00",
+      "rea_l_land_initialization": true,
+      "static_file": "/scratch/mch/olifu/icon_hicar/qualification/native_land_init_v1/initialized-20200703-v6/domain_static_alpine_bridge_200m_rea_l_native_20200703000000.nc"
+    }
+  ]
+}

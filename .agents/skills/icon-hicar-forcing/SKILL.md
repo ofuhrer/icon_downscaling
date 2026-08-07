@@ -62,6 +62,13 @@ costly runs that require recoverability.
   publish NetCDF plus hashes, and remove native GRIB/work data. Never retain
   the physical FDB container files or an unpacked multi-year GRIB staging
   archive.
+- Every pre-emptible campaign should use one campaign-wide valid-time forcing
+  cache. All segment plans for the same domain must map a valid UTC time to
+  the same immutable NetCDF publication; the controller must deduplicate
+  producer tasks by that path. Per-chain copies are not an acceptable
+  shared layout. Retire a shared record only after every consuming
+  segment has passed solver, compression, and journaled segment retirement;
+  retire the once-per-cycle source cache after all of that cycle's records.
 - HICAR forcing files may be retired only after the matching model output and
   exact-end restart have their validated ready publications. Recheck every
   planned forcing hash before deletion; keep plans, source coordinates,
@@ -82,10 +89,30 @@ costly runs that require recoverability.
   `W_SO` by exact vertical overlap. Convert each target mass to volumetric
   water as `mass / (1000 kg m-3 * target thickness)`. This conserves the
   source water represented within the HICAR 0--1.5 m column.
-- Regrid the native ICON fields once to the bounded regular fieldextra grid,
-  then bilinearly sample that product on the curvilinear HICAR domain. Fail
-  on missing land values. If positive `W_SNOW` has invalid `RHO_SNOW`, fail
-  unless an explicit density fallback is supplied and recorded in the
+- The fieldextra regular-grid product followed by Python bilinear sampling is
+  the legacy land-state path, not a scientific requirement. A direct native
+  ICON -> curvilinear HICAR candidate is available with `fdb/5.21:v1`,
+  EarthKit Data 1.0, EarthKit Geo 1.0, and MIR. Import `mir` before EarthKit
+  until APNRZ-998 is resolved. Construct an `eckit.geo.Grid` for each bounded
+  target chunk and pass that object to EarthKit; passing thousands of inline
+  coordinates triggers an eckit-geo regex stack overflow. Persist both
+  `MIR_CACHE_PATH` and `ECKIT_GEO_CACHE_PATH`, and register target chunks once
+  per run so every field and later date reuses the same grid objects and
+  matrices.
+- For direct REA-L land initialization, use the tuned operational ICON-CH1-EPS
+  EXTPAR file only after verifying that its `uuidOfHGrid` exactly matches the
+  GRIB grid. The July 2020 coupled comparison rejected the full TERRA-SMI ->
+  NoahMP-STAS transform: after 48 h it produced about `39--42 kg m-2` mean
+  soil-column-water bias and `0.0624 m3 m-3` soil-water RMSE, substantially
+  worse than the legacy absolute-water initialization. Retain direct native
+  ICON -> HICAR interpolation, but use direct-native absolute `W_SO` plus exact
+  vertical overlap as the next/default candidate. Treat any future SMI variant
+  as a bounded research intervention, not a production default. If testing it,
+  derive TERRA SMI from `W_SO` and `SOILTYP` on the native grid, normalize
+  finite support across sea boundaries, and reconstruct with the exact target
+  soil class and selected NoahMP table.
+- Fail on missing land values. If positive `W_SNOW` has invalid `RHO_SNOW`,
+  fail unless an explicit density fallback is supplied and recorded in the
   manifest.
 - Publish the initialized static copy with `surface_temperature`,
   `soil_temperature`, `soil_vwc`, `swe`, and `snow_height`; enable the
@@ -118,3 +145,6 @@ Read [references/forcing-schema.md](references/forcing-schema.md) when checking 
 - `case_studies/swiss_200m/validation/build_rea_l_land_initialization.py`:
   spatially sample, vertically remap, validate, hash, and publish a HICAR
   static initialization copy.
+- `case_studies/swiss_200m/scripts/produce_rea_l_native_land_state_balfrin.sbatch`
+  and `case_studies/swiss_200m/validation/remap_rea_l_native_land_state.py`:
+  retrieve and directly remap native REA-L land state with reusable weights.

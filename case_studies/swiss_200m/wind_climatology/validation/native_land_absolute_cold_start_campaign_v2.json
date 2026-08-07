@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "status": "STOPPED_BY_USER",
+  "campaign_id": "native-land-absolute-cold-start-july-v2",
+  "campaign_root": "/scratch/mch/olifu/icon_hicar/qualification/native-land-absolute-cold-start-july/v2/campaign",
+  "definition": {
+    "local_source": "case_studies/swiss_200m/wind_climatology/experiments/native_land_absolute_cold_start_july_v2.json",
+    "published_path": "/scratch/mch/olifu/icon_hicar/qualification/native-land-absolute-cold-start-july/v2/experiment/campaign_definition.json",
+    "sha256": "211bbb8e2249c6aae008b944ec561fda7de5f17b42f03fd9c029198e50665fb7"
+  },
+  "campaign_plan": {
+    "path": "/scratch/mch/olifu/icon_hicar/qualification/native-land-absolute-cold-start-july/v2/campaign/campaign.json",
+    "sha256": "e2bb003d4a6d247c125ba4ad7ef8f65860ae1774b9126b0ef5df27f16cdf8ced",
+    "segment_count": 24,
+    "model_node_budget": 4,
+    "model_slots": 2,
+    "partition": "preemptible"
+  },
+  "model": {
+    "expected_hicar_commit": "6bd302f8b97062cd43c1b8d4e59bd3cf0dc8ae07",
+    "frozen_wind_defect_fix_present": true,
+    "nodes_per_attempt": 2,
+    "segment_hours": 6,
+    "output_interval_seconds": 1800
+  },
+  "controller": {
+    "source": "orchestration/preemptible_campaign.py",
+    "published_path": "/scratch/mch/olifu/icon_hicar/qualification/native-land-absolute-cold-start-july/v2/controller-code-v1/preemptible_campaign.py",
+    "sha256": "4d4d886b34ced65a5fbea66a959560e76649bd849da4c45b47a7cf8858809e4a",
+    "runtime_contract_sha256": "2565215ddeba9e8e32cdb66d8545d45925d0d727517a1595d84f46e6ec774eb4",
+    "watcher_sha256": "759e07cec90a245ea4ad799ce9d9f251593325169d469d176f65c72d803fcc54",
+    "verification": {
+      "planner_controller_runtime_and_seeding_tests": 36,
+      "result": "PASS"
+    }
+  },
+  "exact_forcing_reuse": {
+    "source_index": "/scratch/mch/olifu/icon_hicar/qualification/chronological-overlap-summer-202007/v1/campaign/forcing_cache/index.json",
+    "source_index_sha256": "720a173c8b189e852ae51f9ab3c1cd885e89c904d2414084f5a50cc6c7ba9939",
+    "evidence_campaign": "/scratch/mch/olifu/icon_hicar/qualification/native-land-cold-start-july/v1/campaign/campaign.json",
+    "evidence_campaign_sha256": "b6abfd92884b6e76bd0aabc4cf82f07b376a08befbd50fccf5db96033eba1224",
+    "report": "/scratch/mch/olifu/icon_hicar/qualification/native-land-absolute-cold-start-july/v2/reuse/exact_forcing_cache_reuse.json",
+    "report_sha256": "74378981d38a4ad414ad256611a29595bc7839ec0ee23babf436e6bf393e2070",
+    "assessor_sha256": "ca3f2b0a1961ab7c5c6b227f994ec02aeefd6a65f28828051d18dc9a11e62261",
+    "record_count": 97,
+    "valid_time_range": [
+      "2020-07-02T00:00:00",
+      "2020-07-06T00:00:00"
+    ],
+    "method": "same-filesystem hardlink with path-local manifest rewrite",
+    "dry_reconcile": {
+      "forcing_finalize_tasks": 6,
+      "forcing_record_tasks": 0,
+      "result": "PASS"
+    }
+  },
+  "candidate_statics": [
+    {
+      "origin": "2020-07-02T00:00:00",
+      "path": "/scratch/mch/olifu/icon_hicar/qualification/native_land_absolute_v1/initialized-20200702/domain_static_alpine_bridge_200m_rea_l_native_20200702000000.nc",
+      "sha256": "a0ce0044d96d757719e3373fa210cfe42d070a6005b87648aa7310865388293a"
+    },
+    {
+      "origin": "2020-07-03T00:00:00",
+      "path": "/scratch/mch/olifu/icon_hicar/qualification/native_land_absolute_v1/initialized-20200703/domain_static_alpine_bridge_200m_rea_l_native_20200703000000.nc",
+      "sha256": "39852c961f86093fa81cf0d1c5d3de4a2f6ed4bcd71f2bb852d58f6079453900"
+    }
+  ],
+  "submission": {
+    "plan_job": "5031283",
+    "plan_job_state": "COMPLETED",
+    "seed_job": "5031287",
+    "seed_job_state": "COMPLETED",
+    "watcher_job": "5031295",
+    "watcher_successor_job": "5031296",
+    "first_cpu_batch_job": "5031297",
+    "first_cpu_batch_kind": "forcing_finalize",
+    "first_model_jobs": {
+      "absolute-origin-20200702": "5031304",
+      "absolute-origin-20200703": "5031305"
+    },
+    "initial_controller_state": "ACTIVE",
+    "initial_segment_status": {
+      "WAITING_FORCING": 24
+    }
+  },
+  "stop": {
+    "reason": "User requested that the campaign stop.",
+    "controller_capacity": {
+      "cpu_slots": 0,
+      "model_slots": 0
+    },
+    "cancelled_jobs": {
+      "watcher": "5031295",
+      "watcher_successor": "5031296",
+      "absolute-origin-20200702": "5031584",
+      "absolute-origin-20200703": "5031629"
+    },
+    "refreshed_segment_status": {
+      "COMPLETE": 7,
+      "READY_TO_RETRY": 2,
+      "WAITING_FORCING": 15
+    },
+    "dry_reconcile_actions": 0,
+    "artifacts_preserved": true,
+    "resume_possible": true
+  }
+}

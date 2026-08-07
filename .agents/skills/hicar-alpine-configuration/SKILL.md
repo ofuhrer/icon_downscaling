@@ -266,6 +266,78 @@ production.
   the value used by its similarity-function inversion at `SBRLIM=250`, so
   calm stable output can legitimately exceed 250; validate finiteness and a
   broad sanity range rather than applying 250 as an output cap.
+- In a spin-up convergence ladder, the longest member is the reference and
+  its exact self-match is not evidence of convergence. Select a minimum only
+  if at least one shorter member and its complete longer-duration tail pass
+  every frozen event/height criterion. If only the reference passes, report
+  `MINIMUM_SPINUP_NOT_BRACKETED` with the reference duration as a lower bound
+  and extend the bracket before any stitched-chain or production gate.
+- If same-valid-time winds retain cold-start-age dependence after the hourly
+  target is reset from bit-identical forcing, do not assume shorter segments
+  remove drift. Compare pressure, theta, qv, density, PBL, friction velocity,
+  and land state before changing wind parameters. For the Swiss 200 m
+  Morrison bridge, pressure was identical but the coupled prognostic state was
+  not; Sx on/off changed winds by less than `1e-6 m s-1` in both Plateau and
+  Storm Sabine replays and is not the cause.
+- Do not set `advect_density=.False.` as a production diagnostic with the
+  qualified adjoint solver or disable its conservation gate. The tested branch
+  was rejected at `relative_Bq=0.25952` versus the `2e-5` requirement.
+- `wind_only` omits the evolved high-resolution meteorology that motivates
+  using HICAR. Do not confuse it with a wind-focused fully coupled product;
+  use it only as an explicit paired intervention when that distinction is the
+  scientific question.
+- The tested alternative of independent 24-hour coupled windows launched every
+  12 hours with hard ownership of model ages `(12, 24]` also fails as a
+  continuous trajectory. Across four regimes, two handoffs, and seven heights,
+  zero of 56 handoff-height combinations passed the frozen convergence
+  thresholds; worst-handoff vector RMSE was `1.44--8.96 m s-1` against the
+  `0.20 m s-1` limit. Every owned core remained physically valid. Do not hide
+  this trajectory disagreement by linearly tapering independently developed
+  small-scale circulations. Exact evidence is published under
+  `/store_new/mch/msopr/olifu/icon_downscaling/qualification/wind_overlap_handoff_v1`.
+- Short coupled windows may still be assessed for marginal climatological
+  statistics by reducing each deterministically owned core independently.
+  That path requires observation-facing skill and launch-origin sensitivity
+  evidence. It does not supply continuous chronology, persistence, or block
+  extremes unless a separate seam-safe method passes.
+
+## Deferred terrain-radiation production qualification
+
+The component invariants below remain useful for focused R&D. The promotion
+ladder and national-scale requirements apply only during later consolidation.
+
+- Keep `terrain_shading=.False.` as the production default until the bounded
+  causal ladder passes.
+- Use the renderer profiles in cumulative order: `off`, `direct`,
+  `direct-diffuse`, `full-local`, then `full-neighborhood`. Do not jump from
+  off to the inseparable full package.
+- Preserve the RRTMG(P) horizontal-plane direct and diffuse components as
+  restart state. Apply horizon/slope projection to raw direct and SVF only to
+  raw diffuse; never reconstruct direct as total minus an already shaded
+  diffuse field.
+- For UTC forcing and model timestamps, render `tzone=0.0` explicitly. A local
+  civil-time default shifts the solar azimuth/elevation test and can turn a
+  correct horizon crossing into an apparent component failure.
+- First require flat/open identity, blocked-horizon behavior, finite/range and
+  surface-energy closure, exact split-restart agreement to the project
+  tolerance, and shadow timing within one 4-degree sector plus one radiation
+  interval.
+- Test flat/open component identity within each enabled run: compare corrected
+  direct/diffuse fluxes with that run's preserved raw RRTMGP components.
+  Preserve enabled-versus-off coupled-trajectory drift as a diagnostic, but do
+  not confound it with the no-op terrain correction itself.
+- If the candidate fails split-restart continuity, keep terrain-component and
+  restart decisions separate. Run any later A/B/C preconditioning plus score
+  window uninterrupted; do not join them with a restart until the exact
+  candidate stack passes its restart gate.
+- Qualify on a synthetic domain and compact valley tile across clear summer,
+  winter/snow, and nocturnal drainage cases. Do not authorize a national run
+  until component attribution, observation-facing wind/radiation behavior,
+  runtime, and storage all pass.
+- Retain the model limitations in interpretation: isotropic diffuse SVF,
+  nearest-sector horizon lookup, finite horizon search, bilinear horizon
+  regridding, and simplified local/neighborhood reflected-SW and terrain-LW
+  view factors.
 
 ## Physical plausibility checks
 

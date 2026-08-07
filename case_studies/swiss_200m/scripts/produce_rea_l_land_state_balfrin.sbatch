@@ -9,18 +9,28 @@
 #SBATCH --time=00:30:00
 
 set -euo pipefail
+repo_root=${REPO_ROOT:-$SCRATCH/icon_hicar}
+# shellcheck source=scripts/load_balfrin_site_config.sh
+. "$repo_root/scripts/load_balfrin_site_config.sh"
 [ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
-module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
+module use "$USER_ENV_ROOT/modules"
 module load nco/5.0.1-gcc netcdf-c/4.8.1-gcc >/dev/null
 
-repo_root=${REPO_ROOT:-$SCRATCH/icon_hicar}
 date=${REA_L_LAND_DATE:-20200701}
 time=${REA_L_LAND_TIME:-0000}
-case "$date:$time" in
+cycle_date=${REA_L_LAND_CYCLE_DATE:-$date}
+cycle_time=${REA_L_LAND_CYCLE_TIME:-$time}
+step_hours=${REA_L_LAND_STEP_HOURS:-0}
+case "$date:$time:$cycle_date:$cycle_time:$step_hours" in
   *[!0-9:]*|"") echo "REA_L_LAND_DATE/TIME must be numeric" >&2; exit 2 ;;
 esac
-test "${#date}" -eq 8 && test "${#time}" -eq 4 || {
-  echo "REA_L_LAND_DATE/TIME must be YYYYMMDD/HHMM" >&2
+test "${#date}" -eq 8 && test "${#time}" -eq 4 \
+  && test "${#cycle_date}" -eq 8 && test "${#cycle_time}" -eq 4 || {
+  echo "REA_L_LAND_DATE/TIME and REA_L_LAND_CYCLE_DATE/TIME must be YYYYMMDD/HHMM" >&2
+  exit 2
+}
+(( step_hours >= 0 && step_hours <= 24 )) || {
+  echo "REA_L_LAND_STEP_HOURS must be in 0..24" >&2
   exit 2
 }
 
@@ -29,8 +39,9 @@ target_grid_file=$case_root/config/fieldextra_target_grid.txt
 output_dir=${REA_L_LAND_OUTPUT_DIR:-$repo_root/streaming/rea_l_ch1/land_state}
 output=$output_dir/rea_l_land_state_${date}_${time}.nc
 manifest=$output_dir/rea_l_land_state_${date}_${time}.manifest.json
+work_root=${REA_L_LAND_WORK_ROOT:-$SCRATCH/icon_hicar/tmp}
 uenv_bin=${UENV_BIN:-/usr/bin/uenv}
-fdb_image=${REA_FDB_IMAGE:-fdb/5.19:v2}
+fdb_image=${REA_FDB_IMAGE:?REA_FDB_IMAGE is required}
 fieldextra=${FIELD_EXTRA_BIN:-/oprusers/osm/opr.inn/abs/fieldextra_gnu_opt_omp-16.0.0-gcc-12.3.0}
 resources=${FIELD_EXTRA_RESOURCES:-/oprusers/osm/opr.inn/config/resources}
 sample=${FIELD_EXTRA_SAMPLE:-/oprusers/osm/opr.inn/modules/eccodes_cosmo_resources/2.36.0.3/samples/COSMO_GRIB2_default.tmpl}
@@ -40,12 +51,12 @@ for path in "$target_grid_file" "$fieldextra" "$resources/dictionary_icon.txt" \
   "$sample" "$icon_grid"; do
   test -e "$path" || { echo "missing required path: $path" >&2; exit 2; }
 done
-mkdir -p "$output_dir" "$repo_root/tmp"
+mkdir -p "$output_dir" "$work_root"
 test ! -e "$output" && test ! -e "$output.ready" || {
   echo "refusing to overwrite published land state: $output" >&2
   exit 2
 }
-work=$(mktemp -d "$repo_root/tmp/rea_l_land_producer.XXXXXX")
+work=$(mktemp -d "$work_root/rea_l_land_producer.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 target_grid=$(tr -d '\n' < "$target_grid_file")
 
@@ -56,11 +67,11 @@ retrieve,
   expver=r001,
   model=icon-rea-l-ch1,
   type=cf,
-  date=$date,
-  time=$time,
+  date=$cycle_date,
+  time=$cycle_time,
   levtype=sfc,
   param=500044/500147/502336,
-  step=0
+  step=$step_hours
 EOF
 cat > "$work/soil_temperature.mars" <<EOF
 retrieve,
@@ -69,12 +80,12 @@ retrieve,
   expver=r001,
   model=icon-rea-l-ch1,
   type=cf,
-  date=$date,
-  time=$time,
+  date=$cycle_date,
+  time=$cycle_time,
   levtype=dp,
   levelist=0/0.005/0.02/0.06/0.18/0.54/1.62/4.86,
   param=500166,
-  step=0
+  step=$step_hours
 EOF
 cat > "$work/soil_water.mars" <<EOF
 retrieve,
@@ -83,12 +94,12 @@ retrieve,
   expver=r001,
   model=icon-rea-l-ch1,
   type=cf,
-  date=$date,
-  time=$time,
+  date=$cycle_date,
+  time=$cycle_time,
   levtype=dp,
   levelist=0/0.01/0.03/0.09/0.27/0.81/2.43/7.29,
   param=500167,
-  step=0
+  step=$step_hours
 EOF
 for name in surface soil_temperature soil_water; do
   "$uenv_bin" run --view=rea-l-ch1 "$fdb_image" -- \
@@ -207,7 +218,7 @@ ncks -4 -L 1 -O "$work/packaged.nc" "$partial"
 mv "$partial" "$output"
 sha256sum "$output" > "$output.sha256"
 
-python3 - "$manifest" "$output" "$date" "$time" "$target_grid" "$fdb_image" <<'PY'
+python3 - "$manifest" "$output" "$date" "$time" "$cycle_date" "$cycle_time" "$step_hours" "$target_grid" "$fdb_image" <<'PY'
 import hashlib
 import json
 import os
@@ -215,7 +226,7 @@ import pathlib
 import sys
 import tempfile
 
-manifest, output, date, time, target_grid, image = sys.argv[1:]
+manifest, output, date, time, cycle_date, cycle_time, step_hours, target_grid, image = sys.argv[1:]
 output_path = pathlib.Path(output)
 digest = hashlib.sha256(output_path.read_bytes()).hexdigest()
 payload = {
@@ -228,9 +239,11 @@ payload = {
         "expver": "r001",
         "model": "icon-rea-l-ch1",
         "type": "cf",
-        "date": date,
-        "time": time,
-        "step": 0,
+        "cycle_date": cycle_date,
+        "cycle_time": cycle_time,
+        "step_hours": int(step_hours),
+        "valid_date": date,
+        "valid_time": time,
         "fields": ["SKT", "T_SO", "W_SO", "W_SNOW", "RHO_SNOW"],
     },
     "fdb_image": image,

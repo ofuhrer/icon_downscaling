@@ -1,0 +1,22 @@
+#!/bin/bash -l
+#SBATCH --job-name=repeat-day-compat
+#SBATCH --partition=pp-short
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=4G
+#SBATCH --time=01:00:00
+
+set -euo pipefail
+
+: "${HICAR_REPEAT_RUNTIME_DIR:?set HICAR_REPEAT_RUNTIME_DIR}"
+: "${HICAR_REPEAT_PYTHON:?set HICAR_REPEAT_PYTHON}"
+: "${HICAR_REPEAT_TRANSFORM_REPORT:?set HICAR_REPEAT_TRANSFORM_REPORT}"
+: "${HICAR_REPEAT_RESTART_INPUT_FILE:?set HICAR_REPEAT_RESTART_INPUT_FILE}"
+: "${HICAR_REPEAT_COMPATIBILITY_REPORT:?set HICAR_REPEAT_COMPATIBILITY_REPORT}"
+
+exec "${HICAR_REPEAT_PYTHON}" \
+  "${HICAR_REPEAT_RUNTIME_DIR}/publish_repeated_day_restart_compatibility.py" \
+  --transform "${HICAR_REPEAT_TRANSFORM_REPORT}" \
+  --restart "${HICAR_REPEAT_RESTART_INPUT_FILE}" \
+  --output "${HICAR_REPEAT_COMPATIBILITY_REPORT}"

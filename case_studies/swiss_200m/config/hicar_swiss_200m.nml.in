@@ -23,6 +23,7 @@
   soil_deept_var = 'soil_deep_temperature'
   soil_t_var = 'soil_temperature'
   soil_vwc_var = 'soil_vwc'
+@VEGETATION_DOMAIN_LINES@
 @SNOW_INIT_LINES@
 @TERRAIN_RADIATION_DOMAIN_LINES@
   use_map_factors = .True.
@@ -78,21 +79,25 @@
   v_order = 3
   flux_corr = 1
   cz_diff_order = 0
+  advect_density = @ADVECT_DENSITY@
 /
 &sm_parameters
 /
 &lsm_parameters
   LU_Categories = 'USGS'
-  ! WorldCover snow/ice maps to USGS category 24.
+  ! HICAR's generic USGS default leaves glaciers disabled. WorldCover snow/ice
+  ! is mapped to USGS category 24, so select Noah-MP glacier physics explicitly.
   ice_category = 24
   nmp_opt_soil = @NMP_OPT_SOIL@
+@VEGETATION_LSM_LINES@
 /
 &cu_parameters
 /
 &rad_parameters
-  ! Simulation and forcing timestamps are UTC. Terrain radiation remains off
-  ! unless a causal component profile is selected explicitly.
+  ! Explicitly freeze the previously effective RRTMGP defaults. Terrain
+  ! radiation remains off unless a causal profile is selected explicitly.
   update_interval_rad = @RADIATION_UPDATE_INTERVAL@.0
+  ! Simulation and forcing timestamps are UTC.
   tzone = 0.0
   icloud = 3
   cldovrlp = 2
@@ -103,7 +108,7 @@
 &sfc_parameters
 /
 &wind
-  Sx = .True.
+  Sx = @SX_ENABLED@
   smooth_wind_distance = 500.0
 @ALPHA_CONST_LINE@
   wind_solver_iterations = @WIND_SOLVER_ITERATIONS@

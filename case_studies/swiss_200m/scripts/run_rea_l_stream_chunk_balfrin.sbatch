@@ -23,6 +23,7 @@ module load nvhpc/24.5 cray-mpich-nvhpc/8.1.30 cuda/12.3.0-gcc \
 
 plan=${STREAM_PLAN:?Set STREAM_PLAN to a published chunk_plan.json}
 root=${HICAR_MULTILEVEL_ROOT:-$SCRATCH/icon_hicar/HICAR}
+support_dir=${HICAR_RUNTIME_SUPPORT_DIR:-$root/run}
 case_root=${HICAR_SWISS_CASE:-$SCRATCH/icon_hicar/case_studies/swiss_200m}
 case_name=$(basename "$case_root")
 build=${HICAR_MULTILEVEL_BUILD:-$root/build_gpu_nccl}
@@ -54,6 +55,7 @@ restart_dir=${STREAM_RESTART_DIR:-$run/restart}
 restart_input_file=${STREAM_RESTART_INPUT_FILE:-}
 restart_input_report=${STREAM_RESTART_INPUT_REPORT:-}
 restart_input_validator=${HICAR_RESTART_INPUT_VALIDATOR:-$repo_root/case_studies/swiss_200m/validation/validate_published_restart_input.py}
+restart_override_check=${STREAM_RESTART_OVERRIDE_CHECK:-0}
 forcing_publication="$chunk_root/forcing_publication.json"
 restart_file="$restart_dir/${static_basename}_${end_file}.nc"
 report="$run/model_chunk_completion.json"
@@ -63,19 +65,39 @@ preemption_helper=${HICAR_PREEMPTION_HELPER:-$SCRATCH/icon_hicar/orchestration/p
 signal_forwarder="$repo_root/scripts/preemption_signal_forwarding.sh"
 interruption_report="$run/attempt_interrupted.json"
 output_profile=${STREAM_OUTPUT_PROFILE:-routine}
+wind_sx=${STREAM_WIND_SX:-on}
+advect_density=${STREAM_ADVECT_DENSITY:-on}
 if test "$output_profile" = wind_climatology && test -z "${STREAM_OUTPUT_INTERVAL:-}"; then
   echo "wind_climatology requires an explicit STREAM_OUTPUT_INTERVAL sampling cadence" >&2
   exit 2
 fi
 output_interval=${STREAM_OUTPUT_INTERVAL:-3600}
-wind_reduction_interval=${STREAM_WIND_REDUCTION_INTERVAL:-86400}
+wind_reduction_interval=${STREAM_WIND_REDUCTION_INTERVAL:-$((hours * 3600))}
 wind_reduction_dir="$run/wind_climatology"
 wind_reduction_file="$wind_reduction_dir/wind_statistics_${chunk_id}.nc"
 wind_reduction_report="$wind_reduction_dir/wind_statistics_${chunk_id}.json"
 
 case "$output_profile" in
-  routine|qualification|wind_climatology) ;;
+  routine|qualification|mechanism_diagnosis|causal_surface_30min|wind_climatology) ;;
   *) echo "unsupported STREAM_OUTPUT_PROFILE: $output_profile" >&2; exit 2 ;;
+esac
+case "$wind_sx" in
+  1|true|TRUE|on|ON) wind_sx=on ;;
+  0|false|FALSE|off|OFF) wind_sx=off ;;
+  *) echo "STREAM_WIND_SX must be on/off or true/false" >&2; exit 2 ;;
+esac
+case "$advect_density" in
+  1|true|TRUE|on|ON) advect_density=on ;;
+  0|false|FALSE|off|OFF) advect_density=off ;;
+  *) echo "STREAM_ADVECT_DENSITY must be on/off or true/false" >&2; exit 2 ;;
+esac
+case "$restart_override_check" in
+  1|true|TRUE) restart_override_check=1 ;;
+  0|false|FALSE) restart_override_check=0 ;;
+  *)
+    echo "STREAM_RESTART_OVERRIDE_CHECK must be true/false or 1/0" >&2
+    exit 2
+    ;;
 esac
 case "$preemptible_attempt" in
   0|false|FALSE) preemptible_attempt=0 ;;
@@ -278,6 +300,7 @@ cp "$plan" "$run/chunk_plan.json"
 cp "$forcing_publication" "$run/forcing_publication.json"
 
 restart_args=()
+restart_override_args=()
 validator_restart_args=()
 land_initialization_args=()
 case "${STREAM_REA_L_LAND_INITIALIZATION:-0}" in
@@ -335,6 +358,9 @@ if test -n "${STREAM_RESTART_FROM:-}"; then
   fi
   test -s "$previous_file" || { echo "missing previous restart: $previous_file" >&2; exit 2; }
   restart_args=(--restart-from "$start_hicar")
+  if test "$restart_override_check" -eq 1; then
+    restart_override_args=(--restart-override-check)
+  fi
 fi
 
 "$python" "$renderer" \
@@ -348,19 +374,44 @@ fi
   "${land_initialization_args[@]}" \
   --nz 80 \
   --wind-solver-iterations 2500 \
+  --sx "$wind_sx" \
+  --advect-density "$advect_density" \
   --restart-interval "$restart_records" \
   "${restart_args[@]}" \
+  "${restart_override_args[@]}" \
   --output-dir "$run/output" \
   --restart-dir "$restart_dir" \
   --output "$run/input.nml"
 
 grep -Eq '^[[:space:]]*restartinterval[[:space:]]*=[[:space:]]*'"$restart_records" "$run/input.nml"
 grep -Eq '^[[:space:]]*outputinterval[[:space:]]*=[[:space:]]*'"$output_interval" "$run/input.nml"
-grep -q "'u10m'" "$run/input.nml"
-grep -q "'v10m'" "$run/input.nml"
+if test "$wind_sx" = on; then
+  grep -Eqi '^[[:space:]]*Sx[[:space:]]*=[[:space:]]*\.True\.' "$run/input.nml"
+else
+  grep -Eqi '^[[:space:]]*Sx[[:space:]]*=[[:space:]]*\.False\.' "$run/input.nml"
+fi
+if test "$advect_density" = on; then
+  grep -Eqi '^[[:space:]]*advect_density[[:space:]]*=[[:space:]]*\.True\.' "$run/input.nml"
+else
+  grep -Eqi '^[[:space:]]*advect_density[[:space:]]*=[[:space:]]*\.False\.' "$run/input.nml"
+fi
+case "$output_profile" in
+  routine|qualification|wind_climatology)
+    grep -q "'u10m'" "$run/input.nml"
+    grep -q "'v10m'" "$run/input.nml"
+    ;;
+  mechanism_diagnosis|causal_surface_30min)
+    grep -q "'cldfrac'" "$run/input.nml"
+    grep -q "'soil_column_total_water'" "$run/input.nml"
+    ;;
+esac
 for asset in NoahmpTable.TBL rrtmgp_support mp_support; do
+  test -e "$support_dir/$asset" || {
+    echo "missing HICAR runtime support asset: $support_dir/$asset" >&2
+    exit 2
+  }
   if ! test -e "$run/$asset"; then
-    ln -s "$root/run/$asset" "$run/$asset"
+    ln -s "$support_dir/$asset" "$run/$asset"
   fi
 done
 

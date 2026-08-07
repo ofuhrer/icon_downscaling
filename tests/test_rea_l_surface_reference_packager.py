@@ -18,7 +18,10 @@ PACKAGER = (
 
 
 def write_surface(
-    path: Path, precipitation: float | None = None, mesh_coordinates: bool = False
+    path: Path,
+    precipitation: float | None = None,
+    mesh_coordinates: bool = False,
+    diagnostics: bool = False,
 ) -> None:
     with netCDF4.Dataset(path, "w") as dataset:
         dataset.createDimension("lat_1", 2)
@@ -48,6 +51,22 @@ def write_surface(
             }
         else:
             values = {"TOT_PREC": precipitation}
+        if diagnostics:
+            values.update(
+                {
+                    "ASWDIR_S": 100.0,
+                    "ASWDIFD_S": 50.0,
+                    "ATHD_S": 300.0,
+                    "ASOB_S": 80.0,
+                    "ATHB_S": -40.0,
+                    "ALHFL_S": 20.0,
+                    "ASHFL_S": 10.0,
+                    "RAIN_GSP": 1.0,
+                    "SNOW_GSP": 0.5,
+                    "GRAU_GSP": 0.25,
+                    "CLCT": 60.0,
+                }
+            )
         for name, value in values.items():
             dataset.createVariable(name, "f4", ("lat_1", "lon_1"))[:] = value
 
@@ -155,3 +174,64 @@ def test_rejects_material_cumulative_precipitation_decrease(tmp_path):
     assert result.returncode != 0
     assert not output.exists()
     assert not manifest.exists()
+
+
+def test_packages_interval_surface_diagnostics_from_cycle_endpoints(tmp_path):
+    result, output, manifest = run_packager(tmp_path)
+    assert result.returncode == 0, result.stderr + result.stdout
+
+    start = tmp_path / "diagnostics_start.nc"
+    end = tmp_path / "diagnostics_end.nc"
+    current = tmp_path / "current.nc"
+    current.unlink()
+    write_surface(current, diagnostics=True)
+    write_surface(start, precipitation=0.0, diagnostics=True)
+    write_surface(end, precipitation=0.0, diagnostics=True)
+    with netCDF4.Dataset(end, "a") as dataset:
+        dataset.variables["ASWDIR_S"][:] = 150.0
+        dataset.variables["RAIN_GSP"][:] = 4.0
+
+    command = [
+        sys.executable,
+        str(PACKAGER),
+        "--current",
+        str(current),
+        "--geometry",
+        str(tmp_path / "geometry.nc"),
+        "--precip-start",
+        str(tmp_path / "start.nc"),
+        "--precip-end",
+        str(tmp_path / "end.nc"),
+        "--diagnostics-start",
+        str(start),
+        "--diagnostics-end",
+        str(end),
+        "--diagnostics-start-hours",
+        "3",
+        "--diagnostics-end-hours",
+        "6",
+        "--valid-time",
+        "2020-07-01T06:00:00+00:00",
+        "--interval-start",
+        "2020-07-01T03:00:00+00:00",
+        "--output",
+        str(output),
+        "--manifest",
+        str(manifest),
+        "--source-cycle",
+        "20200701T0000",
+        "--source-step",
+        "6",
+    ]
+    result = subprocess.run(command, text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr + result.stdout
+    with netCDF4.Dataset(output) as dataset:
+        np.testing.assert_allclose(
+            dataset.variables["sw_direct_down_interval_ref"][:], 200.0
+        )
+        np.testing.assert_allclose(dataset.variables["rain_interval_ref"][:], 3.0)
+        np.testing.assert_allclose(
+            dataset.variables["cloud_area_fraction_ref"][:], 0.6
+        )
+    payload = json.loads(manifest.read_text())
+    assert payload["diagnostic_endpoint_hours"] == [3.0, 6.0]
