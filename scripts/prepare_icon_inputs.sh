@@ -44,6 +44,8 @@ Level/options:
       --half-level-min N       First half model level [level-min]
       --half-level-max N       Last half model level [level-max + 1]
       --no-w                   Do not extract/preserve W
+      --include-surface-wind   Extract and preserve U_10M and V_10M when
+                               present in the dynamic GRIB
       --compression N          NetCDF4 deflate level for final file [0]
       --work-dir DIR           Work directory [temporary directory]
       --keep-work              Do not remove temporary work directory
@@ -102,6 +104,7 @@ WORK_DIR=""
 KEEP_WORK=0
 SKIP_SYNTAXCHECK=0
 INCLUDE_W=1
+INCLUDE_SURFACE_WIND=0
 LOAD_BALFRIN_MODULES=0
 DYNAMIC_GRIB=""
 STATIC_GRIB=""
@@ -137,6 +140,7 @@ while [ "$#" -gt 0 ]; do
     --keep-work) KEEP_WORK=1; shift ;;
     --skip-syntaxcheck) SKIP_SYNTAXCHECK=1; shift ;;
     --no-w) INCLUDE_W=0; shift ;;
+    --include-surface-wind) INCLUDE_SURFACE_WIND=1; shift ;;
     --load-balfrin-modules) LOAD_BALFRIN_MODULES=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown argument: $1" ;;
@@ -335,6 +339,12 @@ if [ "$INCLUDE_W" -eq 1 ]; then
 &Process in_field = "W",  levmin = $HALF_LEVEL_MIN, levmax = $HALF_LEVEL_MAX /
 EOF
 fi
+if [ "$INCLUDE_SURFACE_WIND" -eq 1 ]; then
+  cat >> dynamic.nl <<EOF
+&Process in_field = "U_10M" /
+&Process in_field = "V_10M" /
+EOF
+fi
 
 cat common_header.nl > static.nl
 cat >> static.nl <<EOF
@@ -420,7 +430,7 @@ ncatted_args=(
   -a uuid,z_hl,d,,
   -a bounds,z,d,,
 )
-for var in P QV T U V W HFL HHL HSURF FR_LAND; do
+for var in P QV T U V W U_10M V_10M HFL HHL HSURF FR_LAND; do
   if has_var "$var" hicar_zrev.nc; then
     ncatted_args+=(-a "cell_methods,$var,d,,")
   fi

@@ -53,6 +53,26 @@ QUALIFICATION_VARIABLES = ROUTINE_VARIABLES + (
     "wetland_h20_store",
 )
 
+# Instrumentation-only profile for the V29 warm/dry mechanism diagnosis.  It
+# must not be used to qualify a changed physical configuration.
+MECHANISM_DIAGNOSIS_VARIABLES = (
+    "precipitation", "snowfall", "graupel", "psfc", "taix", "hus2m",
+    "rsds", "swtb", "swtd", "swcf", "lwtr", "rlus", "lwcf",
+    "tend_th_swrad", "tend_th_lwrad", "cldfrac", "qc", "qi", "qr",
+    "qs", "qg", "hfss", "hfls", "tsfe", "albedo", "snow_height",
+    "soil_column_total_water", "soil_water_content", "soil_temperature",
+)
+
+# Two-dimensional, high-cadence observability for the V29 causal test.  The
+# cadence itself is enforced below: the assessor reconstructs each 3-hour
+# HICAR flux mean from these 30-minute samples before comparing it with the
+# REA-L ending-interval means.
+CAUSAL_SURFACE_30MIN_VARIABLES = (
+    "precipitation", "snowfall", "graupel", "psfc", "taix", "hus2m",
+    "rsds", "swtb", "swtd", "swcf", "lwtr", "rlus", "lwcf", "cldfrac",
+    "hfss", "hfls", "tsfe", "albedo", "soil_column_total_water",
+)
+
 WIND_CLIMATOLOGY_VARIABLES = (
     "u10m",
     "v10m",
@@ -68,7 +88,28 @@ WIND_CLIMATOLOGY_VARIABLES = (
 OUTPUT_PROFILES = {
     "routine": ROUTINE_VARIABLES,
     "qualification": QUALIFICATION_VARIABLES,
+    "mechanism_diagnosis": MECHANISM_DIAGNOSIS_VARIABLES,
+    "causal_surface_30min": CAUSAL_SURFACE_30MIN_VARIABLES,
     "wind_climatology": WIND_CLIMATOLOGY_VARIABLES,
+}
+
+MECHANISM_DIAGNOSIS_LIMITS = {
+    "precipitation": (-1.0e-6, 10000.0), "snowfall": (-1.0e-6, 10000.0),
+    "graupel": (-1.0e-6, 10000.0), "psfc": (20000.0, 120000.0),
+    "taix": (180.0, 340.0), "hus2m": (0.0, 0.1),
+    # Radiation sign/interval semantics are established by source comparison;
+    # this is only a broad numerical-corruption screen.
+    "rsds": (-2000.0, 2000.0), "swtb": (-2000.0, 2000.0),
+    "swtd": (-2000.0, 2000.0), "swcf": (-2000.0, 2000.0),
+    "lwtr": (-2000.0, 2000.0), "rlus": (-2000.0, 2000.0),
+    "lwcf": (-2000.0, 2000.0), "tend_th_swrad": (-0.1, 0.1),
+    "tend_th_lwrad": (-0.1, 0.1), "cldfrac": (0.0, 1.0),
+    "qc": (0.0, 0.1), "qi": (0.0, 0.1), "qr": (0.0, 0.1),
+    "qs": (0.0, 0.1), "qg": (0.0, 0.1), "hfss": (-5000.0, 5000.0),
+    "hfls": (-5000.0, 5000.0), "tsfe": (180.0, 340.0),
+    "albedo": (0.0, 1.1), "snow_height": (0.0, 20.0),
+    "soil_column_total_water": (0.0, 1200.0), "soil_water_content": (0.0, 0.8),
+    "soil_temperature": (180.0, 340.0),
 }
 
 QUALIFICATION_LIMITS = {
@@ -431,6 +472,8 @@ def main() -> int:
     duration_seconds = int((end - start).total_seconds())
     if args.output_interval_seconds <= 0:
         failures.append("output interval must be positive")
+    elif args.output_profile == "causal_surface_30min" and args.output_interval_seconds != 1800:
+        failures.append("causal_surface_30min requires a 1800 s output interval")
     elif duration_seconds % args.output_interval_seconds:
         failures.append(
             "chunk duration is not divisible by the configured output interval"
@@ -438,9 +481,9 @@ def main() -> int:
     required_variables = OUTPUT_PROFILES[args.output_profile]
     landmask = None
     active_soil_mask = None
-    if args.output_profile == "qualification":
+    if args.output_profile in {"qualification", "mechanism_diagnosis", "causal_surface_30min"}:
         if args.static_file is None:
-            failures.append("qualification validation requires --static-file")
+            failures.append(f"{args.output_profile} validation requires --static-file")
         elif not args.static_file.is_file():
             failures.append(f"static file is missing: {args.static_file}")
         else:
@@ -552,6 +595,47 @@ def main() -> int:
                             output_ranges[variable][1] = max(
                                 output_ranges[variable][1], local_range[1]
                             )
+                        else:
+                            output_ranges[variable] = local_range
+                if args.output_profile in {"mechanism_diagnosis", "causal_surface_30min"}:
+                    for variable in required_variables:
+                        if variable not in dataset.variables:
+                            continue
+                        values = np.ma.asarray(dataset.variables[variable][:])
+                        # Noah-MP represents USGS water (16) and permanent
+                        # snow/ice (24) with saturated pseudo-soil.  The
+                        # diagnostic profile exports those cells to preserve
+                        # spatial context, but they are not meaningful
+                        # soil-hydrology range checks.
+                        if variable in SOIL_QUALIFICATION_VARIABLES and active_soil_mask is not None:
+                            if values.shape[-2:] != active_soil_mask.shape:
+                                failures.append(
+                                f"{args.output_profile} output {output_file} {variable} "
+                                    "does not match static surface mask"
+                                )
+                                continue
+                            values = values[..., active_soil_mask]
+                        if np.ma.count_masked(values):
+                            failures.append(
+                                f"{args.output_profile} output {output_file} has masked {variable}"
+                            )
+                            continue
+                        raw = np.asarray(values)
+                        if not np.all(np.isfinite(raw)):
+                            failures.append(
+                                f"{args.output_profile} output {output_file} has non-finite {variable}"
+                            )
+                            continue
+                        local_range = [float(np.min(raw)), float(np.max(raw))]
+                        lower, upper = MECHANISM_DIAGNOSIS_LIMITS[variable]
+                        if local_range[0] < lower or local_range[1] > upper:
+                            failures.append(
+                                f"{args.output_profile} {variable} range "
+                                f"{local_range[0]}..{local_range[1]} is outside {lower}..{upper}"
+                            )
+                        if variable in output_ranges:
+                            output_ranges[variable][0] = min(output_ranges[variable][0], local_range[0])
+                            output_ranges[variable][1] = max(output_ranges[variable][1], local_range[1])
                         else:
                             output_ranges[variable] = local_range
                 if args.output_profile == "wind_climatology":
@@ -782,7 +866,7 @@ def main() -> int:
             "ranges": output_ranges,
             "range_scope": (
                 "static landmask; active USGS soil excludes water=16 and snow/ice=24"
-                if args.output_profile == "qualification" and landmask is not None
+                if args.output_profile in {"qualification", "mechanism_diagnosis"} and landmask is not None
                 else (
                     "all cells at 10 m and 50/75/100/125/150/200 m AGL"
                     if args.output_profile == "wind_climatology"

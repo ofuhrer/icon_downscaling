@@ -64,6 +64,14 @@ QUALIFICATION = ROUTINE + (
     "wetland_h20_store",
 )
 
+MECHANISM_DIAGNOSIS = (
+    "precipitation", "snowfall", "graupel", "psfc", "taix", "hus2m",
+    "rsds", "swtb", "swtd", "swcf", "lwtr", "rlus", "lwcf",
+    "tend_th_swrad", "tend_th_lwrad", "cldfrac", "qc", "qi", "qr",
+    "qs", "qg", "hfss", "hfls", "tsfe", "albedo", "snow_height",
+    "soil_column_total_water", "soil_water_content", "soil_temperature",
+)
+
 def write_output(
     path: Path,
     hours: list[int],
@@ -487,6 +495,40 @@ def test_model_validator_accepts_three_hour_qualification_output(tmp_path):
     assert payload["output_profile"] == "qualification"
     assert payload["output_interval_seconds"] == 10800
     assert payload["output"]["ranges"]["soil_water_content"] == [0.0, 0.0]
+
+
+def test_model_validator_accepts_mechanism_diagnosis_output(tmp_path):
+    plan = tmp_path / "plan.json"
+    plan.write_text(json.dumps({"chunk_id": "diagnosis", "start": "2020-01-01T00:00:00", "end": "2020-01-01T03:00:00", "hours": 3}))
+    output = tmp_path / "output.nc"
+    write_output(output, [0, 3], MECHANISM_DIAGNOSIS)
+    static = tmp_path / "static.nc"
+    with netCDF4.Dataset(static, "w") as dataset:
+        dataset.createDimension("y", 1)
+        dataset.createDimension("x", 1)
+        dataset.createVariable("landmask", "i2", ("y", "x"))[:] = 1
+        dataset.createVariable("landuse", "i2", ("y", "x"))[:] = 7
+    restart = tmp_path / "restart.nc"
+    with netCDF4.Dataset(restart, "w") as dataset:
+        dataset.createDimension("time", 1)
+        time = dataset.createVariable("time", "f8", ("time",))
+        time.units = "hours since 2020-01-01 00:00:00"
+        time[:] = [3]
+        dataset.dt_seconds = np.float32(3.75)
+    model_log = tmp_path / "model.out"
+    model_log.write_text("\n".join(("HICAR discretely adjoint wind projection enabled", "HICAR SLEVE geometry gate:", "Simulation completed successfully!", "Timing across all compute images:")))
+    report = tmp_path / "completion.json"
+    result = subprocess.run(
+        [sys.executable, str(VALIDATOR), "--plan", str(plan), "--run-dir", str(tmp_path),
+         "--output-file", str(output), "--restart-file", str(restart), "--model-log", str(model_log),
+         "--static-file", str(static), "--output-profile", "mechanism_diagnosis", "--output-interval-seconds", "10800", "--report", str(report)],
+        text=True, capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr + result.stdout
+    payload = json.loads(report.read_text())
+    assert payload["status"] == "PASS"
+    assert payload["output_profile"] == "mechanism_diagnosis"
+    assert payload["output"]["ranges"]["cldfrac"] == [0.0, 0.0]
 
 
 def test_model_validator_accepts_fixed_height_wind_output(tmp_path):

@@ -21,14 +21,18 @@ from typing import Any, Iterator
 
 try:
     from runtime_contract import (
+        explicit_sbatch_partition,
         validate_python_environment,
         validate_runtime_release,
+        validate_s83_partition_live,
     )
 except ModuleNotFoundError:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from runtime_contract import (
+        explicit_sbatch_partition,
         validate_python_environment,
         validate_runtime_release,
+        validate_s83_partition_live,
     )
 
 ACTIVE_STATES = {
@@ -115,9 +119,7 @@ def parse_exit_signal(value: str | None) -> int | None:
 
 
 def event(state: dict[str, Any], kind: str, **details: Any) -> None:
-    state.setdefault("events", []).append(
-        {"time": utc_now(), "kind": kind, **details}
-    )
+    state.setdefault("events", []).append({"time": utc_now(), "kind": kind, **details})
     state["events"] = state["events"][-500:]
 
 
@@ -165,38 +167,39 @@ class Slurm:
         numeric = sorted({job_id for job_id in job_ids if job_id.isdigit()})
         if not numeric:
             return {}
-        result = subprocess.run(
-            [
-                "sacct",
-                "-n",
-                "-X",
-                "-P",
-                "-j",
-                ",".join(numeric),
-                "--format=JobIDRaw,State,ExitCode",
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        grouped: dict[str, list[dict[str, str]]] = {
-            job_id: [] for job_id in numeric
-        }
-        for line in result.stdout.splitlines():
-            fields = line.split("|")
-            if len(fields) < 3:
-                continue
-            job_id, scheduler_state, exit_code = fields[:3]
-            for parent in numeric:
-                if job_id == parent or job_id.startswith(f"{parent}_"):
-                    grouped[parent].append(
-                        {
-                            "state": normalized_state(scheduler_state),
-                            "exit_code": exit_code,
-                        }
-                    )
-                    break
+        grouped: dict[str, list[dict[str, str]]] = {job_id: [] for job_id in numeric}
+        # Query each submitted identifier separately. On Balfrin, sacct returns
+        # distinct numeric JobIDRaw values for array elements instead of the
+        # conventional ``<array-job>_<task>`` spelling. A combined query cannot
+        # therefore associate those rows with their array parent, whereas every
+        # row returned by a single ``-j <parent>`` query belongs to that parent.
+        for parent in numeric:
+            result = subprocess.run(
+                [
+                    "sacct",
+                    "-n",
+                    "-X",
+                    "-P",
+                    "-j",
+                    parent,
+                    "--format=JobIDRaw,State,ExitCode",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            for line in result.stdout.splitlines():
+                fields = line.split("|")
+                if len(fields) < 3:
+                    continue
+                _job_id, scheduler_state, exit_code = fields[:3]
+                grouped[parent].append(
+                    {
+                        "state": normalized_state(scheduler_state),
+                        "exit_code": exit_code,
+                    }
+                )
         states: dict[str, dict[str, str]] = {}
         terminal_priority = [
             "OUT_OF_MEMORY",
@@ -221,11 +224,7 @@ class Slurm:
             selected = None
             for scheduler_state in terminal_priority:
                 selected = next(
-                    (
-                        record
-                        for record in records
-                        if record["state"] == scheduler_state
-                    ),
+                    (record for record in records if record["state"] == scheduler_state),
                     None,
                 )
                 if selected is not None:
@@ -264,6 +263,10 @@ class Slurm:
         return sorted(found)
 
     def submit(self, arguments: list[str]) -> str:
+        if not arguments or arguments[0] != "sbatch":
+            raise ValueError("Slurm submission must use sbatch")
+        partition = explicit_sbatch_partition(arguments)
+        validate_s83_partition_live(partition)
         result = subprocess.run(
             arguments,
             check=True,
@@ -282,75 +285,54 @@ def campaign_paths(campaign: dict[str, Any]) -> tuple[Path, Path]:
     return Path(controller["state"]), Path(controller["lease"])
 
 
-def independent_chain_scope(campaign: dict[str, Any]) -> dict[str, Any]:
-    chains = []
-    for chain in campaign["chains"]:
-        segments = chain["segments"]
-        if not segments:
-            raise ValueError(f"campaign chain has no segments: {chain['chain_id']}")
-        chains.append(
-            {
-                "chain_id": chain["chain_id"],
-                "start": segments[0]["start"],
-                "end": segments[-1]["end"],
-                "rea_l_land_initialization": bool(
-                    segments[0]["rea_l_land_initialization"]
-                ),
-            }
+def forcing_cache_index(campaign: dict[str, Any]) -> dict[str, Any]:
+    policy = campaign.get("policy", {})
+    cache = campaign.get("forcing_cache", {})
+    if policy.get("shared_forcing_cache") is not True or cache.get("shared") is not True:
+        raise ValueError("campaign requires a shared forcing cache")
+    node_budget = int(policy["model_node_budget"])
+    nodes_per_attempt = int(campaign["model"]["nodes"])
+    maximum_slots = node_budget // nodes_per_attempt
+    if not 1 <= node_budget <= 46 or maximum_slots < 1:
+        raise ValueError("preemptible campaign has an invalid model-node budget")
+    if not 1 <= int(policy["model_slots"]) <= maximum_slots:
+        raise ValueError(
+            "preemptible campaign model slots exceed its model-node budget: "
+            f"maximum is {maximum_slots}"
         )
-    return {
-        "schema_version": 1,
-        "campaign_id": campaign["campaign_id"],
-        "expected_hicar_commit": campaign["model"]["expected_hicar_commit"],
-        "static_file": str(Path(campaign["model"]["static_file"]).resolve()),
-        "chain_count": len(chains),
-        "chains": chains,
-    }
-
-
-def validate_campaign_authorizations(campaign: dict[str, Any]) -> None:
-    if len(campaign["chains"]) > 1:
-        evidence = campaign.get("independent_chain_authorization")
-        if not evidence:
-            raise ValueError("independent chains lack frozen authorization")
-        path = Path(evidence["path"])
-        authorization = published_json(path, "independent-chain authorization")
-        if sha256(path) != evidence["sha256"]:
-            raise ValueError("independent-chain authorization changed")
-        scope = independent_chain_scope(campaign)
-        scope_hash = json_payload_sha256(scope)
-        if (
-            authorization.get("schema_version") != 1
-            or authorization.get("status") != "PASS"
-            or authorization.get("scope") != scope
-            or authorization.get("scope_sha256") != scope_hash
-            or evidence.get("scope") != scope
-            or evidence.get("scope_sha256") != scope_hash
-        ):
-            raise ValueError(
-                "independent-chain authorization no longer matches campaign"
-            )
-        if authorization.get("decision") not in {
-            "GO_INDEPENDENT_CHAINS",
-            "GO_20_YEAR_200M_PRODUCTION",
-        }:
-            raise ValueError("independent-chain authorization is no longer accepted")
-    if campaign.get("purpose", "qualification") == "production":
-        evidence = campaign.get("production_authorization")
-        if not evidence:
-            raise ValueError("production campaign lacks frozen authorization")
-        path = Path(evidence["path"])
-        authorization = published_json(path, "production authorization")
-        if sha256(path) != evidence["sha256"]:
-            raise ValueError("production authorization changed")
-        if not (
-            authorization.get("assessment_status") == "COMPLETE"
-            and authorization.get("decision") == "GO_20_YEAR_200M_PRODUCTION"
-            and authorization.get("authorization", {}).get(
-                "twenty_year_200m_production"
-            )
-        ):
-            raise ValueError("production authorization is no longer accepted")
+    root = Path(cache["root"]).resolve()
+    campaign_root = Path(campaign["campaign_root"]).resolve()
+    if root == campaign_root or campaign_root not in root.parents:
+        raise ValueError("forcing cache root is outside the campaign root")
+    index_path = Path(cache["index"]).resolve()
+    index = published_json(index_path, "forcing cache index")
+    if sha256(index_path) != cache["index_sha256"]:
+        raise ValueError("forcing cache index changed")
+    if (
+        index.get("schema_version") != 1
+        or index.get("shared") is not True
+        or index.get("campaign_id") != campaign["campaign_id"]
+        or Path(index.get("records_root", "")).resolve() != Path(cache["records_root"]).resolve()
+        or Path(index.get("producer_root", "")).resolve() != Path(cache["producer_root"]).resolve()
+        or index.get("record_count") != len(index.get("records", []))
+    ):
+        raise ValueError("forcing cache index does not match the campaign")
+    seen_times: dict[str, str] = {}
+    seen_paths: set[str] = set()
+    records_root = Path(cache["records_root"]).resolve()
+    for record in index["records"]:
+        path = Path(record["forcing_file"]).resolve()
+        if records_root not in path.parents:
+            raise ValueError(f"forcing cache record is outside records root: {path}")
+        value = str(path)
+        valid_time = str(record["valid_time"])
+        if value in seen_paths or (valid_time in seen_times and seen_times[valid_time] != value):
+            raise ValueError("forcing cache index has a duplicate identity")
+        seen_paths.add(value)
+        seen_times[valid_time] = value
+        if not record.get("consumers"):
+            raise ValueError(f"forcing cache record has no consumers: {path}")
+    return index
 
 
 def validate_campaign_runtime(
@@ -388,8 +370,7 @@ def validate_campaign_runtime(
     if (
         python_payload["python"] != python_evidence["python"]
         or python_payload["python_version"] != python_evidence["python_version"]
-        or python_payload["requirements_sha256"]
-        != python_evidence["requirements_sha256"]
+        or python_payload["requirements_sha256"] != python_evidence["requirements_sha256"]
     ):
         raise ValueError("Python environment evidence changed")
 
@@ -418,6 +399,7 @@ def new_state(campaign_path: Path, campaign: dict[str, Any]) -> dict[str, Any]:
     return {
         "schema_version": 1,
         "campaign_id": campaign["campaign_id"],
+        "goal": campaign.get("goal", {}).get("outcome"),
         "campaign": str(campaign_path.resolve()),
         "campaign_sha256": sha256(campaign_path),
         "status": "ACTIVE",
@@ -481,30 +463,39 @@ def forcing_publication_passes(segment: dict[str, Any]) -> bool:
         return False
 
 
+def forcing_record_ready(record: dict[str, Any]) -> bool:
+    """Check the producer publication contract without re-hashing its payload.
+
+    The forcing ``.ready`` marker is created only after the data, validation,
+    and manifest have been atomically published. The segment finalizer performs
+    the expensive independent payload checksum before HICAR can be submitted.
+    """
+    forcing = Path(record["forcing_file"])
+    base = Path(str(forcing)[:-3]) if str(forcing).endswith(".nc") else forcing
+    validation = Path(f"{base}.validation.json")
+    manifest_path = Path(f"{base}.manifest.json")
+    try:
+        manifest = load_json(manifest_path)
+        digest = manifest.get("forcing_sha256")
+        return (
+            forcing.is_file()
+            and Path(f"{forcing}.ready").is_file()
+            and validation.is_file()
+            and load_json(validation).get("status") == "PASS"
+            and manifest.get("status") == "PASS"
+            and manifest.get("valid_time") == record["valid_time"]
+            and isinstance(digest, str)
+            and len(digest) == 64
+        )
+    except (OSError, KeyError, ValueError, json.JSONDecodeError):
+        return False
+
+
 def missing_forcing_records(segment: dict[str, Any]) -> list[int]:
     plan = load_json(Path(segment["plan"]))
-    missing = []
-    for index, record in enumerate(plan["records"]):
-        forcing = Path(record["forcing_file"])
-        base = Path(str(forcing)[:-3]) if str(forcing).endswith(".nc") else forcing
-        validation = Path(f"{base}.validation.json")
-        manifest_path = Path(f"{base}.manifest.json")
-        try:
-            manifest = load_json(manifest_path)
-            record_passes = (
-                forcing.is_file()
-                and Path(f"{forcing}.ready").is_file()
-                and validation.is_file()
-                and load_json(validation).get("status") == "PASS"
-                and manifest.get("status") == "PASS"
-                and manifest.get("valid_time") == record["valid_time"]
-                and manifest.get("forcing_sha256") == sha256(forcing)
-            )
-        except (OSError, KeyError, ValueError, json.JSONDecodeError):
-            record_passes = False
-        if not record_passes:
-            missing.append(index)
-    return missing
+    return [
+        index for index, record in enumerate(plan["records"]) if not forcing_record_ready(record)
+    ]
 
 
 def completion_report(runtime: dict[str, Any]) -> dict[str, Any] | None:
@@ -522,11 +513,7 @@ def completion_report(runtime: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def solver_report_path(attempt: dict[str, Any]) -> Path:
-    return (
-        Path(attempt["run_dir"])
-        / "scientific_validation"
-        / "solver_log_diagnostics.json"
-    )
+    return Path(attempt["run_dir"]) / "scientific_validation" / "solver_log_diagnostics.json"
 
 
 def solver_report_passes(attempt: dict[str, Any]) -> bool:
@@ -548,9 +535,7 @@ def compression_tasks(
     if report is None:
         return []
     attempt = runtime["attempts"][-1]
-    target_dir = (
-        Path(segment["compressed_root"]) / attempt["attempt_id"]
-    ).resolve()
+    target_dir = (Path(segment["compressed_root"]) / attempt["attempt_id"]).resolve()
     tasks = []
     for artifact in report["output"]["files"]:
         source = Path(artifact["path"])
@@ -594,8 +579,7 @@ def segment_retirement_task(
     obsolete = [
         attempt["attempt_dir"]
         for attempt in runtime["attempts"][:-1]
-        if attempt.get("status")
-        not in {"SUBMITTING", "SUBMITTED", "RUNNING", "PUBLISHED"}
+        if attempt.get("status") not in {"SUBMITTING", "SUBMITTED", "RUNNING", "PUBLISHED"}
     ]
     return {
         "kind": "segment_retirement",
@@ -606,6 +590,7 @@ def segment_retirement_task(
         "campaign_root": campaign["campaign_root"],
         "plan": segment["plan"],
         "forcing_publication": segment["forcing_publication"],
+        "shared_forcing_cache": bool(campaign.get("forcing_cache", {}).get("shared")),
         "model_completion": runtime["model_completion"],
         "successful_attempt_id": successful_attempt["attempt_id"],
         "compressions": compressions,
@@ -630,9 +615,7 @@ def preserve_restart(
 ) -> bool:
     if final:
         return True
-    interval = int(
-        campaign["policy"].get("preserve_restart_every_segments", 30)
-    )
+    interval = int(campaign["policy"].get("preserve_restart_every_segments", 30))
     return interval > 0 and int(segment["sequence"]) % interval == 0
 
 
@@ -655,9 +638,7 @@ def restart_retirement_task(
         successor_path = successor["model_completion"]
     return {
         "kind": "restart_retirement",
-        "task_id": (
-            f"{chain['chain_id']}:{segment['segment_id']}:restart-retirement"
-        ),
+        "task_id": (f"{chain['chain_id']}:{segment['segment_id']}:restart-retirement"),
         "chain_id": chain["chain_id"],
         "segment_id": segment["segment_id"],
         "segment_index": index,
@@ -675,6 +656,147 @@ def restart_retirement_task(
             / "restart_retirement.json"
         ),
     }
+
+
+def forcing_cache_record_report(
+    campaign: dict[str, Any],
+    record: dict[str, Any],
+) -> Path:
+    token = hashlib.sha256(str(Path(record["forcing_file"]).resolve()).encode()).hexdigest()[:20]
+    return (
+        Path(campaign["forcing_cache"]["root"]) / "retirement" / "records" / f"{token}.json"
+    ).resolve()
+
+
+def forcing_cache_record_task(
+    campaign: dict[str, Any],
+    record: dict[str, Any],
+) -> dict[str, Any]:
+    consumers = []
+    for consumer in record["consumers"]:
+        segment = spec_segment(
+            campaign,
+            consumer["chain_id"],
+            int(consumer["segment_index"]),
+        )
+        lifecycle_root = Path(
+            segment.get(
+                "lifecycle_root",
+                Path(segment["attempt_root"]).parent / "lifecycle",
+            )
+        )
+        consumers.append(
+            {
+                **consumer,
+                "segment_retirement": str((lifecycle_root / "segment_retirement.json").resolve()),
+            }
+        )
+    owner = consumers[0]
+    return {
+        "kind": "forcing_cache_retirement",
+        "task_id": (f"forcing-cache:{hashlib.sha256(record['forcing_file'].encode()).hexdigest()}"),
+        "chain_id": owner["chain_id"],
+        "segment_id": owner["segment_id"],
+        "segment_index": owner["segment_index"],
+        "campaign_root": campaign["campaign_root"],
+        "forcing_file": record["forcing_file"],
+        "valid_time": record["valid_time"],
+        "cycle_date": record["cycle_date"],
+        "consumers": consumers,
+        "report": str(forcing_cache_record_report(campaign, record)),
+    }
+
+
+def forcing_cache_record_safe(
+    campaign: dict[str, Any],
+    state: dict[str, Any],
+    record: dict[str, Any],
+) -> bool:
+    for consumer in record["consumers"]:
+        runtime = runtime_segment(
+            state,
+            consumer["chain_id"],
+            int(consumer["segment_index"]),
+        )
+        if not runtime.get("segment_retirement"):
+            return False
+    return True
+
+
+def forcing_cycle_cache_task(
+    campaign: dict[str, Any],
+    cycle_date: str,
+    records: list[dict[str, Any]],
+) -> dict[str, Any]:
+    owner = records[0]["consumers"][0]
+    reports = [str(forcing_cache_record_report(campaign, record)) for record in records]
+    return {
+        "kind": "forcing_cycle_cache_retirement",
+        "task_id": f"forcing-cycle-cache:{cycle_date}",
+        "chain_id": owner["chain_id"],
+        "segment_id": owner["segment_id"],
+        "segment_index": owner["segment_index"],
+        "campaign_root": campaign["campaign_root"],
+        "cycle_date": cycle_date,
+        "record_retirements": reports,
+        "producer_cache_dir": str(
+            (Path(campaign["forcing_cache"]["producer_root"]) / "cache" / cycle_date).resolve()
+        ),
+        "report": str(
+            (
+                Path(campaign["forcing_cache"]["root"])
+                / "retirement"
+                / "cycles"
+                / f"{cycle_date}.json"
+            ).resolve()
+        ),
+    }
+
+
+def pending_forcing_cache_retirements(
+    campaign: dict[str, Any],
+    state: dict[str, Any],
+) -> list[dict[str, Any]]:
+    index = forcing_cache_index(campaign)
+    records = index["records"]
+    pending_records = []
+    for record in records:
+        task = forcing_cache_record_task(campaign, record)
+        if forcing_cache_record_safe(campaign, state, record) and not retirement_task_ready(task):
+            pending_records.append(task)
+    if pending_records:
+        return pending_records
+
+    by_cycle: dict[str, list[dict[str, Any]]] = {}
+    for record in records:
+        by_cycle.setdefault(record["cycle_date"], []).append(record)
+    pending_cycles = []
+    for cycle_date, cycle_records in sorted(by_cycle.items()):
+        if not all(
+            retirement_task_ready(forcing_cache_record_task(campaign, record))
+            for record in cycle_records
+        ):
+            continue
+        task = forcing_cycle_cache_task(campaign, cycle_date, cycle_records)
+        if not retirement_task_ready(task):
+            pending_cycles.append(task)
+    return pending_cycles
+
+
+def forcing_cache_retirement_complete(campaign: dict[str, Any]) -> bool:
+    index = forcing_cache_index(campaign)
+    if not all(
+        retirement_task_ready(forcing_cache_record_task(campaign, record))
+        for record in index["records"]
+    ):
+        return False
+    by_cycle: dict[str, list[dict[str, Any]]] = {}
+    for record in index["records"]:
+        by_cycle.setdefault(record["cycle_date"], []).append(record)
+    return all(
+        retirement_task_ready(forcing_cycle_cache_task(campaign, cycle, records))
+        for cycle, records in by_cycle.items()
+    )
 
 
 def retirement_task_ready(task: dict[str, Any]) -> bool:
@@ -702,7 +824,8 @@ def task_ready(task: dict[str, Any], campaign: dict[str, Any]) -> bool:
                 task["chain_id"],
                 int(task["segment_index"]),
             )
-            return task["record_index"] not in missing_forcing_records(segment)
+            plan = load_json(Path(segment["plan"]))
+            return forcing_record_ready(plan["records"][int(task["record_index"])])
         if kind == "forcing_finalize":
             segment = spec_segment(
                 campaign,
@@ -711,10 +834,7 @@ def task_ready(task: dict[str, Any], campaign: dict[str, Any]) -> bool:
             )
             return forcing_publication_passes(segment)
         if kind == "solver_audit":
-            path = (
-                Path(task["run_dir"])
-                / "scientific_validation/solver_log_diagnostics.json"
-            )
+            path = Path(task["run_dir"]) / "scientific_validation/solver_log_diagnostics.json"
             return (
                 path.is_file()
                 and Path(f"{path}.ready").is_file()
@@ -729,7 +849,12 @@ def task_ready(task: dict[str, Any], campaign: dict[str, Any]) -> bool:
                 and report.is_file()
                 and load_json(report).get("status") == "PASS"
             )
-        if kind in {"segment_retirement", "restart_retirement"}:
+        if kind in {
+            "segment_retirement",
+            "restart_retirement",
+            "forcing_cache_retirement",
+            "forcing_cycle_cache_retirement",
+        }:
             return retirement_task_ready(task)
         raise ValueError(f"unsupported task kind: {kind}")
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
@@ -748,10 +873,11 @@ def job_ids(state: dict[str, Any]) -> list[str]:
     for chain in state["chains"].values():
         for segment in chain["segments"]:
             for attempt in segment["attempts"]:
-                if (
-                    attempt.get("job_id")
-                    and attempt["status"] in {"SUBMITTING", "SUBMITTED", "RUNNING"}
-                ):
+                if attempt.get("job_id") and attempt["status"] in {
+                    "SUBMITTING",
+                    "SUBMITTED",
+                    "RUNNING",
+                }:
                     values.append(str(attempt["job_id"]))
     batch = state.get("cpu_batch")
     if batch and batch.get("job_id"):
@@ -794,9 +920,7 @@ def recover_submitting_job(
     if job_id is None:
         found = scheduler.find_job(item["job_name"])
         if len(found) > 1:
-            raise RuntimeError(
-                f"multiple Slurm jobs share submission identity {item['job_name']}"
-            )
+            raise RuntimeError(f"multiple Slurm jobs share submission identity {item['job_name']}")
         if found:
             job_id = found[0]
             write_receipt(receipt, job_id, item["command"])
@@ -824,9 +948,7 @@ def classify_attempt_terminal(
     if scheduler_state in RETRYABLE_STATES:
         return "RETRYABLE"
     if scheduler_state == "FAILED" and (
-        exit_code == PREEMPTED_EXIT_CODE
-        or exit_signal in {9, 15}
-        or interruption.is_file()
+        exit_code == PREEMPTED_EXIT_CODE or exit_signal in {9, 15} or interruption.is_file()
     ):
         return "RETRYABLE"
     if scheduler_state == SUCCESS_STATE:
@@ -846,10 +968,7 @@ def refresh_model_attempts(
         chain_id = chain["chain_id"]
         for index, segment in enumerate(chain["segments"]):
             runtime = runtime_segment(state, chain_id, index)
-            if (
-                runtime["status"] == "COMPLETE"
-                and runtime.get("model_completion")
-            ):
+            if runtime["status"] == "COMPLETE" and runtime.get("model_completion"):
                 continue
             if not runtime["attempts"]:
                 continue
@@ -878,9 +997,7 @@ def refresh_model_attempts(
             attempt["scheduler_state"] = scheduler_state
             attempt["scheduler_exit_code"] = record.get("exit_code")
             if scheduler_state in ACTIVE_STATES:
-                attempt["status"] = (
-                    "RUNNING" if scheduler_state == "RUNNING" else "SUBMITTED"
-                )
+                attempt["status"] = "RUNNING" if scheduler_state == "RUNNING" else "SUBMITTED"
                 runtime["status"] = attempt["status"]
                 continue
             classification = classify_attempt_terminal(attempt, record)
@@ -900,14 +1017,11 @@ def refresh_model_attempts(
                         scheduler_state=scheduler_state,
                     )
             elif classification == "RETRYABLE":
-                runtime["terminal_error"] = (
-                    f"model retry budget exhausted after {maximum} attempts"
-                )
+                runtime["terminal_error"] = f"model retry budget exhausted after {maximum} attempts"
                 runtime["status"] = "BLOCKED"
             else:
                 runtime["terminal_error"] = (
-                    f"model attempt ended as {scheduler_state} "
-                    f"without a validated completion"
+                    f"model attempt ended as {scheduler_state} without a validated completion"
                 )
                 runtime["status"] = "BLOCKED"
 
@@ -942,26 +1056,58 @@ def refresh_lifecycle(
         chain_id = chain["chain_id"]
         for index, segment in enumerate(chain["segments"]):
             runtime = runtime_segment(state, chain_id, index)
-            segment_task = segment_retirement_task(
-                campaign, chain_id, segment, runtime, index
-            )
+            segment_task = segment_retirement_task(campaign, chain_id, segment, runtime, index)
             runtime["segment_retirement"] = (
                 segment_task["report"]
                 if segment_task and retirement_task_ready(segment_task)
                 else None
             )
-            restart_task = restart_retirement_task(
-                campaign, state, chain, index
-            )
+            restart_task = restart_retirement_task(campaign, state, chain, index)
             runtime["restart_retirement"] = (
                 restart_task["report"]
                 if restart_task and retirement_task_ready(restart_task)
                 else None
             )
             runtime["lifecycle_complete"] = bool(
-                runtime.get("segment_retirement")
-                and runtime.get("restart_retirement")
+                runtime.get("segment_retirement") and runtime.get("restart_retirement")
             )
+
+
+def clear_resolved_lifecycle_terminal_errors(state: dict[str, Any]) -> None:
+    """Unblock lifecycle work that published after its retry budget was exhausted.
+
+    A task can become valid after Slurm has reported its last failed attempt, for
+    example when an operator repairs an immutable input and reruns the exact
+    checksum-bound task.  Keep the failure counters as history, but do not leave
+    the campaign permanently blocked once the expected lifecycle publication is
+    present and has already passed ``retirement_task_ready`` in
+    :func:`refresh_lifecycle`.
+    """
+
+    evidence_keys = {
+        "segment_retirement": "segment_retirement",
+        "restart_retirement": "restart_retirement",
+    }
+    for chain_id, chain in state["chains"].items():
+        for runtime in chain["segments"]:
+            error = runtime.get("terminal_error")
+            if not isinstance(error, str):
+                continue
+            for kind, evidence_key in evidence_keys.items():
+                if not error.startswith(f"CPU task {kind} failed in scheduler state "):
+                    continue
+                if not runtime.get(evidence_key):
+                    break
+                runtime["terminal_error"] = None
+                event(
+                    state,
+                    "CPU_TASK_RECOVERED",
+                    chain_id=chain_id,
+                    segment_id=runtime["segment_id"],
+                    task_kind=kind,
+                    failure_count=int(runtime["cpu_failures"].get(kind, 0)),
+                )
+                break
 
 
 def refresh_cpu_batch(
@@ -990,31 +1136,31 @@ def refresh_cpu_batch(
                 task["chain_id"],
                 int(task["segment_index"]),
             )
-            runtime["terminal_error"] = (
-                f"campaign CPU task publication changed: {task_file}"
-            )
+            runtime["terminal_error"] = f"campaign CPU task publication changed: {task_file}"
             runtime["status"] = "BLOCKED"
         event(state, "CPU_TASK_PUBLICATION_CHANGED", batch_id=batch["batch_id"])
-        state["cpu_batch"] = None
-        return
-    if all(task_ready(task, campaign) for task in batch["tasks"]):
-        event(state, "CPU_BATCH_PUBLISHED", batch_id=batch["batch_id"])
         state["cpu_batch"] = None
         return
     if batch["status"] == "SUBMITTING":
         recover_submitting_job(batch, scheduler, execute)
     job_id = batch.get("job_id")
     record = scheduler_states.get(str(job_id)) if job_id else None
+    scheduler_state = None
+    if record is not None:
+        scheduler_state = normalized_state(record["state"])
+        batch["scheduler_state"] = scheduler_state
+        batch["scheduler_exit_code"] = record.get("exit_code")
+        if scheduler_state in ACTIVE_STATES:
+            batch["status"] = "RUNNING" if scheduler_state == "RUNNING" else "SUBMITTED"
+            return
+    if all(task_ready(task, campaign) for task in batch["tasks"]):
+        event(state, "CPU_BATCH_PUBLISHED", batch_id=batch["batch_id"])
+        state["cpu_batch"] = None
+        return
     if record is None:
         return
-    scheduler_state = normalized_state(record["state"])
-    batch["scheduler_state"] = scheduler_state
-    batch["scheduler_exit_code"] = record.get("exit_code")
-    if scheduler_state in ACTIVE_STATES:
-        batch["status"] = "RUNNING" if scheduler_state == "RUNNING" else "SUBMITTED"
-        return
 
-    retryable = scheduler_state in RETRYABLE_STATES
+    retryable = scheduler_state in (RETRYABLE_STATES | {"FAILED", "OUT_OF_MEMORY", "TIMEOUT"})
     maximum = int(campaign["policy"]["max_cpu_attempts"])
     for task in batch["tasks"]:
         if task_ready(task, campaign):
@@ -1081,7 +1227,8 @@ def pending_cpu_tasks(
     campaign: dict[str, Any],
     state: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    solver_tasks = []
+    batch_limit = int(campaign["policy"].get("max_cpu_batch_tasks", 32))
+    post_tasks = []
     for chain in campaign["chains"]:
         chain_id = chain["chain_id"]
         for index, segment in enumerate(chain["segments"]):
@@ -1089,7 +1236,7 @@ def pending_cpu_tasks(
             if runtime.get("solver_report") or completion_report(runtime) is None:
                 continue
             attempt = runtime["attempts"][-1]
-            solver_tasks.append(
+            post_tasks.append(
                 {
                     "kind": "solver_audit",
                     "chain_id": chain_id,
@@ -1099,10 +1246,7 @@ def pending_cpu_tasks(
                     "run_dir": attempt["run_dir"],
                 }
             )
-    if solver_tasks:
-        return solver_tasks
 
-    compression = []
     for chain in campaign["chains"]:
         chain_id = chain["chain_id"]
         for index, segment in enumerate(chain["segments"]):
@@ -1112,26 +1256,18 @@ def pending_cpu_tasks(
             for task in compression_tasks(chain_id, segment, runtime):
                 task["segment_index"] = index
                 if not task_ready(task, campaign):
-                    compression.append(task)
-    if compression:
-        return compression[:1000]
+                    post_tasks.append(task)
 
-    segment_retirements = []
     for chain in campaign["chains"]:
         chain_id = chain["chain_id"]
         for index, segment in enumerate(chain["segments"]):
             runtime = runtime_segment(state, chain_id, index)
             if runtime.get("segment_retirement"):
                 continue
-            task = segment_retirement_task(
-                campaign, chain_id, segment, runtime, index
-            )
+            task = segment_retirement_task(campaign, chain_id, segment, runtime, index)
             if task and not task_ready(task, campaign):
-                segment_retirements.append(task)
-    if segment_retirements:
-        return segment_retirements[:1000]
+                post_tasks.append(task)
 
-    restart_retirements = []
     for chain in campaign["chains"]:
         for index, _segment in enumerate(chain["segments"]):
             runtime = runtime_segment(state, chain["chain_id"], index)
@@ -1139,19 +1275,13 @@ def pending_cpu_tasks(
                 continue
             task = restart_retirement_task(campaign, state, chain, index)
             if task and not task_ready(task, campaign):
-                restart_retirements.append(task)
-    if restart_retirements:
-        return restart_retirements[:1000]
+                post_tasks.append(task)
+    post_tasks.extend(pending_forcing_cache_retirements(campaign, state))
 
-    finalizers = []
-    for chain_id, index, segment, _runtime in eligible_prefetch_segments(
-        campaign, state
-    ):
-        if (
-            not forcing_publication_passes(segment)
-            and not missing_forcing_records(segment)
-        ):
-            finalizers.append(
+    input_tasks = []
+    for chain_id, index, segment, _runtime in eligible_prefetch_segments(campaign, state):
+        if not forcing_publication_passes(segment) and not missing_forcing_records(segment):
+            input_tasks.append(
                 {
                     "kind": "forcing_finalize",
                     "chain_id": chain_id,
@@ -1160,18 +1290,19 @@ def pending_cpu_tasks(
                     "plan": segment["plan"],
                 }
             )
-    if finalizers:
-        return finalizers
 
-    forcing = []
     model = campaign["model"]
-    for chain_id, index, segment, _runtime in eligible_prefetch_segments(
-        campaign, state
-    ):
+    scheduled_forcing: set[str] = set()
+    for chain_id, index, segment, _runtime in eligible_prefetch_segments(campaign, state):
         if forcing_publication_passes(segment):
             continue
+        plan = load_json(Path(segment["plan"]))
         for record_index in missing_forcing_records(segment):
-            forcing.append(
+            forcing_file = str(Path(plan["records"][record_index]["forcing_file"]).resolve())
+            if forcing_file in scheduled_forcing:
+                continue
+            scheduled_forcing.add(forcing_file)
+            input_tasks.append(
                 {
                     "kind": "forcing_record",
                     "chain_id": chain_id,
@@ -1180,12 +1311,40 @@ def pending_cpu_tasks(
                     "plan": segment["plan"],
                     "record_index": record_index,
                     "case_root": model["case_root"],
-                    "static_file": model["static_file"],
+                    "static_file": campaign["forcing_cache"]["static_file"],
+                    "forcing_file": forcing_file,
                 }
             )
-    if forcing:
-        return forcing[:1000]
-    return []
+
+    input_weight = int(campaign["policy"].get("input_task_weight", 3))
+    post_weight = int(campaign["policy"].get("post_task_weight", 1))
+    selected = []
+    input_index = 0
+    post_index = 0
+    while len(selected) < batch_limit and (
+        input_index < len(input_tasks) or post_index < len(post_tasks)
+    ):
+        # Put both lanes at the head of every cycle so a two-way Slurm array
+        # starts input production and lifecycle work together.
+        if input_index < len(input_tasks):
+            selected.append(input_tasks[input_index])
+            input_index += 1
+        if len(selected) >= batch_limit:
+            break
+        if post_index < len(post_tasks):
+            selected.append(post_tasks[post_index])
+            post_index += 1
+        for _ in range(input_weight - 1):
+            if len(selected) >= batch_limit or input_index >= len(input_tasks):
+                break
+            selected.append(input_tasks[input_index])
+            input_index += 1
+        for _ in range(post_weight - 1):
+            if len(selected) >= batch_limit or post_index >= len(post_tasks):
+                break
+            selected.append(post_tasks[post_index])
+            post_index += 1
+    return selected
 
 
 def shell_export(exports: dict[str, str]) -> str:
@@ -1244,8 +1403,7 @@ def model_submission_command(
     script = Path(
         model.get(
             "script",
-            repo_root
-            / "case_studies/swiss_200m/scripts/run_rea_l_stream_chunk_balfrin.sbatch",
+            repo_root / "case_studies/swiss_200m/scripts/run_rea_l_stream_chunk_balfrin.sbatch",
         )
     ).resolve()
     exports = {
@@ -1253,20 +1411,16 @@ def model_submission_command(
         "STREAM_PLAN": segment["plan"],
         "HICAR_MULTILEVEL_ROOT": model["hicar_root"],
         "HICAR_SWISS_CASE": model["case_root"],
-        "HICAR_STATIC_FILE": model["static_file"],
+        "HICAR_STATIC_FILE": segment.get("static_file", model["static_file"]),
         "HICAR_EXPECTED_COMMIT": model["expected_hicar_commit"],
         "STREAM_OUTPUT_INTERVAL": str(model["output_interval_seconds"]),
         "STREAM_OUTPUT_PROFILE": model["output_profile"],
-        "STREAM_REA_L_LAND_INITIALIZATION": (
-            "1" if segment["rea_l_land_initialization"] else "0"
-        ),
+        "STREAM_REA_L_LAND_INITIALIZATION": ("1" if segment["rea_l_land_initialization"] else "0"),
         "STREAM_RUN_DIR": attempt["run_dir"],
         "STREAM_RESTART_DIR": attempt["restart_dir"],
         "STREAM_PREEMPTIBLE_ATTEMPT": "1",
         "STREAM_ATTEMPT_ID": attempt["attempt_id"],
-        "HICAR_PREEMPTION_HELPER": str(
-            (repo_root / "orchestration/preemption.py").resolve()
-        ),
+        "HICAR_PREEMPTION_HELPER": str((repo_root / "orchestration/preemption.py").resolve()),
         "HICAR_VALIDATION_PYTHON": campaign["python_environment"]["python"],
     }
     if model.get("build_root"):
@@ -1322,12 +1476,9 @@ def submit_ready_models(
         unretired = sum(
             1
             for candidate in state["chains"][chain_id]["segments"]
-            if completion_report(candidate) is not None
-            and not candidate.get("segment_retirement")
+            if completion_report(candidate) is not None and not candidate.get("segment_retirement")
         )
-        if unretired >= int(
-            campaign["policy"].get("max_unretired_segments_per_chain", 2)
-        ):
+        if unretired >= int(campaign["policy"].get("max_unretired_segments_per_chain", 2)):
             continue
         segment = spec_segment(campaign, chain_id, index)
         runtime = runtime_segment(state, chain_id, index)
@@ -1400,6 +1551,23 @@ def submit_cpu_batch(
     tasks = pending_cpu_tasks(campaign, state)
     if not tasks:
         return
+    task_kinds: dict[str, int] = {}
+    failure_level = 0
+    for task in tasks:
+        kind = str(task["kind"])
+        task_kinds[kind] = task_kinds.get(kind, 0) + 1
+        runtime = runtime_segment(
+            state,
+            task["chain_id"],
+            int(task["segment_index"]),
+        )
+        failure_level = max(
+            failure_level,
+            int(runtime["cpu_failures"].get(kind, 0)),
+        )
+    base_cpus = int(campaign["policy"].get("cpu_cpus_per_task", 4))
+    maximum_cpus = int(campaign["policy"].get("cpu_retry_max_cpus_per_task", 16))
+    cpus_per_task = min(base_cpus * (2**failure_level), maximum_cpus)
     batch_id = f"cpu-{uuid.uuid4().hex[:12]}"
     task_root = Path(campaign["controller"]["cpu_task_root"])
     task_file = task_root / f"{batch_id}.json"
@@ -1413,14 +1581,15 @@ def submit_cpu_batch(
     token = f"{campaign['campaign_id']}:{batch_id}"
     job_name = submission_identity("hicc", token)
     script = (
-        repo_root
-        / "case_studies/swiss_200m/scripts/"
+        repo_root / "case_studies/swiss_200m/scripts/"
         "run_preemptible_campaign_cpu_task_balfrin.sbatch"
     ).resolve()
     command = [
         "sbatch",
         "--parsable",
         "--no-requeue",
+        f"--partition={campaign['policy'].get('cpu_partition', 'pp-short')}",
+        f"--cpus-per-task={cpus_per_task}",
         f"--array=0-{len(tasks) - 1}%{int(state['capacity']['cpu_slots'])}",
         f"--job-name={job_name}",
         f"--export={shell_export({'REPO_ROOT': str(repo_root), 'HICAR_CAMPAIGN_CPU_TASK_FILE': str(task_file), 'HICAR_CAMPAIGN_CPU_TASK_SHA256': task_sha256, 'HICAR_VALIDATION_PYTHON': campaign['python_environment']['python']})}",
@@ -1431,7 +1600,9 @@ def submit_cpu_batch(
             "action": "SUBMIT_CPU_BATCH",
             "batch_id": batch_id,
             "task_kind": tasks[0]["kind"],
+            "task_kinds": task_kinds,
             "task_count": len(tasks),
+            "cpus_per_task": cpus_per_task,
             "command": command,
         }
     )
@@ -1447,6 +1618,8 @@ def submit_cpu_batch(
         "task_file": str(task_file),
         "task_sha256": task_sha256,
         "tasks": tasks,
+        "task_kinds": task_kinds,
+        "cpus_per_task": cpus_per_task,
         "status": "SUBMITTING",
         "job_id": None,
         "job_name": job_name,
@@ -1467,7 +1640,9 @@ def submit_cpu_batch(
         batch_id=batch_id,
         job_id=job_id,
         task_kind=tasks[0]["kind"],
+        task_kinds=task_kinds,
         task_count=len(tasks),
+        cpus_per_task=cpus_per_task,
     )
 
 
@@ -1482,9 +1657,7 @@ def exact_chain_output_times(
     previous_end: str | None = None
     for index, segment in enumerate(chain["segments"]):
         if previous_end is not None and segment["start"] != previous_end:
-            raise ValueError(
-                f"campaign plan has a gap or overlap before {segment['segment_id']}"
-            )
+            raise ValueError(f"campaign plan has a gap or overlap before {segment['segment_id']}")
         runtime = runtime_segment(state, chain["chain_id"], index)
         completion_path = Path(runtime["model_completion"])
         completion = published_json(completion_path, "model completion")
@@ -1518,10 +1691,10 @@ def exact_chain_output_times(
             (restart_retirement, "restart retirement"),
         ):
             lifecycle = published_json(path, label)
-            if (
-                lifecycle.get("status") != "PASS"
-                or lifecycle.get("action") not in {"PRESERVED", "RETIRED"}
-            ):
+            if lifecycle.get("status") != "PASS" or lifecycle.get("action") not in {
+                "PRESERVED",
+                "RETIRED",
+            }:
                 raise ValueError(f"{label} is not complete: {path}")
         evidence.append(
             {
@@ -1592,6 +1765,8 @@ def publish_campaign_completion(
         "campaign_id": campaign["campaign_id"],
         "campaign": state["campaign"],
         "campaign_sha256": state["campaign_sha256"],
+        "goal": campaign.get("goal"),
+        "resource_summary": campaign.get("resource_summary"),
         "completed_at": state["completion_time"],
         "chains": chain_reports,
     }
@@ -1615,15 +1790,15 @@ def update_campaign_status(
         for index, segment in enumerate(chain["segments"]):
             runtime = runtime_segment(state, chain_id, index)
             if runtime["terminal_error"]:
-                blocked.append(
-                    f"{chain_id}/{segment['segment_id']}: {runtime['terminal_error']}"
-                )
+                blocked.append(f"{chain_id}/{segment['segment_id']}: {runtime['terminal_error']}")
             if (
                 runtime["status"] != "COMPLETE"
                 or not runtime["compression_complete"]
                 or not runtime.get("lifecycle_complete")
             ):
                 complete = False
+    if complete and not forcing_cache_retirement_complete(campaign):
+        complete = False
     if blocked:
         state["status"] = "BLOCKED"
         state["blockers"] = blocked
@@ -1653,21 +1828,18 @@ def reconcile(
     campaign = published_json(campaign_path, "campaign plan")
     if campaign.get("model", {}).get("partition") != "preemptible":
         raise ValueError("campaign heavy-model partition must be preemptible")
-    validate_campaign_authorizations(campaign)
+    forcing_cache_index(campaign)
     validate_campaign_runtime(campaign, repo_root)
     state_path, lease_path = campaign_paths(campaign)
     actions: list[dict[str, Any]] = []
     with lease(lease_path, int(campaign["policy"]["lease_seconds"])):
         state = load_or_create_state(campaign_path, campaign, state_path)
         scheduler_states = scheduler.query(job_ids(state))
-        refresh_model_attempts(
-            campaign, state, scheduler_states, scheduler, execute
-        )
-        refresh_cpu_batch(
-            campaign, state, scheduler_states, scheduler, execute
-        )
+        refresh_model_attempts(campaign, state, scheduler_states, scheduler, execute)
+        refresh_cpu_batch(campaign, state, scheduler_states, scheduler, execute)
         refresh_solver_and_compression(campaign, state)
         refresh_lifecycle(campaign, state)
+        clear_resolved_lifecycle_terminal_errors(state)
         update_campaign_status(campaign, state)
         if state["status"] == "ACTIVE":
             submit_ready_models(
@@ -1699,16 +1871,16 @@ def set_capacity(campaign_path: Path, models: int | None, cpus: int | None) -> d
     with lease(lease_path, int(campaign["policy"]["lease_seconds"])):
         state = load_or_create_state(campaign_path, campaign, state_path)
         if models is not None:
-            maximum = (
-                int(campaign["policy"]["model_node_budget"])
-                // int(campaign["model"]["nodes"])
+            maximum = int(campaign["policy"]["model_node_budget"]) // int(
+                campaign["model"]["nodes"]
             )
             if not 0 <= models <= maximum:
                 raise ValueError(f"--models must be within 0..{maximum}")
             state["capacity"]["model_slots"] = models
         if cpus is not None:
-            if not 0 <= cpus <= 2:
-                raise ValueError("--cpus must be within 0..2")
+            maximum = int(campaign["policy"].get("max_cpu_slots", 8))
+            if not 0 <= cpus <= maximum:
+                raise ValueError(f"--cpus must be within 0..{maximum}")
             state["capacity"]["cpu_slots"] = cpus
         event(
             state,
@@ -1717,6 +1889,67 @@ def set_capacity(campaign_path: Path, models: int | None, cpus: int | None) -> d
             cpu_slots=state["capacity"]["cpu_slots"],
         )
         state["updated_at"] = utc_now()
+        write_json_atomic(state_path, state)
+    return state
+
+
+def recover_published_cpu_batch(campaign_path: Path, task_file: Path) -> dict[str, Any]:
+    """Clear a false CPU blocker only after every task has published valid evidence."""
+
+    campaign = published_json(campaign_path, "campaign plan")
+    state_path, lease_path = campaign_paths(campaign)
+    task_root = Path(campaign["controller"]["cpu_task_root"]).resolve()
+    task_file = task_file.resolve()
+    if task_file.parent != task_root:
+        raise ValueError(f"CPU task file is outside the campaign task root: {task_file}")
+    payload = published_json(task_file, "campaign CPU task batch")
+    if payload.get("campaign_id") != campaign["campaign_id"]:
+        raise ValueError("CPU task batch belongs to a different campaign")
+    tasks = payload.get("tasks")
+    if not isinstance(tasks, list) or not tasks:
+        raise ValueError("CPU task batch has no tasks")
+    missing = [task for task in tasks if not task_ready(task, campaign)]
+    if missing:
+        raise ValueError(
+            f"CPU task batch has {len(missing)} task(s) without valid published evidence"
+        )
+
+    with lease(lease_path, int(campaign["policy"]["lease_seconds"])):
+        state = load_or_create_state(campaign_path, campaign, state_path)
+        recovered: set[tuple[str, int, str]] = set()
+        for task in tasks:
+            chain_id = str(task["chain_id"])
+            segment_index = int(task["segment_index"])
+            kind = str(task["kind"])
+            runtime = runtime_segment(state, chain_id, segment_index)
+            error = runtime.get("terminal_error")
+            if not isinstance(error, str) or not error.startswith(f"CPU task {kind} failed"):
+                continue
+            runtime["terminal_error"] = None
+            if runtime["status"] == "BLOCKED":
+                runtime["status"] = (
+                    "WAITING_FORCING" if completion_report(runtime) is None else "MODEL_PUBLISHED"
+                )
+            failures = max(int(runtime["cpu_failures"].get(kind, 0)) - 1, 0)
+            if failures:
+                runtime["cpu_failures"][kind] = failures
+            else:
+                runtime["cpu_failures"].pop(kind, None)
+            recovered.add((chain_id, segment_index, kind))
+        if not recovered:
+            raise ValueError("CPU task batch does not match a recoverable campaign blocker")
+        event(
+            state,
+            "CPU_BATCH_EVIDENCE_RECOVERED",
+            batch_id=payload.get("batch_id"),
+            task_file=str(task_file),
+            task_sha256=sha256(task_file),
+            recovered=[
+                {"chain_id": chain_id, "segment_index": index, "kind": kind}
+                for chain_id, index, kind in sorted(recovered)
+            ],
+        )
+        update_campaign_status(campaign, state)
         write_json_atomic(state_path, state)
     return state
 
@@ -1730,6 +1963,7 @@ def print_summary(state: dict[str, Any]) -> None:
         json.dumps(
             {
                 "campaign_id": state["campaign_id"],
+                "goal": state.get("goal"),
                 "status": state["status"],
                 "capacity": state["capacity"],
                 "segment_status_counts": counts,
@@ -1772,6 +2006,9 @@ def build_parser() -> argparse.ArgumentParser:
     capacity.add_argument("--campaign", type=Path, required=True)
     capacity.add_argument("--models", type=int)
     capacity.add_argument("--cpus", type=int)
+    recovery = subparsers.add_parser("recover-cpu-batch")
+    recovery.add_argument("--campaign", type=Path, required=True)
+    recovery.add_argument("--task-file", type=Path, required=True)
     return parser
 
 
@@ -1780,6 +2017,10 @@ def main() -> int:
     campaign_path = args.campaign.resolve()
     if args.command == "set-capacity":
         state = set_capacity(campaign_path, args.models, args.cpus)
+        print_summary(state)
+        return 0
+    if args.command == "recover-cpu-batch":
+        state = recover_published_cpu_batch(campaign_path, args.task_file)
         print_summary(state)
         return 0
     campaign = published_json(campaign_path, "campaign plan")
@@ -1793,7 +2034,7 @@ def main() -> int:
         print_summary(state)
         return 0
     if args.command == "init":
-        validate_campaign_authorizations(campaign)
+        forcing_cache_index(campaign)
         validate_campaign_runtime(campaign, args.repo_root.resolve())
         with lease(lease_path, int(campaign["policy"]["lease_seconds"])):
             state = load_or_create_state(campaign_path, campaign, state_path)

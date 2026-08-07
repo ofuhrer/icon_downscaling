@@ -72,9 +72,7 @@ def validate_campaign(campaign_path: Path) -> dict[str, Any]:
             or attempts
             or state.get("cpu_batch")
         ):
-            raise ValueError(
-                "real recovery drill requires a fresh or dry-inspected campaign"
-            )
+            raise ValueError("real recovery drill requires a fresh or dry-inspected campaign")
     return campaign
 
 
@@ -83,10 +81,7 @@ def scheduler_terminal(job_id: str, timeout_seconds: int) -> dict[str, str]:
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
         record = scheduler.query([job_id]).get(job_id)
-        if (
-            record
-            and controller.normalized_state(record["state"]) in TERMINAL_STATES
-        ):
+        if record and controller.normalized_state(record["state"]) in TERMINAL_STATES:
             return record
         time.sleep(3)
     raise TimeoutError(f"job {job_id} did not become terminal")
@@ -144,14 +139,10 @@ def matching_restart_evidence(
     if (
         restart_input.get("path") != first.get("restart", {}).get("path")
         or restart_input.get("sha256") != first.get("restart", {}).get("sha256")
-        or restart_input.get("publication")
-        != str(first_completion_path.resolve())
-        or restart_input.get("publication_sha256")
-        != controller.sha256(first_completion_path)
+        or restart_input.get("publication") != str(first_completion_path.resolve())
+        or restart_input.get("publication_sha256") != controller.sha256(first_completion_path)
     ):
-        raise ValueError(
-            "recovered completion is not bound to the predecessor restart"
-        )
+        raise ValueError("recovered completion is not bound to the predecessor restart")
     return restart_input
 
 
@@ -180,8 +171,7 @@ def run_drill(
             )
             if state["status"] == "BLOCKED":
                 raise ValueError(
-                    "recovery campaign blocked: "
-                    + "; ".join(state.get("blockers", []))
+                    "recovery campaign blocked: " + "; ".join(state.get("blockers", []))
                 )
             chain_id = campaign["chains"][0]["chain_id"]
             first_runtime, second_runtime = state["chains"][chain_id]["segments"]
@@ -192,27 +182,19 @@ def run_drill(
                 if attempts:
                     attempt = attempts[-1]
                     if attempt["status"] == "PUBLISHED":
-                        raise ValueError(
-                            "continuation completed before controlled cancellation"
-                        )
+                        raise ValueError("continuation completed before controlled cancellation")
                     if attempt["status"] == "RUNNING" and model_started(attempt):
                         signal_name = cancellation_plan[cancellation_index]
                         cancel(attempt["job_id"], signal_name)
-                        terminal = scheduler_terminal(
-                            attempt["job_id"], timeout_seconds=180
-                        )
-                        interruption = (
-                            Path(attempt["run_dir"]) / "attempt_interrupted.json"
-                        )
+                        terminal = scheduler_terminal(attempt["job_id"], timeout_seconds=180)
+                        interruption = Path(attempt["run_dir"]) / "attempt_interrupted.json"
                         if signal_name == "TERM":
                             wait_for_interruption(interruption)
                             interruption_sha256 = controller.sha256(interruption)
                         else:
                             time.sleep(3)
                             if interruption.exists():
-                                raise ValueError(
-                                    "hard-killed HICAR attempt ran signal cleanup"
-                                )
+                                raise ValueError("hard-killed HICAR attempt ran signal cleanup")
                             interruption_sha256 = None
                         cancellations.append(
                             {
@@ -222,38 +204,33 @@ def run_drill(
                                 "terminal": terminal,
                                 "model_log_nonempty": True,
                                 "interruption_report": (
-                                    str(interruption)
-                                    if interruption_sha256 is not None
-                                    else None
+                                    str(interruption) if interruption_sha256 is not None else None
                                 ),
-                                "interruption_report_sha256": (
-                                    interruption_sha256
-                                ),
+                                "interruption_report_sha256": (interruption_sha256),
                             }
                         )
                         continue
 
             if state["status"] == "COMPLETE":
                 if len(cancellations) != 2 or len(attempts) < 3:
-                    raise ValueError(
-                        "campaign completed without both controlled cancellations"
-                    )
+                    raise ValueError("campaign completed without both controlled cancellations")
                 successful = attempts[-1]
                 if successful["status"] != "PUBLISHED":
                     raise ValueError("final immutable retry is not published")
                 first_completion = Path(first_runtime["model_completion"])
                 second_completion = Path(second_runtime["model_completion"])
-                restart_input = matching_restart_evidence(
-                    first_completion, second_completion
-                )
+                restart_input = matching_restart_evidence(first_completion, second_completion)
                 completion = Path(state["completion_report"])
                 published_json(completion, "campaign completion")
                 result = {
                     "schema_version": 1,
                     "status": "PASS",
                     "assessment": "ENGINEERING_ONLY",
-                    "promotion_eligible": False,
-                    "scientific_authorization": False,
+                    "scope": "hicar_preemption_and_restart_recovery",
+                    "observed_capability": (
+                        "A fresh attempt can continue from the last validated "
+                        "restart after graceful and hard interruption."
+                    ),
                     "completed_at": datetime.now(UTC).isoformat(),
                     "campaign": str(campaign_path),
                     "campaign_sha256": controller.sha256(campaign_path),

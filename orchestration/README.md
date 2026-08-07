@@ -2,14 +2,17 @@
 
 This directory contains the primary stateful controller for short,
 restart-linked HICAR attempts on Balfrin. It does not alter HICAR checkpoint serialization or
-claim that the current restart-physics candidate is scientifically qualified.
-Qualification and production authorization remain independent gates.
+decide which scientific experiment matters most. The active project assessment
+selects the goal; the controller executes it safely and reports what completed.
 
-## Recovery contract
+## Recovery behavior
 
 `prepare_preemptible_campaign.py` splits each restart chain into immutable
 segments of at most 24 simulation hours. A segment can be retried many times,
 but every retry receives a new attempt ID and a new run/restart directory.
+When a chain duration is not a multiple of the configured maximum, the final
+segment is shorter; for example, a 26-hour chain is planned as 24 plus 2
+hours. Every segment boundary must still align with the output cadence.
 Only a `model_chunk_completion.json.ready` publication can advance the chain.
 The successor stages the exact restart path and verifies its SHA-256 against
 that predecessor publication before HICAR starts.
@@ -48,9 +51,9 @@ Slurm queue.
 
 ## Elastic capacity
 
-One restart chain remains sequential. Independently authorized chains may run
-concurrently. The planner derives the maximum model slots from a global
-44-node budget:
+One restart chain remains sequential. Restart-independent chains may run
+concurrently when their inputs and initial states are explicit. By default the
+planner derives model slots from the stated node budget:
 
 ```text
 200 m: 4 nodes/attempt  -> at most 11 model attempts
@@ -71,9 +74,9 @@ Setting either value to zero pauses new submissions in that pool. Set both to
 zero before intentionally cancelling active jobs.
 
 Forcing, finalization, solver audits, and compression use one campaign-wide
-`pp-short` array with at most two active tasks (`%2`). Heavy HICAR is the only
-stage initially placed in `preemptible`; post-processing stays on the bounded
-CPU partition.
+`pp-short` array with bounded concurrency, currently up to eight active tasks
+by default. Heavy HICAR is the only stage initially placed in `preemptible`;
+post-processing stays on the bounded CPU partition.
 
 ## Per-campaign execution snapshot
 
@@ -106,6 +109,13 @@ Definitions use absolute Balfrin paths:
   "campaign_root": "/scratch/USER/icon_hicar/campaigns/example",
   "runtime_release": "/scratch/USER/icon_hicar/runtime/releases/release-id/runtime_release.json",
   "python_environment": "/scratch/USER/icon_hicar/runtime/python/release-id.environment.json",
+  "goal": {
+    "outcome": "Measure whether the selected wind method works over this interval.",
+    "why_now": "This is the smallest representative case for the current uncertainty.",
+    "evidence_needed": ["Validated wind fields and measured throughput"],
+    "stop_conditions": ["Stop after the declared interval or on a deterministic failure"],
+    "resource_rationale": "Use only the nodes needed by the representative case."
+  },
   "model": {
     "expected_hicar_commit": "0000000000000000000000000000000000000000",
     "case_root": "/scratch/USER/icon_hicar/case_studies/swiss_200m",
@@ -118,9 +128,11 @@ Definitions use absolute Balfrin paths:
   },
   "policy": {
     "segment_hours": 24,
-    "model_node_budget": 44,
-    "model_slots": 11,
+    "model_node_budget": 46,
     "cpu_slots": 2,
+    "max_cpu_batch_tasks": 32,
+    "input_task_weight": 3,
+    "post_task_weight": 1,
     "prefetch_segments_per_chain": 1,
     "max_model_attempts": 0,
     "max_cpu_attempts": 3,
@@ -132,11 +144,22 @@ Definitions use absolute Balfrin paths:
     {
       "chain_id": "year-2000",
       "start": "2000-01-01T00:00:00",
-      "end": "2001-01-01T00:00:00"
+      "end": "2001-01-01T00:00:00",
+      "static_file": "/scratch/USER/icon_hicar/case_studies/swiss_200m/static/domain_rea_l_20000101_0000.nc"
     }
   ]
 }
 ```
+
+`model_slots` is normally omitted: the planner derives it as
+`model_node_budget // model.nodes`. A smaller node budget or deliberate
+underfill is allowed when the campaign goal explains why that is the most
+diligent scale for the evidence sought.
+Every segment plan points at the campaign-wide valid-time forcing cache.
+Overlapping chains therefore generate each atmospheric record once. The
+controller interleaves input and lifecycle tasks in the configured ratio
+while keeping the global CPU array capped by `cpu_slots`; forcing records are
+retired only after every consuming segment has completed safe retirement.
 
 For the supported single-chain two-hour definition, use
 `scripts/create_balfrin_smoke_campaign.py` as shown in
@@ -144,17 +167,12 @@ For the supported single-chain two-hour definition, use
 example above documents the complete schema; it is not the recommended first
 entry point.
 
-Multiple chains additionally require a published
-`independent_chain_authorization`. Its schema-v1 `scope` must exactly bind the
-campaign ID, HICAR commit, static initialization path, chain count, chain IDs,
-start/end timestamps, and per-chain land-initialization choice; its
-`scope_sha256` is the SHA-256 of the sorted, indented JSON scope plus a final
-newline. Both planning and every reconciliation reject an authorization for
-another campaign. A definition with `"purpose": "production"` also requires a
-checksum-frozen annual assessment whose
-decision is `GO_20_YEAR_200M_PRODUCTION`. The planner and controller recheck
-those publications and hashes. This prevents the orchestration mechanism from
-bypassing the current scientific hold.
+Every definition includes a plain-language `goal` with the intended outcome,
+why it is the next priority, evidence needed, stop conditions, and resource
+rationale. This replaces separate GO and independent-chain authorization
+artifacts. Runtime identity, source provenance, partition access, immutable
+attempts, ready publications, capacity bounds, and restart continuity remain
+enforced because they control concrete material risks.
 
 Prepare, inspect without submission, then launch the lightweight watcher:
 
@@ -210,8 +228,9 @@ after:
 
 The resulting `campaign_completion.json.ready` binds the segment completion,
 solver, compression, segment-retirement, and restart-retirement reports by
-SHA-256. Durable transfer remains governed by the separately approved archive
-contract; rolling scratch retirement is not durable archiving.
+SHA-256. It reports factual campaign completion; it does not automatically
+select the next project step. Durable transfer remains a separate archive
+decision, and rolling scratch retirement is not durable archiving.
 
 ## Engineering cancellation qualification
 
@@ -221,9 +240,9 @@ without signal-time cleanup, and creation of a third immutable retry. It
 pauses campaign capacity and cancels the final probe job before publishing
 `preemption_recovery_engineering.json.ready`.
 
-This report is always `ENGINEERING_ONLY`, `promotion_eligible=false`, and
-`scientific_authorization=false`. It qualifies scheduler/controller recovery;
-it cannot qualify HICAR restart physics or authorize a scientific campaign.
+This report is scoped to scheduler/controller recovery. It records the
+capability that was observed and says nothing about HICAR physics or wind
+skill.
 
 ## Real HICAR recovery qualification
 
@@ -246,5 +265,5 @@ SHA-256 before the engineering report can pass.
 
 This bounded report is also `ENGINEERING_ONLY`; it uses the `routine` output
 profile to qualify the real HICAR/srun/restart mechanism without conflating
-that with scientific diagnostic-output qualification. It does not supersede
-restart-equivalence, seasonal, annual, or production authorization.
+that with scientific wind evidence. Once recovery works, use that capability
+for the smallest experiment selected by the active project assessment.

@@ -79,6 +79,16 @@ def main() -> int:
     parser.add_argument("--chunk-root", type=Path, required=True)
     parser.add_argument("--plan", type=Path)
     parser.add_argument("--forcing-list", type=Path)
+    parser.add_argument(
+        "--forcing-dir",
+        type=Path,
+        help="Shared directory for forcing records; defaults below chunk-root",
+    )
+    parser.add_argument(
+        "--producer-root",
+        type=Path,
+        help="Shared work/static-cache root; defaults to chunk-root",
+    )
     parser.add_argument("--producer-concurrency", type=int, default=4)
     args = parser.parse_args()
     if args.producer_concurrency < 1:
@@ -86,7 +96,16 @@ def main() -> int:
     start = datetime.fromisoformat(args.start)
     end = datetime.fromisoformat(args.end)
     chunk_root = args.chunk_root.resolve()
-    forcing_dir = chunk_root / "forcing"
+    forcing_dir = (
+        args.forcing_dir.resolve()
+        if args.forcing_dir is not None
+        else chunk_root / "forcing"
+    )
+    producer_root = (
+        args.producer_root.resolve()
+        if args.producer_root is not None
+        else chunk_root
+    )
     plan_path = (args.plan or chunk_root / "chunk_plan.json").resolve()
     list_path = (args.forcing_list or chunk_root / "forcing_list.txt").resolve()
     records = records_for_period(start, end, forcing_dir)
@@ -110,6 +129,12 @@ def main() -> int:
             "retired only after validated model output and restart publication."
         ),
         "chunk_root": str(chunk_root),
+        "producer_root": str(producer_root),
+        "forcing_cache": {
+            "shared": args.forcing_dir is not None,
+            "records_root": str(forcing_dir),
+            "producer_root": str(producer_root),
+        },
         "forcing_list": str(list_path),
         "records": records,
     }

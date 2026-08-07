@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from runtime_contract import (
+    S83_APPROVED_PARTITIONS,
     validate_python_environment,
     validate_runtime_release,
 )
@@ -36,11 +37,6 @@ def sha256(path: Path) -> str:
         for block in iter(lambda: stream.read(8 * 1024 * 1024), b""):
             hasher.update(block)
     return hasher.hexdigest()
-
-
-def payload_sha256(payload: dict[str, Any]) -> str:
-    content = json.dumps(payload, indent=2, sort_keys=True) + "\n"
-    return hashlib.sha256(content.encode()).hexdigest()
 
 
 def write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
@@ -82,95 +78,27 @@ def slurm_time_seconds(value: str) -> int:
     return days * 86400 + hours * 3600 + minutes * 60 + seconds
 
 
-def independent_chain_scope(definition: dict[str, Any]) -> dict[str, Any]:
-    model = definition["model"]
-    chains = [
-        {
-            "chain_id": str(chain["chain_id"]),
-            "start": parse_time(str(chain["start"])).strftime(TIME_FORMAT),
-            "end": parse_time(str(chain["end"])).strftime(TIME_FORMAT),
-            "rea_l_land_initialization": bool(
-                chain.get("rea_l_land_initialization", True)
-            ),
-        }
-        for chain in definition["chains"]
-    ]
-    return {
-        "schema_version": 1,
-        "campaign_id": str(definition["campaign_id"]),
-        "expected_hicar_commit": str(model["expected_hicar_commit"]),
-        "static_file": str(Path(model["static_file"]).resolve()),
-        "chain_count": len(chains),
-        "chains": chains,
-    }
-
-
-def require_independent_chain_authorization(
-    definition: dict[str, Any],
-) -> dict[str, Any] | None:
-    scope = independent_chain_scope(definition)
-    if scope["chain_count"] <= 1:
-        return None
-    value = definition.get("independent_chain_authorization")
-    if not value:
-        raise ValueError(
-            "multiple independent chains require independent_chain_authorization"
-        )
-    path = Path(value).resolve()
-    authorization = published_json(path, "independent-chain authorization")
-    if authorization.get("schema_version") != 1:
-        raise ValueError("independent-chain authorization schema is not 1")
-    if authorization.get("status") != "PASS":
-        raise ValueError("independent-chain authorization is not PASS")
-    if authorization.get("decision") not in {
-        "GO_INDEPENDENT_CHAINS",
-        "GO_20_YEAR_200M_PRODUCTION",
-    }:
-        raise ValueError("independent-chain authorization has no accepted decision")
-    scope_hash = payload_sha256(scope)
-    if (
-        authorization.get("scope") != scope
-        or authorization.get("scope_sha256") != scope_hash
-    ):
-        raise ValueError(
-            "independent-chain authorization does not match this campaign"
-        )
-    return {
-        "path": str(path),
-        "sha256": sha256(path),
-        "decision": authorization["decision"],
-        "scope": scope,
-        "scope_sha256": scope_hash,
-    }
-
-
-def require_production_authorization(
-    definition: dict[str, Any],
-) -> dict[str, Any] | None:
-    purpose = definition.get("purpose", "qualification")
-    if purpose not in {"qualification", "production"}:
-        raise ValueError("purpose must be qualification or production")
-    if purpose != "production":
-        return None
-    value = definition.get("production_authorization")
-    if not value:
-        raise ValueError("production purpose requires production_authorization")
-    path = Path(value).resolve()
-    authorization = published_json(path, "production authorization")
-    accepted = (
-        authorization.get("assessment_status") == "COMPLETE"
-        and authorization.get("decision") == "GO_20_YEAR_200M_PRODUCTION"
-        and authorization.get("authorization", {}).get(
-            "twenty_year_200m_production"
-        )
-    )
-    if not accepted:
-        raise ValueError("production authorization is not GO_20_YEAR_200M_PRODUCTION")
-    return {
-        "path": str(path),
-        "sha256": sha256(path),
-        "decision": authorization["decision"],
-    }
+def normalize_goal(definition: dict[str, Any]) -> dict[str, Any]:
+    """Keep the campaign tied to a useful question, not an approval artifact."""
+    goal = definition.get("goal")
+    if not isinstance(goal, dict):
+        raise ValueError("campaign definition requires a goal")
+    normalized: dict[str, Any] = {}
+    for key in ("outcome", "why_now", "resource_rationale"):
+        value = goal.get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"goal.{key} must be a non-empty string")
+        normalized[key] = value.strip()
+    for key in ("evidence_needed", "stop_conditions"):
+        values = goal.get(key)
+        if (
+            not isinstance(values, list)
+            or not values
+            or any(not isinstance(value, str) or not value.strip() for value in values)
+        ):
+            raise ValueError(f"goal.{key} must contain non-empty strings")
+        normalized[key] = [value.strip() for value in values]
+    return normalized
 
 
 def run_chunk_planner(
@@ -180,6 +108,8 @@ def run_chunk_planner(
     end: datetime,
     chunk_id: str,
     chunk_root: Path,
+    forcing_dir: Path,
+    producer_root: Path,
     producer_concurrency: int,
 ) -> Path:
     plan = chunk_root / "chunk_plan.json"
@@ -197,6 +127,10 @@ def run_chunk_planner(
             str(chunk_root),
             "--plan",
             str(plan),
+            "--forcing-dir",
+            str(forcing_dir),
+            "--producer-root",
+            str(producer_root),
             "--producer-concurrency",
             str(producer_concurrency),
         ],
@@ -231,16 +165,14 @@ def build_campaign(
         raise ValueError("heavy HICAR campaign jobs must initially use preemptible")
     model["partition"] = partition
     model["nodes"] = int(model.get("nodes", 4))
-    if not 1 <= model["nodes"] <= 44:
-        raise ValueError("model.nodes must be within 1..44")
+    if not 1 <= model["nodes"] <= 46:
+        raise ValueError("model.nodes must be within 1..46")
     model["time_limit"] = str(model.get("time_limit", "06:00:00"))
     time_limit_seconds = slurm_time_seconds(model["time_limit"])
     if not 600 <= time_limit_seconds <= 6 * 3600:
         raise ValueError("model.time_limit must be within 00:10:00..06:00:00")
     model["output_profile"] = str(model.get("output_profile", "routine"))
-    model["output_interval_seconds"] = int(
-        model.get("output_interval_seconds", 3600)
-    )
+    model["output_interval_seconds"] = int(model.get("output_interval_seconds", 3600))
     if model["output_interval_seconds"] <= 0:
         raise ValueError("model.output_interval_seconds must be positive")
     for key in ("case_root", "hicar_root", "static_file"):
@@ -255,21 +187,39 @@ def build_campaign(
         raise ValueError("policy.segment_hours must be within 1..24")
     if (segment_hours * 3600) % model["output_interval_seconds"]:
         raise ValueError(
-            "segment duration must be divisible by model.output_interval_seconds"
+            "maximum segment duration must be divisible by model.output_interval_seconds"
         )
-    model_node_budget = int(policy.get("model_node_budget", 44))
-    if not 1 <= model_node_budget <= 44:
-        raise ValueError("policy.model_node_budget must be within 1..44")
+    model_node_budget = int(policy.get("model_node_budget", 46))
+    if not 1 <= model_node_budget <= 46:
+        raise ValueError("policy.model_node_budget must be within 1..46")
     maximum_model_slots = model_node_budget // model["nodes"]
+    if maximum_model_slots < 1:
+        raise ValueError("policy.model_node_budget must fit at least one model attempt")
     model_slots = int(policy.get("model_slots", maximum_model_slots))
-    cpu_slots = int(policy.get("cpu_slots", 2))
+    cpu_partition = str(policy.get("cpu_partition", "pp-short"))
+    if cpu_partition != "pp-short" or cpu_partition not in S83_APPROVED_PARTITIONS:
+        raise ValueError(
+            "short campaign pre/post-processing must use the s83-open pp-short partition"
+        )
+    max_cpu_slots = 8
+    cpu_slots = int(policy.get("cpu_slots", max_cpu_slots))
+    cpu_cpus_per_task = int(policy.get("cpu_cpus_per_task", 4))
+    cpu_retry_max_cpus_per_task = int(policy.get("cpu_retry_max_cpus_per_task", 16))
     if not 1 <= model_slots <= maximum_model_slots:
         raise ValueError(
-            "policy.model_slots exceeds the model-node budget: "
-            f"maximum is {maximum_model_slots}"
+            f"policy.model_slots exceeds the model-node budget: maximum is {maximum_model_slots}"
         )
-    if not 1 <= cpu_slots <= 2:
-        raise ValueError("policy.cpu_slots must be within 1..2")
+    if not 1 <= cpu_slots <= max_cpu_slots:
+        raise ValueError(f"policy.cpu_slots must be within 1..{max_cpu_slots}")
+    if cpu_cpus_per_task < 4:
+        raise ValueError(
+            "policy.cpu_cpus_per_task must reserve at least four cores "
+            "as the shared-node memory proxy"
+        )
+    if cpu_retry_max_cpus_per_task < cpu_cpus_per_task or cpu_retry_max_cpus_per_task > 32:
+        raise ValueError(
+            "policy.cpu_retry_max_cpus_per_task must be between the base CPU request and 32"
+        )
     rolling_retirement = policy.get("rolling_retirement", True)
     if not isinstance(rolling_retirement, bool):
         raise ValueError("policy.rolling_retirement must be boolean")
@@ -279,9 +229,15 @@ def build_campaign(
             "model_node_budget": model_node_budget,
             "model_slots": model_slots,
             "cpu_slots": cpu_slots,
-            "prefetch_segments_per_chain": int(
-                policy.get("prefetch_segments_per_chain", 1)
-            ),
+            "max_cpu_slots": max_cpu_slots,
+            "cpu_partition": cpu_partition,
+            "cpu_cpus_per_task": cpu_cpus_per_task,
+            "cpu_retry_max_cpus_per_task": cpu_retry_max_cpus_per_task,
+            "max_cpu_batch_tasks": int(policy.get("max_cpu_batch_tasks", 32)),
+            "shared_forcing_cache": True,
+            "input_task_weight": int(policy.get("input_task_weight", 3)),
+            "post_task_weight": int(policy.get("post_task_weight", 1)),
+            "prefetch_segments_per_chain": int(policy.get("prefetch_segments_per_chain", 1)),
             "max_model_attempts": int(policy.get("max_model_attempts", 0)),
             "max_cpu_attempts": int(policy.get("max_cpu_attempts", 3)),
             "lease_seconds": int(policy.get("lease_seconds", 300)),
@@ -294,29 +250,29 @@ def build_campaign(
             ),
         }
     )
-    if policy["max_model_attempts"] < 0 or policy["max_cpu_attempts"] < 1:
-        raise ValueError(
-            "model retry limit must be non-negative and CPU retry limit positive"
-        )
+    if policy["max_model_attempts"] < 0:
+        raise ValueError("model retry limit must be non-negative")
+    if policy["max_cpu_attempts"] != 3:
+        raise ValueError("policy.max_cpu_attempts must be 3 for bounded shared-node recovery")
     if policy["prefetch_segments_per_chain"] < 0:
         raise ValueError("prefetch_segments_per_chain must be non-negative")
+    if policy["max_cpu_batch_tasks"] < 1:
+        raise ValueError("max_cpu_batch_tasks must be positive")
+    if policy["input_task_weight"] < 1 or policy["post_task_weight"] < 1:
+        raise ValueError("input and post task weights must be positive")
     if policy["lease_seconds"] < 60:
         raise ValueError("lease_seconds must be at least 60")
     if not policy["rolling_retirement"]:
-        raise ValueError(
-            "pre-emptible campaigns require policy.rolling_retirement=true"
-        )
+        raise ValueError("pre-emptible campaigns require policy.rolling_retirement=true")
     if policy["preserve_restart_every_segments"] < 0:
-        raise ValueError(
-            "preserve_restart_every_segments must be non-negative"
-        )
+        raise ValueError("preserve_restart_every_segments must be non-negative")
     if policy["max_unretired_segments_per_chain"] < 1:
-        raise ValueError(
-            "max_unretired_segments_per_chain must be positive"
-        )
+        raise ValueError("max_unretired_segments_per_chain must be positive")
 
-    purpose = definition.get("purpose", "qualification")
-    production_authorization = require_production_authorization(definition)
+    purpose = definition.get("purpose", "experiment")
+    if purpose not in {"experiment", "qualification", "production"}:
+        raise ValueError("purpose must be experiment, qualification, or production")
+    goal = normalize_goal(definition)
     runtime_value = definition.get("runtime_release")
     if not runtime_value:
         raise ValueError("campaign definition requires runtime_release")
@@ -350,15 +306,15 @@ def build_campaign(
         "python_version": python_payload["python_version"],
         "requirements_sha256": python_payload["requirements_sha256"],
     }
-    authorization = require_independent_chain_authorization(definition)
-    chunk_planner = (
-        repo_root
-        / "case_studies/swiss_200m/streaming/create_chunk_plan.py"
-    ).resolve()
+    chunk_planner = (repo_root / "case_studies/swiss_200m/streaming/create_chunk_plan.py").resolve()
     if not chunk_planner.is_file():
         raise ValueError(f"missing chunk planner: {chunk_planner}")
+    forcing_cache_root = (campaign_root / "forcing_cache").resolve()
+    forcing_records_root = (forcing_cache_root / "records").resolve()
+    forcing_producer_root = (forcing_cache_root / "producer").resolve()
 
     prepared_chains = []
+    shared_records: dict[str, dict[str, Any]] = {}
     seen_chain_ids: set[str] = set()
     for chain in chains:
         chain_id = str(chain["chain_id"])
@@ -371,25 +327,24 @@ def build_campaign(
         end = parse_time(str(chain["end"]))
         if end <= start:
             raise ValueError(f"chain {chain_id} end must follow start")
-        duration_hours = int((end - start).total_seconds() // 3600)
-        if duration_hours % segment_hours:
+        chain_static_file = str(Path(chain.get("static_file", model["static_file"])).resolve())
+        duration_seconds = int((end - start).total_seconds())
+        if duration_seconds % model["output_interval_seconds"]:
             raise ValueError(
-                f"chain {chain_id} duration must be divisible by segment_hours"
+                f"chain {chain_id} duration must be divisible by model.output_interval_seconds"
             )
         segments = []
         cursor = start
         sequence = 0
         while cursor < end:
             sequence += 1
-            segment_end = cursor + timedelta(hours=segment_hours)
+            remaining_hours = int((end - cursor).total_seconds() // 3600)
+            current_segment_hours = min(segment_hours, remaining_hours)
+            segment_end = cursor + timedelta(hours=current_segment_hours)
             stamp = cursor.strftime("%Y%m%dT%H%M%S")
-            segment_id = f"{chain_id}_{stamp}_{segment_hours:02d}h"
+            segment_id = f"{chain_id}_{stamp}_{current_segment_hours:02d}h"
             segment_root = (
-                campaign_root
-                / "chains"
-                / chain_id
-                / "segments"
-                / f"{sequence:05d}_{stamp}"
+                campaign_root / "chains" / chain_id / "segments" / f"{sequence:05d}_{stamp}"
             )
             chunk_root = segment_root / "forcing_chunk"
             plan = run_chunk_planner(
@@ -398,32 +353,93 @@ def build_campaign(
                 end=segment_end,
                 chunk_id=segment_id,
                 chunk_root=chunk_root,
+                forcing_dir=forcing_records_root,
+                producer_root=forcing_producer_root,
                 producer_concurrency=cpu_slots,
             )
             plan_payload = load_json(plan)
+            cache_contract = plan_payload.get("forcing_cache", {})
+            if (
+                cache_contract.get("shared") is not True
+                or Path(cache_contract.get("records_root", "")).resolve() != forcing_records_root
+                or Path(cache_contract.get("producer_root", "")).resolve() != forcing_producer_root
+            ):
+                raise ValueError(f"chunk plan lacks the shared forcing cache: {plan}")
+            for record in plan_payload["records"]:
+                forcing_file = str(Path(record["forcing_file"]).resolve())
+                existing = shared_records.get(forcing_file)
+                identity = {
+                    "valid_time": record["valid_time"],
+                    "cycle_date": record["cycle_date"],
+                    "cycle_time": record["cycle_time"],
+                    "step_hours": record["step_hours"],
+                    "forcing_file": forcing_file,
+                }
+                if existing is None:
+                    existing = {**identity, "consumers": []}
+                    shared_records[forcing_file] = existing
+                elif any(existing[key] != value for key, value in identity.items()):
+                    raise ValueError(f"shared forcing cache identity collision: {forcing_file}")
+                existing["consumers"].append(
+                    {
+                        "chain_id": chain_id,
+                        "segment_index": sequence - 1,
+                        "segment_id": segment_id,
+                        "plan": str(plan),
+                        "forcing_publication": str(
+                            Path(plan_payload["chunk_root"]) / "forcing_publication.json"
+                        ),
+                    }
+                )
             segments.append(
                 {
                     "sequence": sequence,
                     "segment_id": segment_id,
                     "start": cursor.strftime(TIME_FORMAT),
                     "end": segment_end.strftime(TIME_FORMAT),
-                    "hours": segment_hours,
+                    "hours": current_segment_hours,
                     "plan": str(plan),
                     "plan_sha256": sha256(plan),
                     "forcing_publication": str(
-                        Path(plan_payload["chunk_root"])
-                        / "forcing_publication.json"
+                        Path(plan_payload["chunk_root"]) / "forcing_publication.json"
                     ),
                     "attempt_root": str(segment_root / "attempts"),
                     "compressed_root": str(segment_root / "compressed"),
                     "lifecycle_root": str(segment_root / "lifecycle"),
+                    "static_file": chain_static_file,
                     "rea_l_land_initialization": bool(
                         sequence == 1 and chain.get("rea_l_land_initialization", True)
                     ),
                 }
             )
             cursor = segment_end
-        prepared_chains.append({"chain_id": chain_id, "segments": segments})
+        prepared_chains.append(
+            {
+                "chain_id": chain_id,
+                "static_file": chain_static_file,
+                "segments": segments,
+            }
+        )
+
+    cache_index_path = forcing_cache_root / "index.json"
+    cache_index = {
+        "schema_version": 1,
+        "status": "PLANNED",
+        "campaign_id": campaign_id,
+        "shared": True,
+        "records_root": str(forcing_records_root),
+        "producer_root": str(forcing_producer_root),
+        "static_file": model["static_file"],
+        "record_count": len(shared_records),
+        "records": [shared_records[path] for path in sorted(shared_records)],
+    }
+    if cache_index_path.exists() or Path(f"{cache_index_path}.ready").exists():
+        existing = published_json(cache_index_path, "forcing cache index")
+        if existing != cache_index:
+            raise ValueError(f"refusing to replace forcing cache index: {cache_index_path}")
+    else:
+        write_json_atomic(cache_index_path, cache_index)
+        Path(f"{cache_index_path}.ready").touch()
 
     payload = {
         "schema_version": 1,
@@ -435,10 +451,28 @@ def build_campaign(
         "definition_sha256": sha256(definition_path),
         "runtime_release": runtime_release,
         "python_environment": python_environment,
-        "independent_chain_authorization": authorization,
-        "production_authorization": production_authorization,
+        "goal": goal,
         "model": model,
         "policy": policy,
+        "resource_summary": {
+            "nodes_per_attempt": model["nodes"],
+            "node_budget": model_node_budget,
+            "model_slots": model_slots,
+            "maximum_slots_within_budget": maximum_model_slots,
+            "maximum_concurrent_nodes": model_slots * model["nodes"],
+            "unused_nodes_at_capacity": (model_node_budget - model_slots * model["nodes"]),
+            "cpu_slots": cpu_slots,
+            "cpu_cpus_per_task": cpu_cpus_per_task,
+        },
+        "forcing_cache": {
+            "shared": True,
+            "root": str(forcing_cache_root),
+            "records_root": str(forcing_records_root),
+            "producer_root": str(forcing_producer_root),
+            "static_file": model["static_file"],
+            "index": str(cache_index_path),
+            "index_sha256": sha256(cache_index_path),
+        },
         "chains": prepared_chains,
         "controller": {
             "state": str(campaign_root / "controller_state.json"),

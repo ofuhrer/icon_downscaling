@@ -21,7 +21,7 @@ def test_repository_site_configuration_selects_supported_production_line():
     assert config["HICAR_PRIMARY_WORKFLOW"] == "preemptible"
     assert config["HICAR_PRODUCTION_BRANCH"] == "feature/icon_downscaling"
     assert config["HICAR_PRODUCTION_COMMIT"] == (
-        "7700c97a0248abcc1db055ef04c22e1ff9ec6d22"
+        "6bd302f8b97062cd43c1b8d4e59bd3cf0dc8ae07"
     )
     assert config["ICON_DOWNSCALING_DURABLE_ROOT"].startswith("/store_new/")
 

@@ -68,11 +68,27 @@ completion marker already exists. Signal-time checkpoint publication is best
 effort only; hard-kill recovery must use the last previously published,
 checksum-bound restart.
 
-Capacity limits are global, not per chain. Against 44 GPU nodes, four-node
+Capacity limits are global, not per chain. Against the 46-node `preemptible`
+partition, four-node
 200 m attempts permit at most 11 concurrent independent chains; provisional
-16-node 100 m attempts permit at most two. Keep `pp-short` work in one global
-array capped at two active jobs rather than multiplying producers by the
-number of model chains.
+16-node 100 m attempts permit at most two. Keep campaign CPU work in one
+global `pp-short` array, normally capped at eight active jobs rather than
+multiplying producers by the number of model chains. The CPU nodes are
+shared, and Balfrin does not enforce job memory limits: reserve at least four
+CPUs per task as the memory-placement proxy. The measured campaign-worker
+peak is about 3.8 GB, while four CPUs represent about 7 GB on the current
+256-CPU/456704-MB nodes. Treat `--mem` as documentation, not protection.
+NetCDF assessment code must bound simultaneously open datasets: the wind
+spin-up assessor exceeded 32 GB when it retained all 156 HDF5-backed files,
+but stabilized near 2 GB with one candidate and one reference open at a time.
+Eight CPUs are therefore a conservative shared-node reservation for that
+bounded assessor; do not compensate for an unbounded file cache by requesting
+more cores.
+Retry publication-safe CPU failures up to three times with progressively
+larger reservations of 4, 8, then 16 CPUs. Pre-emptible campaign plans must derive this slot
+count from the node budget and per-attempt node count, use a shared
+valid-time forcing cache, and interleave input with lifecycle tasks so idle
+GPU slots are not caused by CPU-pipeline starvation.
 
 For long, expensive, shared, or pre-emptible campaigns, use a checksum-bound
 runtime, a bounded controller, `make balfrin-preflight CHECK_FDB=1`, and the

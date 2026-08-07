@@ -11,6 +11,27 @@ from pathlib import Path
 from typing import Any
 
 
+S83_PRIMARY_GROUP = "s83"
+# Deliberately narrower than every partition that may happen to AllowGroups=ALL:
+# these are the reviewed partitions used by this project.  Privileged
+# s83opr/s83disp-only partitions are intentionally absent.
+S83_APPROVED_PARTITIONS = frozenset(
+    {
+        "debug",
+        "lowprio",
+        "normal",
+        "postproc",
+        "pp-long",
+        "pp-serial",
+        "pp-short",
+        "preemptible",
+        "short",
+    }
+)
+S83_CAMPAIGN_PARTITIONS = frozenset(
+    {"normal", "pp-long", "pp-short", "preemptible"}
+)
+
 REQUIRED_RUNTIME_PATHS = (
     "orchestration/preemptible_campaign.py",
     "orchestration/preemption.py",
@@ -51,6 +72,77 @@ REQUIRED_RUNTIME_PATHS = (
     "scripts/prepare_icon_inputs.sh",
     "scripts/reduce_hicar_wind_climatology.py",
 )
+
+
+def parse_scontrol_record(record: str) -> dict[str, str]:
+    return {
+        key: value
+        for token in record.strip().split()
+        if "=" in token
+        for key, value in (token.split("=", 1),)
+    }
+
+
+def validate_s83_partition_record(
+    partition: str,
+    record: str,
+) -> dict[str, str]:
+    """Fail closed unless a reviewed, live partition is open to exact group s83."""
+    if partition not in S83_APPROVED_PARTITIONS:
+        raise ValueError(
+            f"partition {partition!r} is not in the reviewed s83 allowlist"
+        )
+    fields = parse_scontrol_record(record)
+    if fields.get("PartitionName") != partition:
+        raise ValueError(f"scontrol did not return partition {partition!r}")
+    if fields.get("State") != "UP":
+        raise ValueError(
+            f"partition {partition!r} is not UP: {fields.get('State', 'missing')}"
+        )
+    allow_groups = {
+        value for value in fields.get("AllowGroups", "").split(",") if value
+    }
+    if "ALL" not in allow_groups and S83_PRIMARY_GROUP not in allow_groups:
+        raise ValueError(
+            f"partition {partition!r} is not open to exact group "
+            f"{S83_PRIMARY_GROUP}: AllowGroups={fields.get('AllowGroups', 'missing')}"
+        )
+    return fields
+
+
+def validate_s83_partition_live(partition: str) -> dict[str, str]:
+    result = subprocess.run(
+        ["scontrol", "show", "partition", partition, "-o"],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    records = [line for line in result.stdout.splitlines() if line.strip()]
+    if len(records) != 1:
+        raise ValueError(
+            f"expected one scontrol record for {partition!r}, found {len(records)}"
+        )
+    return validate_s83_partition_record(partition, records[0])
+
+
+def explicit_sbatch_partition(arguments: list[str]) -> str:
+    """Return the one explicit partition in an sbatch command."""
+    values: list[str] = []
+    for index, value in enumerate(arguments):
+        if value.startswith("--partition="):
+            values.append(value.split("=", 1)[1])
+        elif value in {"--partition", "-p"}:
+            if index + 1 >= len(arguments):
+                raise ValueError(f"{value} requires a partition")
+            values.append(arguments[index + 1])
+        elif value.startswith("-p") and value != "-p":
+            values.append(value[2:].lstrip("="))
+    if len(values) != 1 or not values[0] or "," in values[0]:
+        raise ValueError(
+            "every project sbatch command must select exactly one explicit partition"
+        )
+    return values[0]
 
 
 def sha256(path: Path) -> str:

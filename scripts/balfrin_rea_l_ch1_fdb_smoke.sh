@@ -4,9 +4,14 @@ set -eo pipefail
 # Smoke-test REA-L-CH1 FDB access on Balfrin.
 # Run from a local machine with passwordless SSH to Balfrin:
 #   scripts/balfrin_rea_l_ch1_fdb_smoke.sh
-#   scripts/balfrin_rea_l_ch1_fdb_smoke.sh fdb/5.19:v2
+#   scripts/balfrin_rea_l_ch1_fdb_smoke.sh fdb/operator:v1
 
-ssh -o BatchMode=yes -o ConnectTimeout=10 balfrin 'bash -s' -- "$@" <<'REMOTE'
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+# shellcheck source=load_balfrin_site_config.sh
+. "$repo_root/scripts/load_balfrin_site_config.sh"
+image="${1:-$REA_FDB_IMAGE}"
+
+ssh -o BatchMode=yes -o ConnectTimeout=10 balfrin 'bash -s' -- "$image" <<'REMOTE'
 set -eo pipefail
 
 [ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
@@ -24,7 +29,7 @@ printf 'workdir=%s\n' "$PWD"
 printf 'USER_ENV_ROOT=%s\n' "$USER_ENV_ROOT"
 id
 
-image="${1:-fdb/5.18:v1}"
+image="$1"
 echo
 echo "== uenv image =="
 uenv image pull "$image" || true

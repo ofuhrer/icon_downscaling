@@ -22,20 +22,17 @@ def test_watcher_hands_off_to_exactly_one_afterany_successor():
     assert "#SBATCH --no-requeue" in watcher
     assert '--dependency="afterany:${SLURM_JOB_ID:?}"' in watcher
     assert "HICAR_CAMPAIGN_CHAIN_WATCHER=1" in watcher
+    assert "HICAR_CAMPAIGN_CONTROLLER=$controller" in watcher
 
 
 def test_cpu_pool_stays_on_bounded_postprocessing_partition():
-    worker = (
-        SCRIPTS / "run_preemptible_campaign_cpu_task_balfrin.sbatch"
-    ).read_text()
+    worker = (SCRIPTS / "run_preemptible_campaign_cpu_task_balfrin.sbatch").read_text()
     assert "#SBATCH --partition=pp-short" in worker
     assert "#SBATCH --no-requeue" in worker
 
 
 def test_forcing_uses_frozen_site_grid_and_validator():
-    producer = (
-        SCRIPTS / "produce_rea_l_stream_record_balfrin.sbatch"
-    ).read_text()
+    producer = (SCRIPTS / "produce_rea_l_stream_record_balfrin.sbatch").read_text()
     assert "load_balfrin_site_config.sh" in producer
     assert (
         "validator=${HICAR_FORCING_VALIDATOR:-$repo_root/"
@@ -45,13 +42,11 @@ def test_forcing_uses_frozen_site_grid_and_validator():
         "grid_file=${HICAR_FIELD_EXTRA_GRID:-$repo_root/"
         "case_studies/swiss_200m/config/fieldextra_target_grid.txt}"
     ) in producer
-    assert '$source_case/validation/validate_forcing.py' not in producer
+    assert "$source_case/validation/validate_forcing.py" not in producer
 
 
 def test_recovery_probe_is_engineering_only_and_uses_the_signal_guard():
-    probe = (
-        SCRIPTS / "run_preemptible_recovery_probe_balfrin.sbatch"
-    ).read_text()
+    probe = (SCRIPTS / "run_preemptible_recovery_probe_balfrin.sbatch").read_text()
     assert "#SBATCH --partition=preemptible" in probe
     assert "#SBATCH --no-requeue" in probe
     assert "Engineering-only" in probe
@@ -63,12 +58,8 @@ def test_recovery_probe_is_engineering_only_and_uses_the_signal_guard():
 
 
 def test_real_hicar_recovery_qualification_is_controller_only():
-    wrapper = (
-        SCRIPTS / "qualify_hicar_preemptible_recovery_balfrin.sbatch"
-    ).read_text()
-    qualifier = (
-        ROOT / "orchestration/qualify_hicar_preemptible_recovery.py"
-    ).read_text()
+    wrapper = (SCRIPTS / "qualify_hicar_preemptible_recovery_balfrin.sbatch").read_text()
+    qualifier = (ROOT / "orchestration/qualify_hicar_preemptible_recovery.py").read_text()
     assert "#SBATCH --partition=pp-long" in wrapper
     assert "#SBATCH --no-requeue" in wrapper
     assert "--execute" in wrapper

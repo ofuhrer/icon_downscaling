@@ -41,8 +41,7 @@ def wait_for(
             return record
         time.sleep(5)
     raise TimeoutError(
-        f"job {job_id} did not reach {sorted(accepted)} within "
-        f"{timeout_seconds} seconds"
+        f"job {job_id} did not reach {sorted(accepted)} within {timeout_seconds} seconds"
     )
 
 
@@ -69,9 +68,7 @@ def make_campaign(
     python_report: Path,
 ) -> Path:
     runtime_manifest = repo_root / "runtime_release.json"
-    runtime = validate_runtime_release(
-        runtime_manifest, expected_root=repo_root
-    )
+    runtime = validate_runtime_release(runtime_manifest, expected_root=repo_root)
     python_environment = validate_python_environment(
         python_report,
         runtime_manifest,
@@ -79,6 +76,24 @@ def make_campaign(
     )
     forcing_root = work_root / "forcing"
     forcing_root.mkdir(parents=True)
+    cache_root = work_root / "forcing_cache"
+    records_root = cache_root / "records"
+    producer_root = cache_root / "producer"
+    cache_index = cache_root / "index.json"
+    publish(
+        cache_index,
+        {
+            "schema_version": 1,
+            "status": "PLANNED",
+            "campaign_id": "preemption-recovery-probe",
+            "shared": True,
+            "records_root": str(records_root),
+            "producer_root": str(producer_root),
+            "static_file": str(work_root / "unused-static.nc"),
+            "record_count": 0,
+            "records": [],
+        },
+    )
     plan = forcing_root / "chunk_plan.json"
     publish(
         plan,
@@ -87,6 +102,12 @@ def make_campaign(
             "status": "PLANNED",
             "chunk_id": "preemption-recovery-probe",
             "chunk_root": str(forcing_root),
+            "producer_root": str(producer_root),
+            "forcing_cache": {
+                "shared": True,
+                "records_root": str(records_root),
+                "producer_root": str(producer_root),
+            },
             "start": "2000-01-01T00:00:00",
             "end": "2000-01-01T01:00:00",
             "hours": 1,
@@ -127,12 +148,21 @@ def make_campaign(
             "sha256": sha256(python_report),
             "python": python_environment["python"],
             "python_version": python_environment["python_version"],
-            "requirements_sha256": python_environment[
-                "requirements_sha256"
-            ],
+            "requirements_sha256": python_environment["requirements_sha256"],
         },
-        "independent_chain_authorization": None,
-        "production_authorization": None,
+        "goal": {
+            "outcome": "Exercise cancellation recovery without running HICAR.",
+            "why_now": "Scheduler recovery must work before model resources rely on it.",
+            "evidence_needed": [
+                "A classified graceful interruption",
+                "A classified hard kill and a fresh retry",
+            ],
+            "stop_conditions": [
+                "Stop after the recovery sequence is observed",
+                "Stop if an outcome cannot be classified safely",
+            ],
+            "resource_rationale": "The scheduler probe needs one node and no scientific model integration.",
+        },
         "model": {
             "partition": "preemptible",
             "nodes": 1,
@@ -144,8 +174,7 @@ def make_campaign(
             "output_interval_seconds": 3600,
             "output_profile": "routine",
             "script": str(
-                repo_root
-                / "case_studies/swiss_200m/scripts/"
+                repo_root / "case_studies/swiss_200m/scripts/"
                 "run_preemptible_recovery_probe_balfrin.sbatch"
             ),
         },
@@ -154,6 +183,9 @@ def make_campaign(
             "model_node_budget": 1,
             "model_slots": 1,
             "cpu_slots": 1,
+            "shared_forcing_cache": True,
+            "input_task_weight": 3,
+            "post_task_weight": 1,
             "prefetch_segments_per_chain": 0,
             "max_model_attempts": 0,
             "max_cpu_attempts": 1,
@@ -161,6 +193,15 @@ def make_campaign(
             "rolling_retirement": True,
             "preserve_restart_every_segments": 0,
             "max_unretired_segments_per_chain": 1,
+        },
+        "forcing_cache": {
+            "shared": True,
+            "root": str(cache_root),
+            "records_root": str(records_root),
+            "producer_root": str(producer_root),
+            "static_file": str(work_root / "unused-static.nc"),
+            "index": str(cache_index),
+            "index_sha256": sha256(cache_index),
         },
         "chains": [
             {
@@ -268,9 +309,7 @@ def drill(
             },
             terminal_timeout,
         )
-        hard_kill_interruption = (
-            Path(second["run_dir"]) / "attempt_interrupted.json"
-        )
+        hard_kill_interruption = Path(second["run_dir"]) / "attempt_interrupted.json"
         if hard_kill_interruption.exists():
             raise ValueError("hard-killed attempt unexpectedly ran signal cleanup")
 
@@ -292,15 +331,16 @@ def drill(
             "schema_version": 1,
             "status": "PASS",
             "assessment": "ENGINEERING_ONLY",
-            "promotion_eligible": False,
-            "scientific_authorization": False,
+            "scope": "scheduler_and_controller_recovery",
+            "observed_capability": (
+                "The controller classifies graceful and hard interruptions "
+                "and creates a fresh immutable retry."
+            ),
             "completed_at": datetime.now(UTC).isoformat(),
             "campaign": str(campaign_path),
             "campaign_sha256": sha256(campaign_path),
             "runtime_release": str(repo_root / "runtime_release.json"),
-            "runtime_release_sha256": sha256(
-                repo_root / "runtime_release.json"
-            ),
+            "runtime_release_sha256": sha256(repo_root / "runtime_release.json"),
             "sigterm": {
                 "job_id": first["job_id"],
                 "attempt_id": first["attempt_id"],
@@ -350,9 +390,7 @@ def main() -> int:
                     "assessment": "ENGINEERING_ONLY",
                     "repo_root": str(args.repo_root.resolve()),
                     "work_root": str(args.work_root.resolve()),
-                    "python_environment": str(
-                        args.python_environment.resolve()
-                    ),
+                    "python_environment": str(args.python_environment.resolve()),
                     "actions": [
                         "submit one-node preemptible sleep attempt",
                         "send SIGTERM and verify interruption report",

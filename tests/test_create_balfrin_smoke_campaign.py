@@ -24,7 +24,7 @@ def test_site_configuration_path_honors_environment(monkeypatch, tmp_path):
     assert MODULE.selected_site_config(ROOT / "config/balfrin.env") == replacement
 
 
-def test_definition_is_bounded_and_preemptible_controller_compatible(tmp_path):
+def test_definition_is_goal_sized_and_preemptible_controller_compatible(tmp_path):
     payload = MODULE.definition_payload(
         campaign_id="smoke",
         campaign_root=tmp_path / "campaign",
@@ -40,12 +40,14 @@ def test_definition_is_bounded_and_preemptible_controller_compatible(tmp_path):
         output_profile="routine",
     )
     assert payload["purpose"] == "qualification"
+    assert payload["goal"]["outcome"].startswith("Verify that the current runtime")
+    assert payload["goal"]["resource_rationale"].startswith("One four-node")
     assert payload["model"]["expected_hicar_commit"] == "a" * 40
     assert payload["model"]["nodes"] == 4
     assert payload["model"]["time_limit"] == "01:00:00"
     assert payload["model"]["output_profile"] == "routine"
     assert payload["policy"]["model_node_budget"] == 4
-    assert payload["policy"]["model_slots"] == 1
+    assert "model_slots" not in payload["policy"]
     assert payload["policy"]["cpu_slots"] == 1
     assert payload["policy"]["segment_hours"] == 1
     assert payload["policy"]["max_model_attempts"] == 0

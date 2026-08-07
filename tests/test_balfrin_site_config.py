@@ -21,6 +21,14 @@ PRIMARY_WRAPPERS = (
     "watch_preemptible_campaign_balfrin.sbatch",
 )
 
+FDB_AUXILIARY_WRAPPERS = (
+    "audit_rea_l_cycle_boundary_balfrin.sbatch",
+    "audit_rea_l_land_state_balfrin.sbatch",
+    "audit_rea_l_surface_reference_balfrin.sbatch",
+    "produce_rea_l_event_reference_balfrin.sbatch",
+    "produce_rea_l_land_state_balfrin.sbatch",
+)
+
 
 def source_loader(environment: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     active = os.environ.copy()
@@ -71,8 +79,8 @@ def test_loader_publishes_repository_defaults():
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == [
         "/mch-environment/v8",
-        "fdb/5.19:v2",
-        "7700c97a0248abcc1db055ef04c22e1ff9ec6d22",
+        "fdb/5.18:v1",
+        "6bd302f8b97062cd43c1b8d4e59bd3cf0dc8ae07",
     ]
 
 
@@ -84,7 +92,7 @@ def test_loader_preserves_explicit_environment_override():
 
 def test_primary_wrappers_load_site_defaults_before_modules():
     script_root = ROOT / "case_studies/swiss_200m/scripts"
-    for name in PRIMARY_WRAPPERS:
+    for name in (*PRIMARY_WRAPPERS, *FDB_AUXILIARY_WRAPPERS):
         text = (script_root / name).read_text()
         loader_index = text.index("load_balfrin_site_config.sh")
         module_index = text.index("/etc/profile.d/modules.sh")

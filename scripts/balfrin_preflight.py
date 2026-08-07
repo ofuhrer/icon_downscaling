@@ -11,9 +11,16 @@ import shutil
 import socket
 import subprocess
 import tempfile
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "orchestration"))
+from runtime_contract import (  # noqa: E402
+    S83_CAMPAIGN_PARTITIONS,
+    validate_s83_partition_record,
+)
 
 
 REQUIRED_CONFIG = {
@@ -183,7 +190,15 @@ def run_checks(
         writable=True,
     )
 
-    for command in ("git", "sbatch", "squeue", "sacct", "sinfo", "uenv"):
+    for command in (
+        "git",
+        "sbatch",
+        "scontrol",
+        "squeue",
+        "sacct",
+        "sinfo",
+        "uenv",
+    ):
         resolved = shutil.which(command)
         add_check(
             checks,
@@ -237,18 +252,23 @@ def run_checks(
     except (OSError, subprocess.SubprocessError) as exc:
         add_check(checks, "production HICAR remote branch", False, str(exc))
 
-    try:
-        partition = command_output(
-            ["sinfo", "-h", "-p", "preemptible", "-o", "%P|%a|%l"]
-        )
-        add_check(
-            checks,
-            "preemptible partition",
-            bool(partition),
-            partition or "partition not returned by sinfo",
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        add_check(checks, "preemptible partition", False, str(exc))
+    for partition in sorted(S83_CAMPAIGN_PARTITIONS):
+        try:
+            record = command_output(
+                ["scontrol", "show", "partition", partition, "-o"]
+            )
+            fields = validate_s83_partition_record(partition, record)
+            add_check(
+                checks,
+                f"s83 partition: {partition}",
+                True,
+                (
+                    f"State={fields['State']} "
+                    f"AllowGroups={fields['AllowGroups']}"
+                ),
+            )
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            add_check(checks, f"s83 partition: {partition}", False, str(exc))
 
     if check_fdb:
         try:

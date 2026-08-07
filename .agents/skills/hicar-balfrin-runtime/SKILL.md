@@ -31,12 +31,21 @@ Use `$balfrin-user-environment` for generic module and partition rules. Keep sou
   coordinator recovery inventory and checksum-bound durable bundles; it is
   not active branch state.
 - Validated transport baseline: `06ba6b54` (`Fix OpenACC halo exchanges`)
+- Commit `1dc42620` stopped applying the already-computed adjusted horizontal
+  `u`/`v` tendencies. The current baseline restores that update. Its Git tree
+  `6776f68c49f1f82394093058ee5571c8f377775f` is byte-identical to bounded
+  qualification commit `86d6f1dd`, which passes the isolated build, four-GPU
+  halo suite, temporal native/fixed-height wind evolution, and cross-node
+  split/restart gate. The authoritative report is
+  `/store_new/mch/msopr/olifu/icon_downscaling/qualification/wind-tendency-fix-b514/v1/wind_tendency_fix_qualification.json`.
 
-Read `memory/project-assessment.md` before model work and consult
-`memory/project-state.md` only for historical evidence. Keep the model fully
-coupled unless `wind_only` is explicitly the experimental intervention; do not
-confuse a wind-focused product with a wind-only model. Choose the smallest
-experiment that distinguishes the active hypotheses.
+Every wind experiment must prove temporal evolution under nonstationary
+forcing in both native restart `u`/`v` and every published `u_agl`/`v_agl`
+height. A nonzero 10 m diagnostic alone is insufficient. For restart
+qualification, branch from a checkpoint that the uninterrupted reference
+actually emitted, then continue that same checkpoint on a different eligible
+node allocation. Compare the final restart and output; a reference run that did
+not write the branch checkpoint is not a valid split/restart control.
 
 The branch uses legacy `use mpi` for compatibility with Balfrin `cray-mpich-nvhpc/8.1.30`, fixes NVHPC virtual dispatch during variable initialization, and has correct four-GPU halo exchange with both GPU-aware MPI and NCCL.
 
@@ -189,6 +198,22 @@ For costly, long, or interruption-prone REA-L experiments,
 hours and each model request at no more than six wall-clock hours. Small debug
 or bridge experiments may use a simpler explicit Slurm script on `debug` or
 `short` when restart recovery and streaming lifecycle are irrelevant.
+
+For every new pre-emptible campaign, derive the initial global model slot count
+as `model_node_budget // nodes_per_attempt` by default; do not retain a slot
+count from a differently sized template. A goal-sized smaller budget or
+deliberate underfill is valid when its resource rationale explains why it is
+the most diligent experiment. Use the shared valid-time forcing cache and
+interleave input-generation with solver/compression/retirement work in the
+bounded CPU array so neither lane starves HICAR. Use `pp-short` for these
+sub-hour tasks:
+it shares the 14 CPU nodes and has a tenfold partition priority factor over
+`postproc`, `pp-serial`, and `pp-long`. Start with eight concurrent workers
+and four CPUs per worker; CPU count is the memory-isolation proxy because
+Balfrin does not enforce memory limits. Publication-safe CPU failures,
+including scheduler `FAILED`, `OUT_OF_MEMORY`, and `TIMEOUT`, retry with
+4/8/16-CPU reservations before blocking. An operator may still reduce live
+capacity explicitly for maintenance or diagnosis.
 
 Use one sequential chain per restart trajectory and let the external
 controller retry a fresh immutable attempt from the last validator-published

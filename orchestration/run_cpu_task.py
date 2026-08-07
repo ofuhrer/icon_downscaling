@@ -96,7 +96,12 @@ def main() -> int:
                 "COMPRESSED_OUTPUT_DIR": task["target_dir"],
             },
         )
-    if kind in {"segment_retirement", "restart_retirement"}:
+    if kind in {
+        "segment_retirement",
+        "restart_retirement",
+        "forcing_cache_retirement",
+        "forcing_cycle_cache_retirement",
+    }:
         script = repo_root / "orchestration/retire_campaign_artifacts.py"
         if not script.is_file():
             raise SystemExit(f"missing retirement worker: {script}")

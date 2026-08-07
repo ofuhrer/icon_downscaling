@@ -170,6 +170,7 @@ def segment_journal(task: dict[str, Any]) -> dict[str, Any]:
         str(Path(item["forcing_file"]).resolve()): item
         for item in forcing.get("entries", [])
     }
+    shared_forcing_cache = bool(task.get("shared_forcing_cache"))
     for record in plan.get("records", []):
         path = confined(root, Path(record["forcing_file"]), "forcing payload")
         entry = forcing_entries.get(str(path))
@@ -180,19 +181,20 @@ def segment_journal(task: dict[str, Any]) -> dict[str, Any]:
         marker = Path(f"{path}.ready")
         if not marker.is_file():
             raise ValueError(f"forcing payload is not published: {path}")
-        targets.append(
-            {
-                "kind": "forcing",
-                "path": str(path),
-                "sha256": entry["forcing_sha256"],
-                "ready_marker": str(marker),
-            }
-        )
+        if not shared_forcing_cache:
+            targets.append(
+                {
+                    "kind": "forcing",
+                    "path": str(path),
+                    "sha256": entry["forcing_sha256"],
+                    "ready_marker": str(marker),
+                }
+            )
 
     forcing_marker = Path(f"{forcing_path}.ready")
     cache_root = confined(root, Path(plan["chunk_root"]) / "cache", "forcing cache")
     cache_files = []
-    if cache_root.exists():
+    if not shared_forcing_cache and cache_root.exists():
         for path in sorted(cache_root.rglob("*")):
             if path.is_symlink():
                 raise ValueError(f"forcing cache contains a symlink: {path}")
@@ -226,12 +228,154 @@ def segment_journal(task: dict[str, Any]) -> dict[str, Any]:
         "model_completion_sha256": sha256(completion_path),
         "forcing_publication": str(forcing_path),
         "forcing_publication_sha256": sha256(forcing_path),
-        "forcing_publication_marker": str(forcing_marker),
+        "forcing_publication_marker": (
+            None if shared_forcing_cache else str(forcing_marker)
+        ),
         "plan": str(plan_path),
         "plan_sha256": sha256(plan_path),
         "compressions": compressions,
         "targets": targets,
         "obsolete_attempt_dirs": obsolete_dirs,
+    }
+
+
+def forcing_cache_journal(task: dict[str, Any]) -> dict[str, Any]:
+    root = Path(task["campaign_root"]).resolve()
+    forcing = confined(
+        root, Path(task["forcing_file"]), "shared forcing payload"
+    )
+    manifest_path = confined(
+        root, forcing.with_suffix(".manifest.json"), "forcing manifest"
+    )
+    validation_path = confined(
+        root, forcing.with_suffix(".validation.json"), "forcing validation"
+    )
+    marker = confined(root, Path(f"{forcing}.ready"), "forcing ready marker")
+    for path in (forcing, manifest_path, validation_path, marker):
+        if not path.is_file():
+            raise ValueError(f"shared forcing publication is incomplete: {path}")
+    manifest = json.loads(manifest_path.read_text())
+    validation = json.loads(validation_path.read_text())
+    digest = sha256(forcing)
+    if (
+        manifest.get("status") != "PASS"
+        or validation.get("status") != "PASS"
+        or manifest.get("valid_time") != task["valid_time"]
+        or manifest.get("forcing_sha256") != digest
+    ):
+        raise ValueError("shared forcing manifest does not match the cache task")
+
+    consumer_evidence = []
+    for consumer in task["consumers"]:
+        retirement = confined(
+            root,
+            Path(consumer["segment_retirement"]),
+            "segment retirement",
+        )
+        lifecycle = load_published(retirement, "segment retirement")
+        publication_path = confined(
+            root,
+            Path(consumer["forcing_publication"]),
+            "forcing publication",
+        )
+        publication = load_published(publication_path, "forcing publication")
+        matches = [
+            item
+            for item in publication.get("entries", [])
+            if str(Path(item["forcing_file"]).resolve()) == str(forcing)
+        ]
+        if (
+            lifecycle.get("action") not in {"PRESERVED", "RETIRED"}
+            or len(matches) != 1
+            or matches[0].get("forcing_sha256") != digest
+        ):
+            raise ValueError(
+                "shared forcing consumer evidence does not match the payload"
+            )
+        consumer_evidence.append(
+            {
+                "chain_id": consumer["chain_id"],
+                "segment_id": consumer["segment_id"],
+                "segment_retirement": str(retirement),
+                "segment_retirement_sha256": sha256(retirement),
+                "forcing_publication": str(publication_path),
+                "forcing_publication_sha256": sha256(publication_path),
+            }
+        )
+
+    return {
+        "schema_version": 1,
+        "status": "RETIRING",
+        "action": "RETIRING",
+        "task_id": task["task_id"],
+        "task_sha256": payload_sha256(task),
+        "campaign_root": str(root),
+        "forcing_file": str(forcing),
+        "valid_time": task["valid_time"],
+        "consumers": consumer_evidence,
+        "targets": [
+            {
+                "kind": "forcing",
+                "path": str(forcing),
+                "sha256": digest,
+                "ready_marker": str(marker),
+            },
+            {
+                "kind": "forcing_manifest",
+                "path": str(manifest_path),
+                "sha256": sha256(manifest_path),
+                "ready_marker": None,
+            },
+            {
+                "kind": "forcing_validation",
+                "path": str(validation_path),
+                "sha256": sha256(validation_path),
+                "ready_marker": None,
+            },
+        ],
+        "obsolete_attempt_dirs": [],
+    }
+
+
+def forcing_cycle_cache_journal(task: dict[str, Any]) -> dict[str, Any]:
+    root = Path(task["campaign_root"]).resolve()
+    evidence = []
+    for value in task["record_retirements"]:
+        path = confined(root, Path(value), "forcing record retirement")
+        payload = load_published(path, "forcing record retirement")
+        if payload.get("action") != "RETIRED":
+            raise ValueError(f"forcing record was not retired: {path}")
+        evidence.append({"path": str(path), "sha256": sha256(path)})
+
+    cache_dir = confined(
+        root, Path(task["producer_cache_dir"]), "forcing cycle cache"
+    )
+    targets = []
+    if cache_dir.exists():
+        for path in sorted(cache_dir.rglob("*")):
+            if path.is_symlink():
+                raise ValueError(f"forcing cycle cache contains a symlink: {path}")
+            if path.is_file():
+                resolved = confined(root, path, "forcing cycle cache file")
+                targets.append(
+                    {
+                        "kind": "forcing_cycle_cache",
+                        "path": str(resolved),
+                        "sha256": sha256(resolved),
+                        "ready_marker": None,
+                    }
+                )
+    return {
+        "schema_version": 1,
+        "status": "RETIRING",
+        "action": "RETIRING",
+        "task_id": task["task_id"],
+        "task_sha256": payload_sha256(task),
+        "campaign_root": str(root),
+        "cycle_date": task["cycle_date"],
+        "record_retirements": evidence,
+        "targets": targets,
+        "obsolete_attempt_dirs": [],
     }
 
 
@@ -327,6 +471,10 @@ def execute_task(task: dict[str, Any]) -> dict[str, Any]:
             journal = segment_journal(task)
         elif task["kind"] == "restart_retirement":
             journal = restart_journal(task)
+        elif task["kind"] == "forcing_cache_retirement":
+            journal = forcing_cache_journal(task)
+        elif task["kind"] == "forcing_cycle_cache_retirement":
+            journal = forcing_cycle_cache_journal(task)
         else:
             raise ValueError(f"unsupported retirement task: {task['kind']}")
         write_json_atomic(report, journal)

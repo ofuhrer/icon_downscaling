@@ -59,9 +59,7 @@ def verify_build(
         text=True,
     ).strip()
     if commit != expected_commit:
-        raise ValueError(
-            f"HICAR checkout is {commit}; expected production pin {expected_commit}"
-        )
+        raise ValueError(f"HICAR checkout is {commit}; expected production pin {expected_commit}")
     tracked = subprocess.check_output(
         [
             "git",
@@ -112,8 +110,7 @@ def verify_build(
     missing = [line for line in required_lines if line not in content]
     if missing:
         raise ValueError(
-            "HICAR build provenance does not match the requested run: "
-            + "; ".join(missing)
+            "HICAR build provenance does not match the requested run: " + "; ".join(missing)
         )
 
 
@@ -144,11 +141,22 @@ def definition_payload(
         "campaign_root": str(campaign_root.resolve()),
         "runtime_release": str(runtime_manifest.resolve()),
         "python_environment": str(python_report.resolve()),
+        "goal": {
+            "outcome": "Verify that the current runtime can complete and publish a short HICAR segment.",
+            "why_now": "This is the smallest representative check before committing more Balfrin resources.",
+            "evidence_needed": [
+                "A validated model completion and exact-end restart",
+                "Clean solver, compression, and retirement reports",
+            ],
+            "stop_conditions": [
+                "Stop after the planned smoke segments complete",
+                "Reassess on any deterministic model or validation failure",
+            ],
+            "resource_rationale": "One four-node model slot and one CPU worker are sufficient for this bounded check.",
+        },
         "model": {
             "expected_hicar_commit": expected_commit,
-            "case_root": str(
-                release_root / "case_studies/swiss_200m"
-            ),
+            "case_root": str(release_root / "case_studies/swiss_200m"),
             "hicar_root": str(hicar_root.resolve()),
             "build_root": str(build_root.resolve()),
             "static_file": str(static_file.resolve()),
@@ -160,7 +168,6 @@ def definition_payload(
         "policy": {
             "segment_hours": segment_hours,
             "model_node_budget": 4,
-            "model_slots": 1,
             "cpu_slots": 1,
             "prefetch_segments_per_chain": 1,
             "max_model_attempts": 0,
@@ -236,9 +243,7 @@ def main() -> int:
         raise SystemExit("--hours must be within 1..24")
     segment_hours = args.hours if args.segment_hours is None else args.segment_hours
     if not 1 <= segment_hours <= args.hours or args.hours % segment_hours:
-        raise SystemExit(
-            "--segment-hours must divide --hours and be within 1..hours"
-        )
+        raise SystemExit("--segment-hours must divide --hours and be within 1..hours")
     try:
         start = datetime.strptime(args.start, TIME_FORMAT)
     except ValueError as exc:
@@ -264,8 +269,7 @@ def main() -> int:
     builder_record = next(
         item
         for item in runtime["files"]
-        if item["path"]
-        == "case_studies/swiss_200m/scripts/build_hicar_balfrin.sbatch"
+        if item["path"] == "case_studies/swiss_200m/scripts/build_hicar_balfrin.sbatch"
     )
     python_report = require_publication(
         args.python_report,
