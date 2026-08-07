@@ -98,8 +98,10 @@ def sha256(path: Path) -> str:
 
 
 def read_grib_fields(path: Path):
-    # This ordering avoids duplicate eckit factories in MeteoSwiss uenvs.
-    import mir  # noqa: F401
+    # Payload decoding is handled by ecCodes through earthkit-data. MIR is an
+    # interpolation library and is deliberately not a runtime dependency of
+    # this native-grid decoder; the operational FDB uenv does not ship its
+    # Python bindings.
     import earthkit.data as ekd
 
     return ekd.from_source("file", str(path))
