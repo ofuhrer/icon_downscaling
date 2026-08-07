@@ -1,0 +1,285 @@
+{
+  "decision": "TERRAIN_COMPONENT_PASS_RESTART_GATE_FAIL",
+  "failures": [
+    "restart mismatch for cosz",
+    "restart mismatch for hfls",
+    "restart mismatch for hfss",
+    "restart mismatch for lwtr",
+    "restart mismatch for rsds",
+    "restart mismatch for shortwave_diffuse_horizontal",
+    "restart mismatch for shortwave_direct_horizontal",
+    "restart mismatch for swtb",
+    "restart mismatch for swtd",
+    "restart mismatch for tsfe"
+  ],
+  "gates": {
+    "blocked_sector": [
+      {
+        "azimuth_degrees": 88.02387,
+        "diffuse_direct_diffuse": 182.0821075439453,
+        "diffuse_direct_diffuse_horizontal": 182.58929443359375,
+        "diffuse_direct_only": 182.57861328125,
+        "diffuse_horizontal": 182.57861328125,
+        "direct": 0.1733352541923523,
+        "direct_horizontal": 0.1733352392911911,
+        "elevation_degrees": 26.948531895589078,
+        "valid_time": "2020-07-20T06:45:00+00:00",
+        "visible_in_blocked_sector": false,
+        "zero_based_sector": 22
+      },
+      {
+        "azimuth_degrees": 88.92405,
+        "diffuse_direct_diffuse": 207.06898498535156,
+        "diffuse_direct_diffuse_horizontal": 207.64576721191406,
+        "diffuse_direct_only": 207.63926696777344,
+        "diffuse_horizontal": 207.63926696777344,
+        "direct": 0.0,
+        "direct_horizontal": 0.7182755470275879,
+        "elevation_degrees": 27.802055894349895,
+        "valid_time": "2020-07-20T06:50:00+00:00",
+        "visible_in_blocked_sector": false,
+        "zero_based_sector": 22
+      },
+      {
+        "azimuth_degrees": 89.83103,
+        "diffuse_direct_diffuse": 229.31971740722656,
+        "diffuse_direct_diffuse_horizontal": 229.95848083496094,
+        "diffuse_direct_only": 229.9352264404297,
+        "diffuse_horizontal": 229.9352264404297,
+        "direct": 0.0,
+        "direct_horizontal": 1.9471031427383423,
+        "elevation_degrees": 28.655893636090017,
+        "valid_time": "2020-07-20T06:55:00+00:00",
+        "visible_in_blocked_sector": false,
+        "zero_based_sector": 22
+      },
+      {
+        "azimuth_degrees": 90.7454,
+        "diffuse_direct_diffuse": 249.3611297607422,
+        "diffuse_direct_diffuse_horizontal": 250.05572509765625,
+        "diffuse_direct_only": 250.11061096191406,
+        "diffuse_horizontal": 250.11061096191406,
+        "direct": 0.0,
+        "direct_horizontal": 4.136606216430664,
+        "elevation_degrees": 29.5098268040675,
+        "valid_time": "2020-07-20T07:00:00+00:00",
+        "visible_in_blocked_sector": false,
+        "zero_based_sector": 22
+      },
+      {
+        "azimuth_degrees": 91.66773,
+        "diffuse_direct_diffuse": 268.5382080078125,
+        "diffuse_direct_diffuse_horizontal": 269.2862243652344,
+        "diffuse_direct_only": 269.3094787597656,
+        "diffuse_horizontal": 269.3094787597656,
+        "direct": 7.852313995361328,
+        "direct_horizontal": 7.852313995361328,
+        "elevation_degrees": 30.363632362197926,
+        "valid_time": "2020-07-20T07:05:00+00:00",
+        "visible_in_blocked_sector": true,
+        "zero_based_sector": 22
+      }
+    ],
+    "blocked_svf": 0.9972222222222222,
+    "flat_identity": {
+      "flat_direct": {
+        "rsds": {
+          "max_abs": 6.103515625e-05,
+          "max_scaled": 8.792815847397516e-08
+        },
+        "swtb": {
+          "max_abs": 6.103515625e-05,
+          "max_scaled": 1.1863341893920844e-07
+        },
+        "swtd": {
+          "max_abs": 0.0,
+          "max_scaled": 0.0
+        }
+      },
+      "flat_direct_diffuse": {
+        "rsds": {
+          "max_abs": 6.103515625e-05,
+          "max_scaled": 8.792815847397516e-08
+        },
+        "swtb": {
+          "max_abs": 6.103515625e-05,
+          "max_scaled": 1.1863341893920844e-07
+        },
+        "swtd": {
+          "max_abs": 0.0,
+          "max_scaled": 0.0
+        }
+      }
+    },
+    "flat_off_cross_run_drift_diagnostic": {
+      "flat_direct": {
+        "rsds": {
+          "max_abs": 3.7286376953125,
+          "max_scaled": 0.009887330234427883
+        },
+        "swtb": {
+          "max_abs": 4.5401611328125,
+          "max_scaled": 0.0971264978624535
+        },
+        "swtd": {
+          "max_abs": 3.211669921875,
+          "max_scaled": 0.01740968471202282
+        }
+      },
+      "flat_direct_diffuse": {
+        "rsds": {
+          "max_abs": 3.7286376953125,
+          "max_scaled": 0.009887330234427883
+        },
+        "swtb": {
+          "max_abs": 4.5401611328125,
+          "max_scaled": 0.0971264978624535
+        },
+        "swtd": {
+          "max_abs": 3.211669921875,
+          "max_scaled": 0.01740968471202282
+        }
+      }
+    },
+    "restart": {
+      "times": [
+        "2020-07-20T08:05:00",
+        "2020-07-20T08:10:00",
+        "2020-07-20T08:15:00",
+        "2020-07-20T08:20:00",
+        "2020-07-20T08:25:00",
+        "2020-07-20T08:30:00",
+        "2020-07-20T08:35:00",
+        "2020-07-20T08:40:00",
+        "2020-07-20T08:45:00",
+        "2020-07-20T08:50:00",
+        "2020-07-20T08:55:00",
+        "2020-07-20T09:00:00",
+        "2020-07-20T09:05:00",
+        "2020-07-20T09:10:00",
+        "2020-07-20T09:15:00",
+        "2020-07-20T09:20:00",
+        "2020-07-20T09:25:00",
+        "2020-07-20T09:30:00"
+      ],
+      "variables": {
+        "cosz": {
+          "final_max_abs": 3.4749507904052734e-05,
+          "final_max_scaled": 3.4749507904052734e-05,
+          "first_max_abs": 3.9637088775634766e-05,
+          "first_max_scaled": 3.9637088775634766e-05,
+          "max_abs": 3.9637088775634766e-05,
+          "max_scaled": 3.9637088775634766e-05
+        },
+        "hfls": {
+          "final_max_abs": 0.1468505859375,
+          "final_max_scaled": 0.0012388094237289293,
+          "first_max_abs": 53.35641860961914,
+          "first_max_scaled": 0.6726174211684389,
+          "max_abs": 53.35641860961914,
+          "max_scaled": 0.6726174211684389
+        },
+        "hfss": {
+          "final_max_abs": 0.2095794677734375,
+          "final_max_scaled": 0.0009739306386949911,
+          "first_max_abs": 46.073638916015625,
+          "first_max_scaled": 0.634128267199707,
+          "max_abs": 46.073638916015625,
+          "max_scaled": 0.634128267199707
+        },
+        "lwtr": {
+          "final_max_abs": 0.030853271484375,
+          "final_max_scaled": 9.602878727487487e-05,
+          "first_max_abs": 0.0,
+          "first_max_scaled": 0.0,
+          "max_abs": 0.62445068359375,
+          "max_scaled": 0.0017766418568902916
+        },
+        "rsds": {
+          "final_max_abs": 0.22259521484375,
+          "final_max_scaled": 0.0002951665279639723,
+          "first_max_abs": 0.04364013671875,
+          "first_max_scaled": 9.348897154058164e-05,
+          "max_abs": 9.962570190429688,
+          "max_scaled": 0.03804533342190476
+        },
+        "shortwave_diffuse_horizontal": {
+          "final_max_abs": 0.58135986328125,
+          "final_max_scaled": 0.004813242784380305,
+          "first_max_abs": 0.03045654296875,
+          "first_max_scaled": 9.318273659924314e-05,
+          "max_abs": 9.898666381835938,
+          "max_scaled": 0.03773224397150976
+        },
+        "shortwave_direct_horizontal": {
+          "final_max_abs": 0.80224609375,
+          "final_max_scaled": 0.0013733268430908849,
+          "first_max_abs": 0.01863861083984375,
+          "first_max_scaled": 0.00045386497059039403,
+          "max_abs": 7.293937683105469,
+          "max_scaled": 0.09143045544624329
+        },
+        "swtb": {
+          "final_max_abs": 0.80230712890625,
+          "final_max_scaled": 0.0013733268430908849,
+          "first_max_abs": 0.018646240234375,
+          "first_max_scaled": 0.00045386497059039403,
+          "max_abs": 7.293937683105469,
+          "max_scaled": 0.09143047034740448
+        },
+        "swtd": {
+          "final_max_abs": 0.579742431640625,
+          "final_max_scaled": 0.004813197221757533,
+          "first_max_abs": 0.030364990234375,
+          "first_max_scaled": 9.315367397801544e-05,
+          "max_abs": 9.87115478515625,
+          "max_scaled": 0.037732186608082224
+        },
+        "swtr": {
+          "final_max_abs": 0.0,
+          "final_max_scaled": 0.0,
+          "first_max_abs": 0.0,
+          "first_max_scaled": 0.0,
+          "max_abs": 0.0,
+          "max_scaled": 0.0
+        },
+        "tsfe": {
+          "final_max_abs": 0.00604248046875,
+          "final_max_scaled": 2.0377299071340614e-05,
+          "first_max_abs": 0.873626708984375,
+          "first_max_scaled": 0.002991169535063148,
+          "max_abs": 0.873626708984375,
+          "max_scaled": 0.002991169535063148
+        }
+      }
+    }
+  },
+  "inputs": {
+    "execution_plan": {
+      "path": "/scratch/mch/olifu/icon_hicar/qualification/terrain-radiation-model-gate-v3/inputs/execution_plan.json",
+      "sha256": "1ed633b6abfb3d3b41a1dfbd127c72d8fe8d8188ccb96acd577382687ab86562"
+    },
+    "run_manifest": {
+      "path": "/scratch/mch/olifu/icon_hicar/qualification/terrain-radiation-model-gate-v4/runs/run_manifest.json",
+      "sha256": "b4fbdad3c7faab9532d30a26e0c7d32339bb7d1f4d4c5a796c033ac6f3ec962f"
+    }
+  },
+  "promotion_limit": "A pass permits a bounded real-valley qualification only, not national production.",
+  "restart_failures": [
+    "restart mismatch for cosz",
+    "restart mismatch for hfls",
+    "restart mismatch for hfss",
+    "restart mismatch for lwtr",
+    "restart mismatch for rsds",
+    "restart mismatch for shortwave_diffuse_horizontal",
+    "restart mismatch for shortwave_direct_horizontal",
+    "restart mismatch for swtb",
+    "restart mismatch for swtd",
+    "restart mismatch for tsfe"
+  ],
+  "restart_status": "FAIL",
+  "schema": "hicar-terrain-radiation-assessment/v1",
+  "status": "FAIL",
+  "terrain_component_status": "PASS",
+  "terrain_failures": []
+}

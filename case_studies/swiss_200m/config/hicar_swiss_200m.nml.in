@@ -24,6 +24,7 @@
   soil_t_var = 'soil_temperature'
   soil_vwc_var = 'soil_vwc'
 @SNOW_INIT_LINES@
+@TERRAIN_RADIATION_DOMAIN_LINES@
   use_map_factors = .True.
   auto_level = 1
   height_lowest_level = 15.0
@@ -38,7 +39,7 @@
   forcing_file_list = '@FORCING_FILE_LIST@'
   wait_for_ready_file = .True.
   ready_file_timeout = 1800
-  inputinterval = 3600
+  inputinterval = @FORCING_INTERVAL@
   time_var = 'time'
   pvar = 'P'
   tvar = 'T'
@@ -89,6 +90,13 @@
 &cu_parameters
 /
 &rad_parameters
+  ! Simulation and forcing timestamps are UTC. Terrain radiation remains off
+  ! unless a causal component profile is selected explicitly.
+  update_interval_rad = @RADIATION_UPDATE_INTERVAL@.0
+  tzone = 0.0
+  icloud = 3
+  cldovrlp = 2
+@TERRAIN_RADIATION_LINES@
 /
 &pbl_parameters
 /

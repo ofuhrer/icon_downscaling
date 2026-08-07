@@ -1,0 +1,70 @@
+{
+  "cases": {
+    "blocked_direct": {
+      "model_log_sha256": "91f291d3a7db5a1a334d1ff38aed32cd246e0e0f08899c98b0d1c924e048057b",
+      "namelist_sha256": "ae4a5eefd93a9fa7ab9476f00f797360cbffc309a996e70023fe4f1e751b2385",
+      "output_files": [
+        "/scratch/mch/olifu/icon_hicar/qualification/terrain-radiation-model-gate-v4/runs/blocked_direct/output/static_single_sector_blocked_2020-07-20_06-30-00.nc",
+        "/scratch/mch/olifu/icon_hicar/qualification/terrain-radiation-model-gate-v4/runs/blocked_direct/output/static_single_sector_blocked_2020-07-20_08-30-00.nc"
+      ]
+    },
+    "blocked_direct_diffuse": {
+      "model_log_sha256": "13f2b30b1a30e2518f4335e6a05bb3b5dc0bb52cffc94b5233a34da4527ba7e5",
+      "namelist_sha256": "6c13397e7efd867f2880051b822d323c183ac0b80a2e00b8f74adb583cbe5972",
+      "output_files": [
+        "/scratch/mch/olifu/icon_hicar/qualification/terrain-radiation-model-gate-v4/runs/blocked_direct_diffuse/output/static_single_sector_blocked_2020-07-20_06-30-00.nc",
+        "/scratch/mch/olifu/icon_hicar/qualification/terrain-radiation-model-gate-v4/runs/blocked_direct_diffuse/output/static_single_sector_blocked_2020-07-20_08-30-00.nc"
+      ]
+    },
+    "flat_direct": {
+      "model_log_sha256": "c09c5f5e55e54a4a58ad942db4369477ce8eb3ee4bb00705d128d3117ed67f10",
+      "namelist_sha256": "9a12100656d6cc7388a2aa4da0e78a667b262ad62f3e8e46f903600fc716e58c",
+      "output_files": [
+        "/scratch/mch/olifu/icon_hicar/qualification/terrain-radiation-model-gate-v4/runs/flat_direct/output/static_flat_open_2020-07-20_06-30-00.nc",
+        "/scratch/mch/olifu/icon_hicar/qualification/terrain-radiation-model-gate-v4/runs/flat_direct/output/static_flat_open_2020-07-20_08-30-00.nc"
+      ]
+    },
+    "flat_direct_diffuse": {
+      "model_log_sha256": "9095d1a5cf95de384e8049dfd92ad9747fa03bed37ca6f5df098324ae69a4b12",
+      "namelist_sha256": "431b181ff9931546592b3ff96c358df37441df802b7db98849a9a7d7c286412c",
+      "output_files": [
+        "/scratch/mch/olifu/icon_hicar/qualification/terrain-radiation-model-gate-v4/runs/flat_direct_diffuse/output/static_flat_open_2020-07-20_06-30-00.nc",
+        "/scratch/mch/olifu/icon_hicar/qualification/terrain-radiation-model-gate-v4/runs/flat_direct_diffuse/output/static_flat_open_2020-07-20_08-30-00.nc"
+      ]
+    },
+    "flat_off": {
+      "model_log_sha256": "21a08eb13513e3fc7968af683801eab70cd4e7382653930b00dd5fa8a5fddaab",
+      "namelist_sha256": "4abf1a91391dba9644b8a0efe8d99dab7de09ab9b31fcc6b3769a99447bd87c0",
+      "output_files": [
+        "/scratch/mch/olifu/icon_hicar/qualification/terrain-radiation-model-gate-v4/runs/flat_off/output/static_flat_open_2020-07-20_06-30-00.nc",
+        "/scratch/mch/olifu/icon_hicar/qualification/terrain-radiation-model-gate-v4/runs/flat_off/output/static_flat_open_2020-07-20_08-30-00.nc"
+      ]
+    },
+    "restart_first": {
+      "model_log_sha256": "ed001f8b9e78a8786361040a59533b4d3ed1105bfff0dba9149769d75ddbc7dd",
+      "namelist_sha256": "d06cfd0b29471b5f8313da4dbb943fff150b89a9c8e4fd39cd600722ff524842",
+      "output_files": [
+        "/scratch/mch/olifu/icon_hicar/qualification/terrain-radiation-model-gate-v4/runs/restart_first/output/static_single_sector_blocked_2020-07-20_06-30-00.nc"
+      ]
+    },
+    "restart_second": {
+      "model_log_sha256": "453ca848b07cd4cc4250d812998e95c26cfbe53db63a973efee37b80ffd02c01",
+      "namelist_sha256": "8af527116dcd78b5ff3c639eaba35bc4002bc6bd52c5f9b3d6571c35f4b64c33",
+      "output_files": [
+        "/scratch/mch/olifu/icon_hicar/qualification/terrain-radiation-model-gate-v4/runs/restart_second/output/static_single_sector_blocked_2020-07-20_08-00-00.nc"
+      ]
+    }
+  },
+  "executable": {
+    "path": "/scratch/mch/olifu/icon_hicar/validation/supporting-work-combined-v1/build-gpu-mpi-v7/HICAR_gpu",
+    "sha256": "d10362a7946ddec4fe549bcad55a291c29c37863fed1688fe86d9a13a7e50bca"
+  },
+  "input_plan": {
+    "path": "/scratch/mch/olifu/icon_hicar/qualification/terrain-radiation-model-gate-v3/inputs/execution_plan.json",
+    "sha256": "1ed633b6abfb3d3b41a1dfbd127c72d8fe8d8188ccb96acd577382687ab86562"
+  },
+  "promotion_limit": "Synthetic causal/restart qualification only.",
+  "schema": "hicar-terrain-radiation-run/v1",
+  "source_commit": "43c636be24fb920cafebac17ab0ce0bab7f8343c",
+  "status": "MODEL_RUNS_COMPLETE_ASSESSMENT_PENDING"
+}

@@ -97,13 +97,34 @@ def main() -> int:
     parser.add_argument("--end-date", required=True, help="HICAR timestamp after start-date")
     parser.add_argument("--output-interval", type=int, default=3600, help="output interval in seconds")
     parser.add_argument(
+        "--forcing-interval",
+        type=int,
+        default=3600,
+        help="forcing interval in seconds; production remains 3600",
+    )
+    parser.add_argument(
+        "--radiation-update-interval",
+        type=int,
+        default=600,
+        help="full-radiation update interval in seconds; production remains 600",
+    )
+    parser.add_argument(
         "--output-profile",
-        choices=("routine", "qualification", "wind_climatology", "engineering"),
+        choices=("routine", "qualification", "terrain_radiation_gate", "wind_climatology", "engineering"),
         default="routine",
         help=(
             "Routine production fields, land-surface qualification diagnostics, "
             "fixed-height wind-climatology fields, or the full start/end "
             "engineering state."
+        ),
+    )
+    parser.add_argument(
+        "--terrain-radiation-profile",
+        choices=("off", "direct", "direct-diffuse", "full-local", "full-neighborhood"),
+        default="off",
+        help=(
+            "Causal terrain-radiation component set. Production remains off; "
+            "non-off profiles require audited hlm, svf, slope_angle, and aspect_angle fields."
         ),
     )
     parser.add_argument("--nz", type=int, default=80,
@@ -136,6 +157,10 @@ def main() -> int:
         raise SystemExit("--end-date must be after --start-date")
     if args.output_interval <= 0:
         raise SystemExit("--output-interval must be positive")
+    if args.forcing_interval <= 0:
+        raise SystemExit("--forcing-interval must be positive")
+    if args.radiation_update_interval <= 0:
+        raise SystemExit("--radiation-update-interval must be positive")
     if args.restart_interval < 0:
         raise SystemExit("--restart-interval must be non-negative")
     if args.nz not in (60, 80):
@@ -158,6 +183,49 @@ def main() -> int:
                 raise SystemExit(
                     "soil_type_layer must have NetCDF dimensions (soil_layer, y, x) with four layers"
                 )
+    if args.terrain_radiation_profile != "off":
+        try:
+            import netCDF4
+            import numpy as np
+        except ModuleNotFoundError as exc:
+            raise SystemExit("terrain-radiation validation requires Python netCDF4 and numpy") from exc
+        with netCDF4.Dataset(args.static_file) as static:
+            required_attributes = {
+                "terrain_radiation_geometry_sha256",
+                "terrain_radiation_horizon_convention",
+                "terrain_radiation_search_distance_km",
+            }
+            missing_attributes = sorted(
+                name for name in required_attributes if not hasattr(static, name)
+            )
+            if missing_attributes:
+                raise SystemExit(
+                    "terrain-radiation static lacks audited attributes: "
+                    + ", ".join(missing_attributes)
+                )
+            if static.terrain_radiation_horizon_convention != "hlm_zenith_angle_degrees_flat_90":
+                raise SystemExit("terrain-radiation static uses an unsupported horizon convention")
+            missing = sorted({"hlm", "svf", "slope_angle", "aspect_angle"} - set(static.variables))
+            if missing:
+                raise SystemExit(
+                    "terrain-radiation profile requires static variables: " + ", ".join(missing)
+                )
+            hlm = static.variables["hlm"]
+            if hlm.dimensions != ("azimuth", "y", "x") or hlm.shape[0] != 90:
+                raise SystemExit("hlm must have NetCDF dimensions (azimuth, y, x) with 90 sectors")
+            spatial_shape = hlm.shape[1:]
+            for name in ("svf", "slope_angle", "aspect_angle"):
+                if static.variables[name].dimensions != ("y", "x") or static.variables[name].shape != spatial_shape:
+                    raise SystemExit(f"{name} must have the same (y, x) shape as hlm")
+            for name, lower, upper in (
+                ("hlm", 0.0, 90.0),
+                ("svf", 0.0, 1.0),
+                ("slope_angle", 0.0, np.pi / 2.0),
+                ("aspect_angle", 0.0, 2.0 * np.pi),
+            ):
+                values = np.asarray(static.variables[name][:])
+                if not np.all(np.isfinite(values)) or np.any(values < lower) or np.any(values > upper):
+                    raise SystemExit(f"{name} contains non-finite or out-of-range values")
     if not args.forcing_file_list.is_file():
         raise SystemExit(f"forcing file list is missing: {args.forcing_file_list}")
     forcing_list_marker = Path(f"{args.forcing_file_list}.ready")
@@ -194,7 +262,7 @@ def main() -> int:
         raise SystemExit("forcing file list timestamps are not monotonic")
     if timestamps[0] != start_time:
         raise SystemExit("forcing file list must start exactly at --start-date")
-    expected_gap = timedelta(seconds=3600)
+    expected_gap = timedelta(seconds=args.forcing_interval)
     if any(right - left != expected_gap for left, right in zip(timestamps, timestamps[1:])):
         raise SystemExit("forcing file list is not continuous at the configured 3600 s interval")
     if timestamps[-1] < end_time:
@@ -219,6 +287,26 @@ def main() -> int:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     args.restart_dir.mkdir(parents=True, exist_ok=True)
     rendered = TEMPLATE.read_text()
+    terrain_profiles = {
+        "off": (False, False, False, False, False, 0.0),
+        "direct": (True, True, False, False, False, 0.0),
+        "direct-diffuse": (True, True, True, False, False, 0.0),
+        "full-local": (True, True, True, True, True, 0.0),
+        "full-neighborhood": (True, True, True, True, True, 1500.0),
+    }
+    terrain_master, terrain_direct, terrain_diffuse, terrain_reflected, terrain_lw, terrain_radius = (
+        terrain_profiles[args.terrain_radiation_profile]
+    )
+    terrain_radiation_lines = "\n".join(
+        (
+            f"  terrain_shading = {'.True.' if terrain_master else '.False.'}",
+            f"  terrain_direct_sw = {'.True.' if terrain_direct else '.False.'}",
+            f"  terrain_diffuse_sw = {'.True.' if terrain_diffuse else '.False.'}",
+            f"  terrain_reflected_sw = {'.True.' if terrain_reflected else '.False.'}",
+            f"  terrain_longwave = {'.True.' if terrain_lw else '.False.'}",
+            f"  terrain_refl_radius = {terrain_radius:.1f}",
+        )
+    )
     output_variables = {
         "routine": (
             "'precipitation', 'psfc', 'taix', 'hus2m', "
@@ -233,6 +321,11 @@ def main() -> int:
             "'runoff_surface_cumulative', 'runoff_subsurface_cumulative', "
             "'evaporation_net_cumulative', 'water_aquifer', 'storage_gw', "
             "'wetland_h20_store'"
+        ),
+        "terrain_radiation_gate": (
+            "'rsds', 'swtb', 'swtd', 'swtr', "
+            "'shortwave_direct_horizontal', 'shortwave_diffuse_horizontal', "
+            "'cosz', 'lwtr', 'tsfe', 'hfss', 'hfls'"
         ),
         "wind_climatology": (
             "'u10m', 'v10m', 'u_agl', 'v_agl', 'rho_agl', "
@@ -260,7 +353,17 @@ def main() -> int:
             "  soiltexture_var = 'soil_type_layer'" if args.depth_varying_soil else ""
         ),
         "@NMP_OPT_SOIL@": "2" if args.depth_varying_soil else "1",
+        "@TERRAIN_RADIATION_DOMAIN_LINES@": (
+            "  svf_var = 'svf'\n"
+            "  hlm_var = 'hlm'\n"
+            "  slope_angle_var = 'slope_angle'\n"
+            "  aspect_angle_var = 'aspect_angle'"
+            if terrain_master else ""
+        ),
+        "@TERRAIN_RADIATION_LINES@": terrain_radiation_lines,
         "@OUTPUT_INTERVAL@": str(args.output_interval),
+        "@FORCING_INTERVAL@": str(args.forcing_interval),
+        "@RADIATION_UPDATE_INTERVAL@": str(args.radiation_update_interval),
         "@OUTPUT_VARS@": output_variables[args.output_profile],
         "@NZ@": str(args.nz),
         "@WIND_SOLVER_ITERATIONS@": str(args.wind_solver_iterations),
