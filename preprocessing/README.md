@@ -249,6 +249,19 @@ python scripts/hicarprep.py validate-boundaries \
 Omit `--allow-unbalanced-research` for model input; the default requires every
 snapshot to carry a matching HICAR balance certificate.
 
+HICAR reads the published sequence when the forcing namelist supplies
+`sparse_lbc_file_list`. The list is separate from the regular coarse-forcing
+list but must have the same exact timestamps and cadence. At initialization,
+each MPI rank reads only its contiguous local runs from the sparse mass, U-face
+and V-face supports. At each forcing event the reader advances one exact
+bracket, with no skipping or extrapolation. T and P are interpolated
+independently in absolute time before potential temperature is derived;
+moisture species are kept nonnegative; edge points are assigned exactly; and
+the interior shoulder uses the stored physical-distance weight with the stable
+`1-exp(-weight*dt/timescale)` update. The runtime rejects target-grid,
+static-product, support, weight, optional-field, cadence, and balance-contract
+changes between frames.
+
 The default lateral-W policy is `diagnose`, matching the common COSMO
 free-slip treatment. Use `--lbc-w-policy=relax` only after HICAR owns and
 validates its native projected W at the sparse boundary.

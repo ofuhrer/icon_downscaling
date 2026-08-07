@@ -100,12 +100,22 @@ touch "$forcing_list.ready"
 
 start="${date:0:4}-${date:4:2}-${date:6:2} ${time:0:2}:00:00"
 end=$(date -u -d "$start UTC + 1 hour" '+%Y-%m-%d %H:%M:%S')
+soil_texture_arguments=()
+if "$python_bin" - "$static_file" <<'PY'
+import netCDF4
+import sys
+with netCDF4.Dataset(sys.argv[1]) as dataset:
+    raise SystemExit(0 if "soil_type_layer" in dataset.variables else 1)
+PY
+then
+  soil_texture_arguments=(--depth-varying-soil)
+fi
 "$python_bin" "$renderer" \
   --static-file "$static_file" \
   --forcing-file-list "$forcing_list" \
   --start-date "$start" --end-date "$end" \
   --output-interval 3600 --output-profile engineering \
-  --rea-l-land-initialization --depth-varying-soil \
+  --rea-l-land-initialization "${soil_texture_arguments[@]}" \
   --nz 80 --wind-solver-iterations 2500 \
   --output-dir "$run/output" --restart-dir "$run/restart" \
   --output "$run/input.nml"
