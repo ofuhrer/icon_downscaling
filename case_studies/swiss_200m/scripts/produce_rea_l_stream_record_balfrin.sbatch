@@ -261,7 +261,7 @@ retrieve,
   time=$cycle_time,
   levtype=ml,
   levelist=1/to/80,
-  param=500001/500014/500028/500030/500035,
+  param=500001/500014/500028/500030/500035/500100,
   step=$step
 EOF
 cat > "$work/w.mars" <<EOF
@@ -280,7 +280,7 @@ retrieve,
 EOF
 surface_wind_args=()
 dynamic_parts=("$work/full.grib" "$work/w.grib")
-expected_dynamic_count=481
+expected_dynamic_count=561
 if test "${HICAR_INCLUDE_SURFACE_WIND:-0}" = 1; then
   cat > "$work/surface_wind.mars" <<EOF
 retrieve,
@@ -299,7 +299,7 @@ EOF
     fdb-read --statistics "$work/surface_wind.mars" "$work/surface_wind.grib"
   surface_wind_args=(--include-surface-wind)
   dynamic_parts+=("$work/surface_wind.grib")
-  expected_dynamic_count=483
+  expected_dynamic_count=563
 fi
 "$uenv_bin" run --view=rea-l-ch1 "$image" -- \
   fdb-read --statistics "$work/full.mars" "$work/full.grib"
@@ -362,7 +362,7 @@ path.write_text(json.dumps({
     "target_grid": "$target_grid",
     "source_dynamic": {
         "retained": False,
-        "messages": 481,
+        "messages": int("$expected_dynamic_count"),
         "size_bytes": int("$dynamic_bytes"),
         "sha256": "$dynamic_sha",
     },

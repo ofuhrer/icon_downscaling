@@ -528,6 +528,26 @@ def boundary_point_indices(
     return np.nonzero(distance <= width_m + 1.0e-6)
 
 
+def boundary_relaxation_weights(
+    x: np.ndarray, y: np.ndarray, width_m: float
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return sparse edge indices and a smooth physical-distance relaxation mask.
+
+    The cosine-squared shoulder is one at the outermost target-grid point and
+    decays continuously to zero at ``width_m``.  Storing the coefficients in
+    each frame makes the preprocessor, rather than a model-grid cell count,
+    authoritative for the lateral relaxation geometry.
+    """
+    rows, cols = boundary_point_indices(x, y, width_m)
+    xx, yy = np.meshgrid(np.asarray(x, dtype=np.float64), np.asarray(y, dtype=np.float64))
+    distance = np.minimum.reduce((xx - xx.min(), xx.max() - xx, yy - yy.min(), yy.max() - yy))
+    phase = np.clip(distance[rows, cols] / float(width_m), 0.0, 1.0)
+    weights = np.cos(0.5 * np.pi * phase) ** 2
+    weights[distance[rows, cols] <= 1.0e-6] = 1.0
+    weights[phase >= 1.0] = 0.0
+    return rows, cols, weights
+
+
 def _face_coordinates(centres: np.ndarray) -> np.ndarray:
     values = np.asarray(centres, dtype=np.float64)
     if values.ndim != 1 or values.size < 2 or not np.all(np.diff(values) > 0.0):
@@ -561,16 +581,16 @@ def write_boundary_condition(
             "HICAR pressure adjustment and variational wind projection have not been applied; "
             "lateral-boundary publication is blocked"
         )
-    rows, cols = boundary_point_indices(x, y, boundary_width_m)
+    rows, cols, relaxation_weight = boundary_relaxation_weights(x, y, boundary_width_m)
     levels, ny, nx = state["T"].shape
     native_u = state.get("U", np.empty(0)).shape == (levels, ny, nx + 1)
     native_v = state.get("V", np.empty(0)).shape == (levels, ny + 1, nx)
     if native_u:
-        u_rows, u_cols = boundary_point_indices(
+        u_rows, u_cols, u_relaxation_weight = boundary_relaxation_weights(
             _face_coordinates(np.asarray(x)), np.asarray(y), boundary_width_m
         )
     if native_v:
-        v_rows, v_cols = boundary_point_indices(
+        v_rows, v_cols, v_relaxation_weight = boundary_relaxation_weights(
             np.asarray(x), _face_coordinates(np.asarray(y)), boundary_width_m
         )
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -586,14 +606,25 @@ def write_boundary_condition(
             dataset.createDimension("half_level", state["HHL"].shape[0])
             dataset.createVariable("row", "i4", ("boundary_point",))[:] = rows
             dataset.createVariable("column", "i4", ("boundary_point",))[:] = cols
+            mass_weight = dataset.createVariable(
+                "relaxation_weight", "f8", ("boundary_point",)
+            )
+            mass_weight[:] = relaxation_weight
+            mass_weight.long_name = "lateral relaxation coefficient on the mass grid"
             if native_u:
                 dataset.createDimension("u_boundary_point", u_rows.size)
                 dataset.createVariable("u_row", "i4", ("u_boundary_point",))[:] = u_rows
                 dataset.createVariable("u_column", "i4", ("u_boundary_point",))[:] = u_cols
+                dataset.createVariable(
+                    "u_relaxation_weight", "f8", ("u_boundary_point",)
+                )[:] = u_relaxation_weight
             if native_v:
                 dataset.createDimension("v_boundary_point", v_rows.size)
                 dataset.createVariable("v_row", "i4", ("v_boundary_point",))[:] = v_rows
                 dataset.createVariable("v_column", "i4", ("v_boundary_point",))[:] = v_cols
+                dataset.createVariable(
+                    "v_relaxation_weight", "f8", ("v_boundary_point",)
+                )[:] = v_relaxation_weight
             for name, value in state.items():
                 if name == "W" and not include_lateral_w:
                     continue
@@ -619,8 +650,27 @@ def write_boundary_condition(
             dataset.hicarprep_product_version = PRODUCT_VERSION
             dataset.valid_time = str(valid_time)
             dataset.boundary_width_m = boundary_width_m
+            dataset.domain_nx = int(np.asarray(x).size)
+            dataset.domain_ny = int(np.asarray(y).size)
             dataset.initial_condition_sha256 = sha256(initial_condition_path)
+            with netCDF4.Dataset(initial_condition_path) as initial:
+                for attribute in ("static_sha256", "target_grid_fingerprint"):
+                    value = getattr(initial, attribute, None)
+                    if value is None:
+                        raise ValueError(
+                            f"{initial_condition_path}: missing required {attribute} provenance"
+                        )
+                    dataset.setncattr(attribute, value)
             dataset.frame_definition = "distance_to_nearest_domain_edge <= boundary_width_m"
+            dataset.relaxation_profile = (
+                "cosine_squared(distance_to_nearest_domain_edge / boundary_width_m); "
+                "one at the outer edge and zero at boundary_width_m"
+            )
+            dataset.relaxation_timescale_seconds = 3600.0
+            dataset.relaxation_update = (
+                "outer edge: exact target assignment; shoulder: "
+                "alpha=1-exp(-relaxation_weight*dt/relaxation_timescale_seconds)"
+            )
             dataset.staggered_frame_definition = (
                 "U and V use their own extrapolated face-coordinate frames and index arrays"
             )

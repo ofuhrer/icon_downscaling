@@ -21,7 +21,7 @@ fdb_image=${REA_FDB_IMAGE_OVERRIDE:-fdb/5.21:v1}
 output_root=${OUTPUT_ROOT:-$SCRATCH/icon_hicar/qualification/hicarprep_surface_cases_v11}
 packager=$repo_root/case_studies/swiss_200m/validation/package_rea_l_native_surface.py
 hicarprep=$repo_root/scripts/hicarprep.py
-case_list=${REA_L_SURFACE_CASES:-"20200115 20200702 20201115"}
+case_list=${REA_L_SURFACE_CASES:-"20200115 20200210 20200702 20201115"}
 
 for path in "$target_static" "$icon_extpar" "$noahmp_table" "$packager" "$hicarprep"; do
   test -s "$path" || { echo "missing or empty input: $path" >&2; exit 2; }

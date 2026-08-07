@@ -24,6 +24,7 @@ from preprocessing.hicarprep.cli import parser as hicarprep_parser
 from preprocessing.hicarprep.geometry import SleveConfig, build_sleve_geometry
 from preprocessing.hicarprep.external import append_epoch, evaluate_external_fields
 from preprocessing.hicarprep.pipeline import (
+    boundary_relaxation_weights,
     boundary_point_indices,
     convert_water_to_hicar_mixing_ratios,
     load_valid_time_inputs,
@@ -658,15 +659,43 @@ class ProductPipelineTests(unittest.TestCase):
             def write(path: Path, valid_time: str) -> None:
                 with netCDF4.Dataset(path, "w") as dataset:
                     dataset.createDimension("boundary_point", 2)
+                    dataset.createDimension("u_boundary_point", 2)
+                    dataset.createDimension("v_boundary_point", 2)
                     dataset.createDimension("level", 1)
+                    dataset.createDimension("half_level", 2)
                     dataset.createVariable("row", "i4", ("boundary_point",))[:] = [0, 0]
                     dataset.createVariable("column", "i4", ("boundary_point",))[:] = [0, 1]
-                    dataset.createVariable("T", "f8", ("level", "boundary_point"))[:] = 280.0
+                    dataset.createVariable("u_row", "i4", ("u_boundary_point",))[:] = [0, 0]
+                    dataset.createVariable("u_column", "i4", ("u_boundary_point",))[:] = [0, 2]
+                    dataset.createVariable("v_row", "i4", ("v_boundary_point",))[:] = [0, 1]
+                    dataset.createVariable("v_column", "i4", ("v_boundary_point",))[:] = [0, 0]
+                    dataset.createVariable(
+                        "relaxation_weight", "f8", ("boundary_point",)
+                    )[:] = [1.0, 0.5]
+                    dataset.createVariable(
+                        "u_relaxation_weight", "f8", ("u_boundary_point",)
+                    )[:] = [1.0, 1.0]
+                    dataset.createVariable(
+                        "v_relaxation_weight", "f8", ("v_boundary_point",)
+                    )[:] = [1.0, 1.0]
+                    for name in ("T", "P", "QV", "QC", "QI", "HFL"):
+                        dataset.createVariable(name, "f8", ("level", "boundary_point"))[:] = 1.0
+                    dataset.createVariable("HHL", "f8", ("half_level", "boundary_point"))[:] = 1.0
+                    dataset.createVariable("U", "f8", ("level", "u_boundary_point"))[:] = 1.0
+                    dataset.createVariable("V", "f8", ("level", "v_boundary_point"))[:] = 1.0
                     dataset.product_type = "hicar_lateral_boundary_state"
                     dataset.valid_time = valid_time
+                    dataset.domain_nx = 2
+                    dataset.domain_ny = 1
                     dataset.hicar_water_conversion = "APPLIED_JOINT_ALL_WATER_SPECIES"
                     dataset.hicar_pressure_adjustment = "APPLIED_HICAR_NATIVE"
                     dataset.wind_balance = "APPLIED_HICAR_ADJOINT_VARIATIONAL_PROJECTION"
+                    dataset.lateral_w_policy = "diagnose_in_hicar"
+                    dataset.target_grid_fingerprint = "target"
+                    dataset.static_sha256 = "static"
+                    dataset.relaxation_profile = "cosine_squared"
+                    dataset.relaxation_update = "stable"
+                    dataset.relaxation_timescale_seconds = 3600.0
 
             first = root / "first.nc"
             second = root / "second.nc"
@@ -677,6 +706,16 @@ class ProductPipelineTests(unittest.TestCase):
             self.assertEqual(sequence["maximum_interval_seconds"], 3600.0)
             with self.assertRaisesRegex(ValueError, "strictly increasing"):
                 validate_boundary_sequence([second, first])
+
+    def test_boundary_relaxation_weights_use_physical_cosine_shoulder(self) -> None:
+        x = np.arange(8, dtype=np.float64) * 200.0
+        y = np.arange(7, dtype=np.float64) * 200.0
+        rows, cols, weights = boundary_relaxation_weights(x, y, 400.0)
+        lookup = {(int(row), int(col)): float(weight) for row, col, weight in zip(rows, cols, weights)}
+        self.assertEqual(lookup[(0, 3)], 1.0)
+        self.assertAlmostEqual(lookup[(1, 3)], 0.5)
+        self.assertEqual(lookup[(2, 2)], 0.0)
+        self.assertNotIn((3, 3), lookup)
 
     def test_all_icon_water_species_are_jointly_converted_to_dry_air_basis(self) -> None:
         shape = (2, 1, 1)

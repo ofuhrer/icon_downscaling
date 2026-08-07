@@ -20,6 +20,7 @@ from .balance import (
     load_hicar_initialized_state,
 )
 from .boundary import write_boundary_sequence_manifest
+from .icon_atmosphere import decode_icon_atmosphere
 from .geometry import SleveConfig
 from .external import append_epoch
 from .pipeline import (
@@ -214,6 +215,19 @@ def _validate_boundaries(args: argparse.Namespace) -> int:
         args.manifest,
         maximum_interval_seconds=args.maximum_interval_seconds,
         allow_unbalanced_research=args.allow_unbalanced_research,
+    )
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0
+
+
+def _decode_icon_atmosphere(args: argparse.Namespace) -> int:
+    payload = decode_icon_atmosphere(
+        args.dynamic_grib,
+        args.geometry_grib,
+        args.icon_extpar,
+        args.valid_time,
+        args.output,
+        missing_qi_policy=args.missing_qi_policy,
     )
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 0
@@ -493,6 +507,23 @@ def parser() -> argparse.ArgumentParser:
         description="Direct native-grid ICON to target-coordinate HICAR preprocessing",
     )
     commands = result.add_subparsers(dest="command", required=True)
+
+    decode_atmosphere = commands.add_parser(
+        "decode-icon-atmosphere",
+        help="strictly decode operational native-grid ICON atmospheric GRIB",
+    )
+    decode_atmosphere.add_argument("--dynamic-grib", type=Path, required=True)
+    decode_atmosphere.add_argument("--geometry-grib", type=Path, required=True)
+    decode_atmosphere.add_argument("--icon-extpar", type=Path, required=True)
+    decode_atmosphere.add_argument("--valid-time", required=True)
+    decode_atmosphere.add_argument("--output", type=Path, required=True)
+    decode_atmosphere.add_argument(
+        "--missing-qi-policy",
+        choices=("error", "source-absent-zero"),
+        default="error",
+        help="explicit policy for QI, which is absent from operational REA-L",
+    )
+    decode_atmosphere.set_defaults(func=_decode_icon_atmosphere)
 
     domain = commands.add_parser(
         "build-domain", help="split field lifetimes and add HICAR geometry"

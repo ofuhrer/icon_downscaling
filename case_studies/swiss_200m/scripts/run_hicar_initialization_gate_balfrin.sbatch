@@ -4,7 +4,7 @@
 # Required submission variables:
 #   HICAR_INITIALIZATION_ROOT       isolated qualification directory
 #   HICAR_INITIALIZATION_BUILD_ROOT clean GPU-NCCL build
-#   HICAR_INITIALIZATION_CASE_DATE  20200115 or 20200702
+#   HICAR_INITIALIZATION_CASE_DATE  YYYYMMDD
 #   HICAR_INITIALIZATION_SOIL_METHOD smi or relative_saturation
 #
 # Optional:
@@ -12,6 +12,7 @@
 #   HICAR_INITIALIZATION_RENDERER    renderer with the engineering-state profile
 #   HICAR_INITIALIZATION_COORDINATOR coordinator checkout containing hicarprep
 #   HICAR_INITIALIZATION_MAX_HYDROSTATIC_RESIDUAL (default 5e-3; provisional)
+#   HICAR_INITIALIZATION_FORCING_CACHE override for independent regimes
 #SBATCH --job-name=hicar-init-gate
 #SBATCH --partition=short
 #SBATCH --nodes=2
@@ -47,15 +48,18 @@ date=${HICAR_INITIALIZATION_CASE_DATE:?Set HICAR_INITIALIZATION_CASE_DATE}
 method=${HICAR_INITIALIZATION_SOIL_METHOD:?Set HICAR_INITIALIZATION_SOIL_METHOD}
 maximum_hydrostatic_residual=${HICAR_INITIALIZATION_MAX_HYDROSTATIC_RESIDUAL:-5e-3}
 
-case "$date" in
-  20200115)
-    forcing_cache=$SCRATCH/icon_hicar/qualification/chronological-overlap-winter-202001/v1/campaign/forcing_cache/records
-    ;;
-  20200702)
-    forcing_cache=$SCRATCH/icon_hicar/qualification/chronological-overlap-summer-202007/v2/campaign/forcing_cache/records
-    ;;
-  *) echo "no retained qualified forcing cache for $date" >&2; exit 2 ;;
-esac
+forcing_cache=${HICAR_INITIALIZATION_FORCING_CACHE:-}
+if test -z "$forcing_cache"; then
+  case "$date" in
+    20200115)
+      forcing_cache=$SCRATCH/icon_hicar/qualification/chronological-overlap-winter-202001/v1/campaign/forcing_cache/records
+      ;;
+    20200702)
+      forcing_cache=$SCRATCH/icon_hicar/qualification/chronological-overlap-summer-202007/v2/campaign/forcing_cache/records
+      ;;
+    *) echo "set HICAR_INITIALIZATION_FORCING_CACHE for independent case $date" >&2; exit 2 ;;
+  esac
+fi
 case "$method" in smi|relative_saturation) ;; *) echo "unsupported method: $method" >&2; exit 2 ;; esac
 
 surface_root=${HICARPREP_SURFACE_ROOT:-$SCRATCH/icon_hicar/qualification/hicarprep_surface_cases_v11}
