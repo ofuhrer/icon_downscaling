@@ -21,6 +21,7 @@ htmlcov/
 # Local workflow and code-discovery caches
 .cache/
 .codebase-memory/
+.qualification_runtime/
 tmp_diagnostics/
 tmp/
 

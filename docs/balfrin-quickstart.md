@@ -54,7 +54,7 @@ jobs read the same record. Durable project storage must remain below
 For a real two-field FDB read, run this from a workstation checkout:
 
 ```bash
-./scripts/balfrin_rea_l_ch1_fdb_smoke.sh fdb/5.19:v2
+./scripts/balfrin_rea_l_ch1_fdb_smoke.sh
 ```
 
 ## 2. Restore the bounded static input
@@ -81,11 +81,12 @@ artifacts.
 
 ## 3. Build the validated HICAR baseline
 
-The coordinator submodule currently records this validated engineering line:
+The validated engineering reference for the current scientific assessment is:
 `feature/icon_downscaling` at
-`7700c97a0248abcc1db055ef04c22e1ff9ec6d22`. This tip contains the qualified
-V26 restart state and selectively validated SCHNAPS fixes. V29 remains a
-separate failed scientific evidence branch.
+`6bd302f8b97062cd43c1b8d4e59bd3cf0dc8ae07`. This tip contains the qualified
+V26 restart state, selectively validated SCHNAPS fixes, fixed-height wind
+diagnostics, and the restored adjusted horizontal-wind tendency. V29 remains
+a separate failed scientific evidence branch.
 
 Build the exact pinned commit with the canonical GPU/NCCL builder:
 

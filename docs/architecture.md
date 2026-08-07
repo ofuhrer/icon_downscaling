@@ -211,15 +211,24 @@ must select the last already-closed, validator-published checkpoint.
 
 Heavy HICAR attempts are the only jobs initially assigned to `preemptible`.
 The lightweight persistent watcher uses `pp-long`; one campaign-wide CPU
-array uses `pp-short` with a maximum of two active tasks. The model-slot limit
-is node-aware against a 44-node budget and may be changed at runtime, including
-zero to pause submissions. The controller keeps work pending up to that limit;
+array uses `pp-short` with bounded concurrency. The model-slot limit is
+derived from the stated node budget and the nodes per attempt by default. A
+smaller goal-sized budget or deliberate underfill is valid when its resource
+rationale makes the tradeoff explicit. Capacity may be changed at runtime,
+including zero to pause submissions. The controller
+keeps work pending up to that limit;
 Slurm itself notices freed nodes and starts the queued attempts immediately,
 so no separate free-node polling policy or fixed retry delay is required.
-Parallelism is allowed only across independently authorized restart chains.
+Parallelism is allowed only across restart-independent chains whose inputs and
+initial states are explicit in the plan.
 
-The controller now journals and resumes forcing, restart, failed-attempt, and
-raw-output retirement after compression and validation publications pass.
+The controller uses one campaign-wide valid-time forcing cache and
+deduplicates producer work across chains. Its bounded CPU array interleaves
+input generation with solver/compression/retirement tasks so either lane
+continues making progress. Shared inputs are reference-retired only after all
+consuming segments have safely retired. The controller also journals and
+resumes restart, failed-attempt, and raw-output retirement after compression
+and validation publications pass.
 It preserves configured periodic and final checkpoints and caps each chain's
 unretired backlog. Durable transfer remains a separate archive-contract
 decision; scratch retirement is never evidence of durable publication.
