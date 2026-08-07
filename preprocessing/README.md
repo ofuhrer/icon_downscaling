@@ -210,6 +210,17 @@ is where operational GRIB decoding and ICON field-name normalization belong.
 Canonical ICON `QV/QC/QI/...` are tracer mass fractions (specific humidity for
 `QV`); saturation and hydrostatic calculations retain that representation.
 
+For ICON REA-L-CH1, `decode-icon-atmosphere` is the strict operational GRIB
+adapter. It requires the exact full inventory of pressure, temperature, U, V,
+QV, QC, W, HHL, HSURF, and FR_LAND; validates parameter identifiers, units,
+vertical types and levels, valid time, reference cycle, native-grid UUID and
+cell count; and reverses the archive's top-to-bottom levels into HICAR's
+bottom-to-top convention. The REA-L archive does not provide QI. The decoder
+therefore fails by default and permits zero QI only through the explicit
+`--missing-qi-policy source-absent-zero` provenance-marked policy. The bounded
+Balfrin retrieval entry point is
+`case_studies/swiss_200m/scripts/decode_rea_l_atmosphere_balfrin.sbatch`.
+
 Horizontal remapping is direct to the exact HICAR target locations. Profiles
 and HHL use the same ten-donor Gaussian RBF kernel solve. The vertical
 transform works in geometric height, explicitly handles target valleys and
