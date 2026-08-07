@@ -30,11 +30,13 @@ cycle, SST/lake state can evolve continuously, and soil/snow state remains an
 initial condition instead of being mislabeled as static.
 
 Model-ready integration gates remain explicit. HICAR's pressure-adjustment
-path, exact mass/U/V/interface staggering, and variational wind projection are
-not duplicated in Python, and the HICAR reader does not yet bracket the new
-sparse LBC records. Both IC and LBC writers therefore refuse normal
-publication. A marked continuously hydrostatic research output exists for
-tests, but cannot be mistaken for a model-ready IC.
+path and variational wind projection are not duplicated in Python. Normal
+cold start and `--initialize-only` now share those operators, and hicarprep
+can certify and publish the exact native mass/U/V/W state with HHL interfaces.
+The HICAR reader does not yet bracket the new sparse LBC records, so this
+closes time-zero IC generation but not multi-time forcing. A marked
+continuously hydrostatic Python research output remains available for tests,
+but cannot be mistaken for a model-ready IC.
 Operational GRIB decoding likewise remains a source-adapter concern; the
 implemented core consumes a strict canonical native-grid ICON NetCDF
 representation.
@@ -428,8 +430,8 @@ Field policies are:
 
 Use the same horizontal stencil for coupled thermodynamic variables and source
 HHL so the remapped profile is not displaced from its geometry. Remap the
-source profiles to exact HICAR mass/U/V/interface locations; do not introduce
-a regular 1 km compatibility grid.
+source profiles to exact HICAR mass and U/V columns and target HHL interfaces;
+do not introduce a regular 1 km compatibility grid.
 
 Horizontal interpolation cannot create valid 100--200 m atmospheric scales.
 The fine structure is introduced only by target statics, target-terrain
@@ -474,9 +476,11 @@ Variable policies are:
   overlap anchor, interpolate full pressure and thermodynamics, then integrate
   hydrostatically upward/downward through the final target virtual-temperature
   profile.
-- **Vertical velocity:** interpolate physical W to target interfaces, enforce
-  the target-terrain kinematic lower condition, and convert to HICAR's
-  terrain-coordinate representation.
+- **Vertical velocity:** interpolate the source physical W on the provisional
+  target transformation grid, enforce the target-terrain kinematic lower
+  condition, and let HICAR's cold-start path produce the authoritative native
+  `w_grid`. In certified time-zero output W has `(level,y,x)` shape; HHL alone
+  carries the extra interface level.
 
 After those operations, diagnose Exner pressure, potential/virtual potential
 temperature, density, interface pressure, and any HICAR-native conservative
@@ -560,9 +564,9 @@ hicar_weights_<source-uuid>_<target-hash>.nc
 hicarprep_manifest.json
 ```
 
-`hicar_input` contains the complete HICAR-native prognostic state on the exact
-mass/U/V/interface staggering, all required initial land/snow state, and the
-static/geometry identity.
+`hicar_input` contains the complete HICAR-native prognostic state on exact
+mass and U/V faces, native level-centred W, HHL interfaces, all required
+initial land/snow state, and the static/geometry identity.
 
 `hicar_bdy` contains a sparse target-grid frame covering the relaxation zone
 and halos. Each record is produced by the same horizontal, vertical,
@@ -571,9 +575,9 @@ values as the canonical data; derive tendencies only if the boundary algorithm
 requires them.
 
 For temporal interpolation, use a declared physical variable set such as
-`P,T,QV,U,V` plus supported hydrometeor masses. Include projected
-interface-staggered `W` only when HICAR is configured to relax it; otherwise
-diagnose it with the model boundary operator. Then diagnose dependent HICAR
+`P,T,QV,U,V` plus supported hydrometeor masses. Include projected native W
+only when HICAR is configured to relax it; otherwise diagnose it with the
+model boundary operator. Then diagnose dependent HICAR
 variables consistently. Do not linearly interpolate mutually dependent
 pressure, density, Exner, and potential temperature as independent degrees of
 freedom.
@@ -677,7 +681,7 @@ implementation detail, not separate compatibility products.
 - normalized-weight and monotone-bound checks;
 - known eastward/northward wind through native-vector reconstruction and
   target rotation;
-- exact mass/U/V/interface destination locations;
+- exact mass/U/V/native-W and HHL-interface destination locations;
 - same-surface mask normalization and fallback accounting.
 
 ### Column-physics tests

@@ -7,11 +7,18 @@ import datetime as dt
 import json
 import os
 from pathlib import Path
+import shutil
+import subprocess
 import tempfile
 
 import netCDF4
 import numpy as np
 
+from .balance import (
+    BalanceCertificate,
+    issue_balance_certificate,
+    load_hicar_initialized_state,
+)
 from .boundary import write_boundary_sequence_manifest
 from .geometry import SleveConfig
 from .external import append_epoch
@@ -32,7 +39,13 @@ from .products import (
     validate_product_set,
 )
 from .registry import FieldRegistry
-from .remap import RBFWeights, VectorRBFWeights, build_rbf_weights, build_vector_rbf_weights
+from .remap import (
+    RBFWeights,
+    VectorRBFWeights,
+    build_rbf_weights,
+    build_vector_rbf_weights,
+    grid_fingerprint,
+)
 from .surface import (
     SOIL_WATER_METHODS,
     TEMPERATURE_HEIGHT_METHODS,
@@ -207,13 +220,28 @@ def _validate_boundaries(args: argparse.Namespace) -> int:
 
 
 def _transform(args: argparse.Namespace) -> int:
+    if bool(args.balanced_state) != bool(args.balance_certificate):
+        raise ValueError("--balanced-state and --balance-certificate must be supplied together")
     weights = RBFWeights.read(args.weights)
     vector_weights = VectorRBFWeights.read(args.vector_weights) if args.vector_weights else None
     state, diagnostics = transform_icon_state(
         args.icon_state, args.static, weights, vector_weights=vector_weights
     )
+    balance_certificate = None
     water_representation = "ICON tracer mass fraction (specific humidity for QV)"
-    if not args.retain_icon_water_for_research:
+    if args.balanced_state:
+        state, initialized_metadata = load_hicar_initialized_state(args.balanced_state)
+        balance_certificate = BalanceCertificate.from_json(args.balance_certificate)
+        balance_certificate.validate(
+            state,
+            valid_time=initialized_metadata["valid_time"],
+            producer_commit=initialized_metadata["hicar_git"],
+        )
+        initialized_time = initialized_metadata["valid_time"]
+        if initialized_time and _datetime(initialized_time) != _datetime(str(diagnostics["valid_time"])):
+            raise ValueError("HICAR initialized state valid time does not match ICON source state")
+        water_representation = "dry-air mixing ratio"
+    elif not args.retain_icon_water_for_research:
         state = convert_water_to_hicar_mixing_ratios(state)
         water_representation = "dry-air mixing ratio"
     supplemental = load_valid_time_inputs(
@@ -231,6 +259,7 @@ def _transform(args: argparse.Namespace) -> int:
         allow_unprojected_wind=args.research_unprojected_wind,
         supplemental_fields=supplemental,
         water_representation=water_representation,
+        balance_certificate=balance_certificate,
     )
     with netCDF4.Dataset(args.static) as static:
         x = np.asarray(static["x"][:])
@@ -246,6 +275,7 @@ def _transform(args: argparse.Namespace) -> int:
         water_representation=water_representation,
         allow_unbalanced_state=args.research_unprojected_wind,
         include_lateral_w=args.lbc_w_policy == "relax",
+        balance_certificate=balance_certificate,
     )
     manifest = {
         "schema": "hicarprep-manifest-v1",
@@ -256,8 +286,14 @@ def _transform(args: argparse.Namespace) -> int:
         "boundary": {"path": str(args.boundary), "sha256": sha256(args.boundary)},
         "product_set_identity": manifest_identity(args.initial, args.boundary),
         "diagnostics": diagnostics,
-        "hicar_pressure_adjustment": "NOT_APPLIED_RESEARCH_PRODUCT",
-        "wind_balance": "NOT_APPLIED_RESEARCH_PRODUCT",
+        "hicar_pressure_adjustment": (
+            "APPLIED_HICAR_NATIVE" if balance_certificate else "NOT_APPLIED_RESEARCH_PRODUCT"
+        ),
+        "wind_balance": (
+            "APPLIED_HICAR_ADJOINT_VARIATIONAL_PROJECTION"
+            if balance_certificate
+            else "NOT_APPLIED_RESEARCH_PRODUCT"
+        ),
         "water_representation": water_representation,
         "hicar_water_conversion": (
             "APPLIED_JOINT_ALL_WATER_SPECIES"
@@ -278,6 +314,15 @@ def _transform(args: argparse.Namespace) -> int:
             "path": str(args.vector_weights),
             "sha256": sha256(args.vector_weights),
         }
+    if args.balanced_state:
+        manifest["hicar_initialized_state"] = {
+            "path": str(args.balanced_state),
+            "sha256": sha256(args.balanced_state),
+        }
+        manifest["balance_certificate"] = {
+            "path": str(args.balance_certificate),
+            "sha256": sha256(args.balance_certificate),
+        }
     args.manifest.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=f".{args.manifest.name}.", suffix=".partial", dir=args.manifest.parent
@@ -289,6 +334,156 @@ def _transform(args: argparse.Namespace) -> int:
         os.replace(temporary, args.manifest)
     finally:
         temporary.unlink(missing_ok=True)
+    return 0
+
+
+def _certify_initialization(args: argparse.Namespace) -> int:
+    certificate = issue_balance_certificate(
+        args.initialized_state,
+        args.diagnostics,
+        maximum_hydrostatic_residual=args.maximum_hydrostatic_residual,
+    )
+    certificate.to_json(args.certificate)
+    print(json.dumps(certificate.__dict__, indent=2, sort_keys=True))
+    return 0
+
+
+def _publish_certified_initialization(args: argparse.Namespace) -> int:
+    state, metadata = load_hicar_initialized_state(args.initialized_state)
+    certificate = BalanceCertificate.from_json(args.balance_certificate)
+    certificate.validate(
+        state, valid_time=metadata["valid_time"], producer_commit=metadata["hicar_git"]
+    )
+    valid_time = metadata["valid_time"]
+    if not valid_time:
+        raise ValueError("HICAR initialized state lacks an unambiguous valid time")
+    weights = RBFWeights.read(args.weights)
+    with netCDF4.Dataset(args.static) as static:
+        missing = {name for name in ("x", "y", "lat", "lon") if name not in static.variables}
+        if missing:
+            raise ValueError(
+                f"certified publication static file lacks {sorted(missing)}"
+            )
+        x = np.asarray(static["x"][:], dtype=np.float64)
+        y = np.asarray(static["y"][:], dtype=np.float64)
+        static_lat = np.asarray(static["lat"][:], dtype=np.float64)
+        static_lon = np.asarray(static["lon"][:], dtype=np.float64)
+    target_shape = state["T"].shape[1:]
+    if x.shape != (target_shape[1],) or y.shape != (target_shape[0],):
+        raise ValueError("certified state and static x/y dimensions do not match")
+    if static_lat.shape != target_shape or static_lon.shape != target_shape:
+        raise ValueError("certified state and static latitude/longitude shapes do not match")
+    if not np.array_equal(state["lat"], static_lat) or not np.array_equal(
+        state["lon"], static_lon
+    ):
+        raise ValueError("certified state and static horizontal grids do not match exactly")
+    if weights.target_shape != target_shape or weights.target_fingerprint != grid_fingerprint(
+        static_lat, static_lon
+    ):
+        raise ValueError("certified static grid does not match the remapping weights")
+    diagnostics = {
+        "valid_time": valid_time,
+        "initialized_state_sha256": sha256(args.initialized_state),
+    }
+    write_initial_condition(
+        args.initial,
+        state,
+        diagnostics,
+        static_path=args.static,
+        weights=weights,
+        water_representation="dry-air mixing ratio",
+        balance_certificate=certificate,
+    )
+    write_boundary_condition(
+        args.boundary,
+        state,
+        x=x,
+        y=y,
+        boundary_width_m=args.boundary_width_m,
+        initial_condition_path=args.initial,
+        valid_time=valid_time,
+        water_representation="dry-air mixing ratio",
+        include_lateral_w=args.lbc_w_policy == "relax",
+        balance_certificate=certificate,
+    )
+    manifest = {
+        "schema": "hicarprep-certified-publication-v1",
+        "valid_time": valid_time,
+        "initialized_state": {
+            "path": str(args.initialized_state),
+            "sha256": sha256(args.initialized_state),
+        },
+        "balance_certificate": {
+            "path": str(args.balance_certificate),
+            "sha256": sha256(args.balance_certificate),
+        },
+        "static": {"path": str(args.static), "sha256": sha256(args.static)},
+        "weights": {"path": str(args.weights), "sha256": sha256(args.weights)},
+        "initial": {"path": str(args.initial), "sha256": sha256(args.initial)},
+        "boundary": {"path": str(args.boundary), "sha256": sha256(args.boundary)},
+        "product_set_identity": manifest_identity(args.initial, args.boundary),
+        "lateral_w_policy": args.lbc_w_policy,
+    }
+    args.manifest.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{args.manifest.name}.", suffix=".partial", dir=args.manifest.parent
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(manifest, stream, indent=2, sort_keys=True)
+            stream.write("\n")
+        os.replace(temporary, args.manifest)
+    finally:
+        temporary.unlink(missing_ok=True)
+    print(json.dumps(manifest, indent=2, sort_keys=True))
+    return 0
+
+
+def _run_hicar_initialization(args: argparse.Namespace) -> int:
+    args.certificate.unlink(missing_ok=True)
+    Path(f"{args.certificate}.ready").unlink(missing_ok=True)
+    args.diagnostics.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{args.diagnostics.name}.", suffix=".partial", dir=args.diagnostics.parent
+    )
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    temporary.unlink()
+    before = args.initialized_state.stat().st_mtime_ns if args.initialized_state.exists() else None
+    command: list[str]
+    if args.mpi_ranks > 0:
+        launcher = args.mpiexec or (Path(found) if (found := shutil.which("mpiexec")) else None)
+        if launcher is None:
+            raise RuntimeError("mpiexec is required when --mpi-ranks is positive")
+        command = [str(launcher), "-n", str(args.mpi_ranks)]
+    else:
+        command = []
+    command.extend(
+        [str(args.hicar_executable), "--initialize-only", str(args.namelist)]
+    )
+    environment = os.environ.copy()
+    environment["HICAR_INITIALIZATION_DIAGNOSTICS"] = str(temporary)
+    environment["HICAR_WIND_ADJOINT_PROJECTION"] = "1"
+    try:
+        subprocess.run(command, check=True, env=environment)
+        if not temporary.exists():
+            raise RuntimeError("HICAR did not emit initialization diagnostics")
+        if not args.initialized_state.exists():
+            raise RuntimeError("HICAR did not write the requested initialized state")
+        after = args.initialized_state.stat().st_mtime_ns
+        if before is not None and after == before:
+            raise RuntimeError("initialized state was not refreshed by this HICAR run")
+        certificate = issue_balance_certificate(
+            args.initialized_state,
+            temporary,
+            maximum_hydrostatic_residual=args.maximum_hydrostatic_residual,
+        )
+        os.replace(temporary, args.diagnostics)
+        certificate.to_json(args.certificate)
+    finally:
+        temporary.unlink(missing_ok=True)
+    print(json.dumps(certificate.__dict__, indent=2, sort_keys=True))
     return 0
 
 
@@ -458,7 +653,7 @@ def parser() -> argparse.ArgumentParser:
         "--lbc-w-policy",
         choices=("diagnose", "relax"),
         default="diagnose",
-        help="omit W for model-side diagnosis, or store projected interface W for relaxation",
+        help="omit W for model-side diagnosis, or store the supplied projected W for relaxation",
     )
     transform.add_argument(
         "--surface-state",
@@ -480,7 +675,68 @@ def parser() -> argparse.ArgumentParser:
         action="store_true",
         help="write a marked research state before shared HICAR pressure/wind balance operators",
     )
+    transform.add_argument(
+        "--balanced-state",
+        type=Path,
+        help="time-zero output from HICAR --initialize-only, replacing the provisional state",
+    )
+    transform.add_argument(
+        "--balance-certificate",
+        type=Path,
+        help="certificate bound to --balanced-state and HICAR's native initialization operators",
+    )
     transform.set_defaults(func=_transform)
+
+    certify = commands.add_parser(
+        "certify-initialization",
+        help="validate HICAR time-zero output and issue a state-bound balance certificate",
+    )
+    certify.add_argument("--initialized-state", type=Path, required=True)
+    certify.add_argument("--diagnostics", type=Path, required=True)
+    certify.add_argument("--certificate", type=Path, required=True)
+    certify.add_argument("--maximum-hydrostatic-residual", type=float, default=5.0e-3)
+    certify.set_defaults(func=_certify_initialization)
+
+    publish = commands.add_parser(
+        "publish-certified-initialization",
+        help="publish exact-staggered IC/LBC products from a certified HICAR time-zero state",
+    )
+    publish.add_argument("--initialized-state", type=Path, required=True)
+    publish.add_argument("--balance-certificate", type=Path, required=True)
+    publish.add_argument("--static", type=Path, required=True)
+    publish.add_argument("--weights", type=Path, required=True)
+    publish.add_argument("--initial", type=Path, required=True)
+    publish.add_argument("--boundary", type=Path, required=True)
+    publish.add_argument("--manifest", type=Path, required=True)
+    publish.add_argument("--boundary-width-m", type=float, default=10_000.0)
+    publish.add_argument(
+        "--lbc-w-policy", choices=("diagnose", "relax"), default="diagnose"
+    )
+    publish.set_defaults(func=_publish_certified_initialization)
+
+    initialize = commands.add_parser(
+        "run-hicar-initialization",
+        help="run HICAR's shared initialization-only path and certify its time-zero output",
+    )
+    initialize.add_argument("--hicar-executable", type=Path, required=True)
+    initialize.add_argument("--namelist", type=Path, required=True)
+    initialize.add_argument(
+        "--initialized-state",
+        type=Path,
+        required=True,
+        help="time-zero output path configured in the HICAR namelist",
+    )
+    initialize.add_argument("--diagnostics", type=Path, required=True)
+    initialize.add_argument("--certificate", type=Path, required=True)
+    initialize.add_argument("--mpiexec", type=Path)
+    initialize.add_argument(
+        "--mpi-ranks",
+        type=int,
+        default=2,
+        help="MPI ranks; use 0 to execute HICAR directly",
+    )
+    initialize.add_argument("--maximum-hydrostatic-residual", type=float, default=5.0e-3)
+    initialize.set_defaults(func=_run_hicar_initialization)
     return result
 
 

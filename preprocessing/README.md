@@ -158,6 +158,48 @@ python scripts/hicarprep.py transform \
   --research-unprojected-wind
 ```
 
+For model-ready publication, configure HICAR's time-zero output to include
+`u`, `v`, `w_grid`, `temperature`, `potential_temperature`, `pressure`, `qv`,
+`qc`, `qi`, `density`, `z`, `z_i`, `lat`, and `lon`; include `qr`, `qs`, and
+`qg` when present. Then run the same cold-start path the model uses without
+taking a time step:
+
+```bash
+python scripts/hicarprep.py run-hicar-initialization \
+  --hicar-executable HICAR/bin/HICAR \
+  --namelist hicar_initialization.nml \
+  --initialized-state hicar_out_2020-01-01_00-00.nc \
+  --diagnostics hicar_initialization_diagnostics.json \
+  --certificate hicar_balance_certificate.json
+```
+
+`run-hicar-initialization` invokes `HICAR --initialize-only`, captures the
+shared initialization core's structured diagnostics, rejects stale output,
+checks exact native U/V/W staggering, independently evaluates the moist
+discrete hydrostatic residual (including the loading of every present water
+species), and enforces the wind matrix and continuity relative-residual
+limits. The resulting certificate hashes the complete canonical atmospheric
+state. Publish that exact state directly, without
+repeating the provisional ICON transform:
+
+```bash
+python scripts/hicarprep.py publish-certified-initialization \
+  --initialized-state hicar_out_2020-01-01_00-00.nc \
+  --balance-certificate hicar_balance_certificate.json \
+  --static hicar_static_d01.nc \
+  --weights hicar_weights.nc \
+  --initial hicar_input_d01_20200101T000000.nc \
+  --boundary hicar_bdy_d01_20200101T000000.nc \
+  --manifest hicarprep_publication.json
+```
+
+The publisher revalidates the full-state fingerprint and every residual gate,
+preserves native U and V face staggering in both the IC and separate sparse
+face frames in the LBC, and writes the IC/LBC pair plus an atomic identity
+manifest. `certify-initialization` is also available when HICAR was launched
+separately. The older `transform --balanced-state --balance-certificate` route
+remains available when one combined source-to-publication manifest is needed.
+
 The native adapter contract uses `cell`, `level`, and `half_level` dimensions;
 `clat`, `clon`, `HHL`, `T`, `P`, `QV`, `W`; and either earth-relative `U/V` or
 `VN` with edge coordinates and edge-normal basis vectors. `HHL.level_order`
@@ -198,19 +240,16 @@ snapshot to carry a matching HICAR balance certificate.
 
 The default lateral-W policy is `diagnose`, matching the common COSMO
 free-slip treatment. Use `--lbc-w-policy=relax` only after HICAR owns and
-validates projected interface W at the sparse boundary.
+validates its native projected W at the sparse boundary.
 
-## Intentional publication gate
+## Publication gate
 
-The final flag in the example is required only because this is presently a
-research integration path. The Python implementation constructs a continuously
-hydrostatic state and the terrain lower condition for physical W. It does not
-duplicate HICAR's own pressure-adjustment path or variational wind solver.
-It also does not yet place U/V on exact HICAR faces. Normal IC and LBC
-publication therefore fail until these are exposed as shared initialization
-operators. The explicit
-`--research-unprojected-wind` option exists only for analytic and integration
-testing; files produced with it carry
+The Python-only transform constructs a continuously hydrostatic provisional
+state and the terrain lower condition for physical W. It deliberately does
+not duplicate HICAR's pressure-adjustment or variational wind solver. Normal IC
+and LBC publication therefore requires the time-zero HICAR state and its
+matching certificate. The explicit `--research-unprojected-wind` option exists
+only for analytic and integration testing; files produced with it carry
 `hicar_pressure_adjustment=NOT_APPLIED_RESEARCH_PRODUCT` and
 `wind_balance=NOT_APPLIED_RESEARCH_PRODUCT`.
 They are not model-ready products.
@@ -234,9 +273,9 @@ directly at an unsplit static file. The research-only
 map used before its validity epoch, and records that exception in both the
 surface and assembled HICAR runtime products.
 HICAR's reader has not yet been changed to bracket the timestamped sparse LBC
-snapshots. That reader and the shared balance/staggering core are
-model-readiness gates for the new atmospheric IC/LBC format, not implicit
-behavior of the research files.
+snapshots. That reader remains the model-readiness gate for multi-time forcing;
+the certificate proves initialization of an individual state, not runtime LBC
+ingestion or interpolation.
 
 Soil-water conservation is deliberately not an acceptance criterion. Soil
 state remains initial-only and must instead be finite, mask-consistent, and

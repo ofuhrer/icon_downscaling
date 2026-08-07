@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -9,6 +10,7 @@ import netCDF4
 
 ROOT = Path(__file__).resolve().parents[1]
 RENDERER = ROOT / "case_studies" / "swiss_200m" / "scripts" / "render_hicar_namelist.py"
+GPU_WRAPPER = ROOT / "case_studies" / "swiss_200m" / "scripts" / "gpu_rank_wrapper.sh"
 
 
 def _forcing(path: Path, hour: int) -> None:
@@ -63,6 +65,10 @@ def test_renderer_selects_four_layer_noahmp_texture(tmp_path: Path) -> None:
     assert "soiltexture_var = 'soil_type_layer'" in rendered
     assert "nmp_opt_soil = 2" in rendered
     assert "ice_category = 24" in rendered
+    assert "'potential_temperature'" in rendered
+    assert "'z_i'" in rendered
+    assert "'qc'" in rendered
+    assert "'qi'" in rendered
 
 
 def test_renderer_rejects_missing_four_layer_texture(tmp_path: Path) -> None:
@@ -75,3 +81,26 @@ def test_renderer_rejects_missing_four_layer_texture(tmp_path: Path) -> None:
     result = _render(tmp_path, static, "--depth-varying-soil")
     assert result.returncode != 0
     assert "requires static variable soil_type_layer" in result.stderr
+
+
+def test_gpu_wrapper_preserves_initialize_only_arguments(tmp_path: Path) -> None:
+    numactl = tmp_path / "numactl"
+    numactl.write_text(
+        "#!/bin/sh\n"
+        "while [ \"$#\" -gt 0 ]; do\n"
+        "  case \"$1\" in --physcpubind=*|--membind=*) shift ;; *) exec \"$@\" ;; esac\n"
+        "done\n"
+    )
+    executable = tmp_path / "hicar"
+    executable.write_text("#!/bin/sh\nprintf '%s\\n' \"$@\"\n")
+    numactl.chmod(0o755)
+    executable.chmod(0o755)
+    environment = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "SLURM_LOCALID": "0"}
+    result = subprocess.run(
+        [str(GPU_WRAPPER), str(executable), "--initialize-only", "input.nml"],
+        env=environment,
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == ["--initialize-only", "input.nml"]

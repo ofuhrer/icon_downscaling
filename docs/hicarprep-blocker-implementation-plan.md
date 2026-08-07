@@ -20,6 +20,7 @@ downscaling. Every atmospheric timestamp is transformed directly from native
 | LBC research files could bypass the balance gate | IC and LBC writers now both refuse publication unless the explicit research override is used | Direct unbalanced LBC write fails |
 | Lateral W ownership was ambiguous | `--lbc-w-policy=diagnose` is the default; `relax` explicitly includes W | Product metadata records the selected policy |
 | COSMO runtime evidence was missing | The COSMO guide and `tmp/cosmo/cosmo` source were audited; exact references are incorporated in the main design | The obsolete source-gap claim is removed |
+| HICAR initialization was not callable or certifiable offline | Normal startup and `--initialize-only` now share `hicar_initialization_core`; HICAR emits structured wind-solver and conservation diagnostics, while hicarprep validates exact output staggering, independently gates discrete hydrostatic residual, and hashes the full state, valid time, producer commit, and residual limits into a certificate | Synthetic native-NetCDF tests cover transposition, U/V/W shapes, fingerprint binding, hydrostatic acceptance, and continuity rejection. Real 701x701x80 winter and summer REA-L states both completed on the GPU-NCCL path and certified; native-face IC/LBC publication also passed on the winter state |
 
 The final audit also closed three file-contract bugs found by end-to-end use:
 runtime assembly now uses a buffered fallback after GPFS `sendfile` errors;
@@ -43,28 +44,37 @@ transfer hypotheses.
 
 ## Remaining model-readiness work
 
-### 1. Expose one HICAR initialization core
+### 1. Extend the real-state envelope and qualify the hydrostatic threshold
 
-Move, without numerical duplication, the following existing HICAR operations
-behind a callable library plus a small offline driver:
+The shared core, initialization-only driver, diagnostics, certificate issuer,
+and certified writer path are implemented. Two independent retained
+ICON REA-L-CH1 states now pass end to end:
 
-1. map earth-relative wind to exact U/V face locations;
-2. convert the complete water basis and refresh EOS diagnostics;
-3. call HICAR's discrete pressure/temperature adjustment;
-4. impose lower/top W conditions and run the selected adjoint variational wind
-   projection;
-5. emit a balance certificate containing operator/version, residual norms,
-   staggering, and conservation diagnostics.
+- 2020-01-15 SMI: hydrostatic residual `4.1517e-4`, wind-matrix relative
+  residual `7.8683e-6`, and mass-continuity relative residual `3.4249e-6`;
+- 2020-07-02 SMI: hydrostatic residual `4.4217e-4`, wind-matrix relative
+  residual `5.9105e-6`, and mass-continuity relative residual `6.5628e-6`.
 
-The Python writer will accept only a certified state. The same certified
-full-domain state supplies both IC and LBC extraction. Acceptance requires a
-zero-time HICAR read/diagnose round trip, a bounded discrete hydrostatic
-residual, the existing wind-solver convergence gate, and exact IC/LBC equality
-where their supports overlap.
+Both used the exact same 701x701x80 initialization-only executable and passed
+the fixed wind gates. The winter state also passed exact-staggered IC/LBC
+publication with distinct mass, U-face, and V-face sparse frames. The next
+controlled experiment is to add an independently retained autumn/storm state
+and establish:
 
-This is the highest-priority blocker because WRF `real.exe`, int2lm/COSMO, and
-ICON all place target-model state construction after generic interpolation.
-Continuous Python hydrostatic integration remains an intermediate only.
+1. the observed discrete hydrostatic residual distribution and a defensible
+   tolerance (the current `5e-3` default is provisional, not a scientific
+   conclusion);
+2. wind solver status zero, matrix relative residual at most `1e-5`, and mass
+   continuity relative residual at most `2e-5`;
+3. bitwise atmospheric identity between the certified full state and the IC,
+   plus exact equality of IC/LBC values on each extracted support;
+4. failure on a changed value, missing staggered face, stale output, or
+   mismatched valid time.
+
+The two cases close the engineering execution blocker but do not justify
+tightening the provisional hydrostatic threshold or calling the path
+production-qualified. Continuous Python hydrostatic integration remains
+provisional input to HICAR's own cold start.
 
 ### 2. Implement the sparse two-record HICAR reader
 

@@ -33,7 +33,7 @@ def validate_boundary_sequence(
         raise ValueError("a bracketable lateral-boundary sequence requires at least two states")
     records: list[dict[str, object]] = []
     reference: dict[str, tuple[tuple[str, ...], tuple[int, ...]]] | None = None
-    reference_points: tuple[np.ndarray, np.ndarray] | None = None
+    reference_points: dict[str, np.ndarray] | None = None
     reference_contract: tuple[str, str, str, str] | None = None
     previous: dt.datetime | None = None
     intervals: list[float] = []
@@ -61,10 +61,11 @@ def validate_boundary_sequence(
             }
             if reference is None:
                 reference = schema
-                reference_points = (
-                    np.asarray(dataset["row"][:], dtype=np.int64),
-                    np.asarray(dataset["column"][:], dtype=np.int64),
-                )
+                reference_points = {
+                    name: np.asarray(dataset[name][:], dtype=np.int64)
+                    for name in ("row", "column", "u_row", "u_column", "v_row", "v_column")
+                    if name in dataset.variables
+                }
                 reference_contract = tuple(
                     str(getattr(dataset, name, ""))
                     for name in (
@@ -77,10 +78,9 @@ def validate_boundary_sequence(
             elif schema != reference:
                 raise ValueError(f"{path}: boundary variable schema changed across time")
             else:
-                if not np.array_equal(dataset["row"][:], reference_points[0]) or not np.array_equal(
-                    dataset["column"][:], reference_points[1]
-                ):
-                    raise ValueError(f"{path}: boundary point set changed across time")
+                for name, expected in reference_points.items():
+                    if not np.array_equal(dataset[name][:], expected):
+                        raise ValueError(f"{path}: {name} point set changed across time")
                 contract = tuple(
                     str(getattr(dataset, name, ""))
                     for name in (
@@ -93,7 +93,7 @@ def validate_boundary_sequence(
                 if contract != reference_contract:
                     raise ValueError(f"{path}: boundary operator contract changed across time")
             for name, variable in dataset.variables.items():
-                if name in {"row", "column"}:
+                if name in {"row", "column", "u_row", "u_column", "v_row", "v_column"}:
                     continue
                 values = np.asarray(np.ma.asarray(variable[:]).filled(np.nan))
                 if values.dtype.kind in {"f", "c"} and not np.isfinite(values).all():

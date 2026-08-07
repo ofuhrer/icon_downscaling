@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -9,8 +10,17 @@ from unittest import mock
 import netCDF4
 import numpy as np
 
-from preprocessing.hicarprep.balance import BalanceCertificate, state_fingerprint
+from preprocessing.hicarprep.balance import (
+    BalanceCertificate,
+    PRESSURE_OPERATOR,
+    STAGGERING,
+    WIND_OPERATOR,
+    issue_balance_certificate,
+    load_hicar_initialized_state,
+    state_fingerprint,
+)
 from preprocessing.hicarprep.boundary import validate_boundary_sequence
+from preprocessing.hicarprep.cli import parser as hicarprep_parser
 from preprocessing.hicarprep.geometry import SleveConfig, build_sleve_geometry
 from preprocessing.hicarprep.external import append_epoch, evaluate_external_fields
 from preprocessing.hicarprep.pipeline import (
@@ -35,6 +45,7 @@ from preprocessing.hicarprep.remap import (
     build_rbf_weights,
     build_vector_rbf_weights,
     coordinates_in_degrees,
+    grid_fingerprint,
     reconstruct_vector_from_normals,
 )
 from preprocessing.hicarprep.vertical import (
@@ -409,17 +420,236 @@ class ProductPipelineTests(unittest.TestCase):
         state = {"T": np.array([[[280.0]]]), "P": np.array([[[90_000.0]]])}
         certificate = BalanceCertificate(
             state_fingerprint=state_fingerprint(state),
-            pressure_operator="HICAR::domain_obj.adjust_pressure",
-            wind_operator="HICAR::wind.adjoint_variational_projection",
-            staggering="HICAR_C_GRID_MASS_U_V_INTERFACE",
+            pressure_operator=PRESSURE_OPERATOR,
+            wind_operator=WIND_OPERATOR,
+            staggering=STAGGERING,
             maximum_discrete_hydrostatic_residual=1.0e-8,
+            hydrostatic_residual_tolerance=1.0e-6,
+            maximum_wind_matrix_relative_residual=1.0e-9,
             maximum_mass_continuity_residual=1.0e-9,
+            valid_time="2020-01-01T00:00:00Z",
             producer_commit="deadbeef",
         )
         certificate.validate(state)
         changed = {**state, "T": state["T"] + 1.0}
         with self.assertRaisesRegex(ValueError, "does not belong"):
             certificate.validate(changed)
+
+    def test_hicar_native_state_is_transposed_staggered_and_certified(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            state_path = root / "initialized.nc"
+            diagnostics_path = root / "diagnostics.json"
+            certificate_path = root / "certificate.json"
+            levels, ny, nx = 3, 2, 2
+            hfl = np.broadcast_to(
+                np.array([100.0, 300.0, 600.0])[:, None, None], (levels, ny, nx)
+            ).copy()
+            hhl = np.broadcast_to(
+                np.array([0.0, 200.0, 450.0, 750.0])[:, None, None],
+                (levels + 1, ny, nx),
+            ).copy()
+            temperature = np.full((levels, ny, nx), 280.0)
+            qv = np.full((levels, ny, nx), 0.005)
+            qc = np.full((levels, ny, nx), 0.001)
+            qi = np.full((levels, ny, nx), 0.002)
+            epsilon = 287.05 / 461.5
+            total_water = 0.005 + 0.001 + 0.002
+            tv = 280.0 * (1.0 + 0.005 / epsilon) / (1.0 + total_water)
+            pressure = 100_000.0 * np.exp(-9.80665 * hfl / (287.05 * tv))
+            theta = temperature / (pressure / 100_000.0) ** 0.2857
+            density = (
+                pressure
+                / (287.05 * temperature)
+                * (1.0 + total_water)
+                / (1.0 + qv / epsilon)
+            )
+            lat = np.array([[46.0, 46.0], [46.01, 46.01]])
+            lon = np.array([[7.0, 7.01], [7.0, 7.01]])
+
+            def write_3d(dataset, name, canonical, dimensions):
+                variable = dataset.createVariable(name, "f8", dimensions)
+                payload = np.transpose(canonical, (2, 0, 1))
+                variable[:] = payload[..., None] if "time" in dimensions else payload
+
+            with netCDF4.Dataset(state_path, "w") as dataset:
+                for name, size in {
+                    "lon_x": nx,
+                    "lon_u": nx + 1,
+                    "level": levels,
+                    "level_i": levels + 1,
+                    "lat_y": ny,
+                    "lat_v": ny + 1,
+                    "time": 1,
+                }.items():
+                    dataset.createDimension(name, size)
+                for name, values in {
+                    "temperature": temperature,
+                    "pressure": pressure,
+                    "qv": qv,
+                    "potential_temperature": theta,
+                    "density": density,
+                    "w_grid": np.zeros_like(temperature),
+                    "qc": qc,
+                    "qi": qi,
+                }.items():
+                    write_3d(dataset, name, values, ("lon_x", "level", "lat_y", "time"))
+                write_3d(
+                    dataset,
+                    "u",
+                    np.zeros((levels, ny, nx + 1)),
+                    ("lon_u", "level", "lat_y", "time"),
+                )
+                write_3d(
+                    dataset,
+                    "v",
+                    np.zeros((levels, ny + 1, nx)),
+                    ("lon_x", "level", "lat_v", "time"),
+                )
+                write_3d(dataset, "z", hfl, ("lon_x", "level", "lat_y"))
+                write_3d(dataset, "z_i", hhl, ("lon_x", "level_i", "lat_y"))
+                dataset.createVariable("lat", "f8", ("lon_x", "lat_y"))[:] = lat.T
+                dataset.createVariable("lon", "f8", ("lon_x", "lat_y"))[:] = lon.T
+                time = dataset.createVariable("time", "f8", ("time",))
+                time.units = "seconds since 2020-01-01 00:00:00"
+                time[:] = 0.432
+                dataset.git = "qualification/test-0-gdeadbeef"
+                dataset.git_tag = "deadbeef"
+
+            diagnostics_path.write_text(
+                json.dumps(
+                    {
+                        "schema": "hicar-initialization-diagnostics-v1",
+                        "pressure_operator": PRESSURE_OPERATOR,
+                        "wind_operator": WIND_OPERATOR,
+                        "staggering": STAGGERING,
+                        "wind_solver_status": 0,
+                        "wind_solver_iterations": 4,
+                        "wind_matrix_initial_residual": 1.0,
+                        "wind_matrix_final_residual": 1.0e-7,
+                        "wind_matrix_relative_residual": 1.0e-7,
+                        "mass_continuity_initial_norm2": 1.0,
+                        "mass_continuity_final_norm2": 4.0e-14,
+                        "mass_continuity_relative_residual": 2.0e-7,
+                        "passed": True,
+                        "producer_commit": "deadbeef",
+                    }
+                )
+            )
+            state, metadata = load_hicar_initialized_state(state_path)
+            self.assertEqual(state["U"].shape, (levels, ny, nx + 1))
+            self.assertEqual(state["V"].shape, (levels, ny + 1, nx))
+            self.assertEqual(state["W"].shape, (levels, ny, nx))
+            self.assertEqual(metadata["valid_time"], "2020-01-01T00:00:00Z")
+            certificate = issue_balance_certificate(
+                state_path, diagnostics_path, maximum_hydrostatic_residual=1.0e-10
+            )
+            certificate.to_json(certificate_path)
+            BalanceCertificate.from_json(certificate_path).validate(state)
+
+            static_path = root / "static.nc"
+            initial_path = root / "initial.nc"
+            boundary_path = root / "boundary.nc"
+            with netCDF4.Dataset(static_path, "w") as dataset:
+                dataset.createDimension("x", nx)
+                dataset.createDimension("y", ny)
+                dataset.createVariable("x", "f8", ("x",))[:] = [0.0, 200.0]
+                dataset.createVariable("y", "f8", ("y",))[:] = [0.0, 200.0]
+                dataset.createVariable("lat", "f8", ("y", "x"))[:] = lat
+                dataset.createVariable("lon", "f8", ("y", "x"))[:] = lon
+            weights = RBFWeights(
+                donor_index=np.zeros((ny * nx, 1), dtype=np.int64),
+                weight=np.ones((ny * nx, 1)),
+                target_shape=(ny, nx),
+                source_fingerprint="source",
+                target_fingerprint=grid_fingerprint(lat, lon),
+            )
+            weights_path = root / "weights.nc"
+            weights.write(weights_path)
+            write_initial_condition(
+                initial_path,
+                state,
+                {"valid_time": metadata["valid_time"]},
+                static_path=static_path,
+                weights=weights,
+                balance_certificate=certificate,
+                water_representation="dry-air mixing ratio",
+            )
+            write_boundary_condition(
+                boundary_path,
+                state,
+                x=np.array([0.0, 200.0]),
+                y=np.array([0.0, 200.0]),
+                boundary_width_m=1.0,
+                initial_condition_path=initial_path,
+                valid_time=metadata["valid_time"],
+                include_lateral_w=True,
+                balance_certificate=certificate,
+                water_representation="dry-air mixing ratio",
+            )
+            rows, cols = boundary_point_indices(
+                np.array([0.0, 200.0]), np.array([0.0, 200.0]), 1.0
+            )
+            with (
+                netCDF4.Dataset(initial_path) as initial,
+                netCDF4.Dataset(boundary_path) as boundary,
+            ):
+                self.assertEqual(initial["U"].dimensions, ("level", "y", "x_u"))
+                self.assertEqual(initial["V"].dimensions, ("level", "y_v", "x"))
+                self.assertEqual(initial["W"].dimensions, ("level", "y", "x"))
+                for name in ("T", "P", "QV", "QC", "QI", "W", "THETA", "RHO", "HFL"):
+                    np.testing.assert_array_equal(boundary[name][:], state[name][:, rows, cols])
+                np.testing.assert_array_equal(boundary["HHL"][:], state["HHL"][:, rows, cols])
+                u_rows = np.asarray(boundary["u_row"][:], dtype=np.int64)
+                u_cols = np.asarray(boundary["u_column"][:], dtype=np.int64)
+                v_rows = np.asarray(boundary["v_row"][:], dtype=np.int64)
+                v_cols = np.asarray(boundary["v_column"][:], dtype=np.int64)
+                self.assertEqual(boundary["U"].dimensions, ("level", "u_boundary_point"))
+                self.assertEqual(boundary["V"].dimensions, ("level", "v_boundary_point"))
+                np.testing.assert_array_equal(boundary["U"][:], state["U"][:, u_rows, u_cols])
+                np.testing.assert_array_equal(boundary["V"][:], state["V"][:, v_rows, v_cols])
+
+            published_initial = root / "published_initial.nc"
+            published_boundary = root / "published_boundary.nc"
+            publication_manifest = root / "publication.json"
+            arguments = hicarprep_parser().parse_args(
+                [
+                    "publish-certified-initialization",
+                    "--initialized-state",
+                    str(state_path),
+                    "--balance-certificate",
+                    str(certificate_path),
+                    "--static",
+                    str(static_path),
+                    "--weights",
+                    str(weights_path),
+                    "--initial",
+                    str(published_initial),
+                    "--boundary",
+                    str(published_boundary),
+                    "--manifest",
+                    str(publication_manifest),
+                    "--boundary-width-m",
+                    "1",
+                    "--lbc-w-policy",
+                    "relax",
+                ]
+            )
+            self.assertEqual(arguments.func(arguments), 0)
+            self.assertTrue(publication_manifest.is_file())
+            with netCDF4.Dataset(published_boundary) as published:
+                self.assertEqual(published["U"].dimensions, ("level", "u_boundary_point"))
+                self.assertEqual(published["V"].dimensions, ("level", "v_boundary_point"))
+                self.assertIn("W", published.variables)
+
+            changed_diagnostics = json.loads(diagnostics_path.read_text())
+            changed_diagnostics["mass_continuity_relative_residual"] = 3.0e-5
+            changed_diagnostics["mass_continuity_final_norm2"] = (3.0e-5) ** 2
+            diagnostics_path.write_text(json.dumps(changed_diagnostics))
+            with self.assertRaisesRegex(ValueError, "mass-continuity"):
+                issue_balance_certificate(
+                    state_path, diagnostics_path, maximum_hydrostatic_residual=1.0e-10
+                )
 
     def test_boundary_sequence_requires_strict_bracketing_and_fixed_schema(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

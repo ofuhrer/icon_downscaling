@@ -1,0 +1,93 @@
+{
+  "schema": "hicar-initialization-gate-v1",
+  "status": "pass_engineering_milestone",
+  "qualification_root": "/scratch/mch/olifu/icon_hicar/qualification/initialization-core-v1",
+  "source": {
+    "local_hicar_commit": "c8802a92",
+    "balfrin_snapshot_commit": "0f0a20f8965d8b1646f8e9dcc36c025abb9b188a",
+    "build_job": "5040300",
+    "build_variant": "gpu-nccl",
+    "executable_sha256": "1ab22cf26a77cbd53783ffee9109c2ba8b616402094e4a4bea742eb14ff1dcc0"
+  },
+  "fixed_gates": {
+    "hydrostatic_residual_tolerance": 0.005,
+    "hydrostatic_residual_definition": "layerwise log-pressure residual using condensate-loaded virtual temperature with QV, QC, QI and optional QR, QS, QG",
+    "mass_continuity_relative_tolerance": 2e-05,
+    "wind_matrix_relative_tolerance": 1e-05
+  },
+  "required_state_fields": [
+    "T",
+    "P",
+    "QV",
+    "QC",
+    "QI",
+    "U",
+    "V",
+    "W",
+    "THETA",
+    "RHO",
+    "HFL",
+    "HHL",
+    "lat",
+    "lon"
+  ],
+  "cases": [
+    {
+      "valid_time": "2020-01-15T00:00:00Z",
+      "soil_water_method": "smi",
+      "job": "5040323",
+      "certification_job": "5040345",
+      "job_state": "COMPLETED",
+      "elapsed": "00:01:46",
+      "state_path": "/scratch/mch/olifu/icon_hicar/qualification/initialization-core-v1/runs/20200115_smi/output/hicar_runtime_domain_smi_20200115_0000_2020-01-15_00-00-00.nc",
+      "state_size_bytes": 2702060017,
+      "state_sha256": "a24c885f49d5d4ec1b42f22ecd85509aa6888fa7c376d8740f6ecf94fd7a9763",
+      "state_fingerprint": "0990a14d7fcd3f249426cd954f3ee69a48bdb34ff65e230903ae2c10d66bdc32",
+      "diagnostics_sha256": "388c25b2c15768c4249f255df34975e337e441adf10d8a495c5d51facdc3d465",
+      "certificate_sha256": "abcee9a6090799f2d27efe5cce9e2ae66eb396b5419d1d1cd81c915462638820",
+      "maximum_discrete_hydrostatic_residual": 0.00041516525067591264,
+      "maximum_wind_matrix_relative_residual": 7.86826855634824e-06,
+      "maximum_mass_continuity_residual": 3.4248801705053774e-06
+    },
+    {
+      "valid_time": "2020-07-02T00:00:00Z",
+      "soil_water_method": "smi",
+      "job": "5040324",
+      "certification_job": "5040346",
+      "job_state": "COMPLETED",
+      "elapsed": "00:01:45",
+      "state_path": "/scratch/mch/olifu/icon_hicar/qualification/initialization-core-v1/runs/20200702_smi/output/hicar_runtime_domain_smi_20200702_0000_2020-07-02_00-00-00.nc",
+      "state_size_bytes": 2702060017,
+      "state_sha256": "ec510ad8b09835155bfeb2aa0d51adf3f507b549944c52b4769b422450e8aa15",
+      "state_fingerprint": "95aebd6c2e9b7ba3be379feb782349b38a09d502d62dbf4adf0b8c6b219e8c5a",
+      "diagnostics_sha256": "fcb27664a43e56834ec85d4f82fb9caca8b0d97dd0e0587fc0986cef4a8764e0",
+      "certificate_sha256": "6fcecd42f43808f91da6db26596acb10d235bf6a2a9a70486c9b416ddd88d30e",
+      "maximum_discrete_hydrostatic_residual": 0.0004421655048844411,
+      "maximum_wind_matrix_relative_residual": 5.9105066252087845e-06,
+      "maximum_mass_continuity_residual": 6.5627946891753746e-06
+    }
+  ],
+  "publication": {
+    "job": "5040347",
+    "job_state": "COMPLETED",
+    "elapsed": "00:00:52",
+    "source_case": "2020-01-15T00:00:00Z",
+    "lateral_w_policy": "relax_projected_native_w",
+    "mass_boundary_points": 132600,
+    "u_boundary_points": 132702,
+    "v_boundary_points": 132702,
+    "initial_sha256": "86ad325e4a66ede0167e46d7f8cdb94bee12f9566bbfe4f86d309b5732827aca",
+    "boundary_sha256": "209fbe438fc0c583834103f5f49104fc370b5e82b7b7884f4f061c9de5003028",
+    "manifest_sha256": "1a260932b86fd183b9eafa4c89c9a20e11e203abe172855be5db15da9126685c",
+    "product_set_identity": "1f6e6ff09c1c0693adfecad873fad02c7494d7717c4d741f9c8843a262df2f67"
+  },
+  "local_verification": {
+    "python_tests": "451 passed, 1 warning",
+    "hicar_wind_iterative_tests": "8 passed"
+  },
+  "limitations": [
+    "The 5e-3 hydrostatic gate remains provisional; two cases do not establish a production distribution.",
+    "An independent autumn or storm regime is still needed before tightening that gate.",
+    "The sparse two-record LBC runtime reader and turnover interpolation are not implemented."
+  ]
+}

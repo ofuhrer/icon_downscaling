@@ -381,10 +381,16 @@ def transform_icon_state(
     return state, diagnostics
 
 
-def _state_dimensions(name: str) -> tuple[str, ...]:
+def _state_dimensions(
+    name: str, value: np.ndarray, *, levels: int, ny: int, nx: int
+) -> tuple[str, ...]:
     if name in {"lat", "lon", "terrain_difference"}:
         return ("y", "x")
-    if name in {"W", "HHL"}:
+    if name == "U" and value.shape == (levels, ny, nx + 1):
+        return ("level", "y", "x_u")
+    if name == "V" and value.shape == (levels, ny + 1, nx):
+        return ("level", "y_v", "x")
+    if name == "HHL" or (name == "W" and value.shape[0] == levels + 1):
         return ("half_level", "y", "x")
     return ("level", "y", "x")
 
@@ -403,7 +409,7 @@ def write_initial_condition(
 ) -> None:
     """Write a certified target IC or an explicitly marked research product."""
     if balance_certificate is not None:
-        balance_certificate.validate(state)
+        balance_certificate.validate(state, valid_time=str(diagnostics["valid_time"]))
     elif not allow_unprojected_wind:
         raise RuntimeError(
             "HICAR pressure adjustment and variational wind projection have not been applied; "
@@ -422,9 +428,20 @@ def write_initial_condition(
             dataset.createDimension("x", nx)
             dataset.createDimension("y", ny)
             dataset.createDimension("level", state["T"].shape[0])
-            dataset.createDimension("half_level", state["W"].shape[0])
+            dataset.createDimension("half_level", state["HHL"].shape[0])
+            if state.get("U", np.empty(0)).shape == (state["T"].shape[0], ny, nx + 1):
+                dataset.createDimension("x_u", nx + 1)
+            if state.get("V", np.empty(0)).shape == (state["T"].shape[0], ny + 1, nx):
+                dataset.createDimension("y_v", ny + 1)
             for name, value in state.items():
-                variable = dataset.createVariable(name, "f8", _state_dimensions(name), zlib=True)
+                variable = dataset.createVariable(
+                    name,
+                    "f8",
+                    _state_dimensions(
+                        name, np.asarray(value), levels=state["T"].shape[0], ny=ny, nx=nx
+                    ),
+                    zlib=True,
+                )
                 variable[:] = value
             for name, field in (supplemental_fields or {}).items():
                 if name in dataset.variables:
@@ -484,6 +501,12 @@ def write_initial_condition(
                 dataset.maximum_discrete_hydrostatic_residual = (
                     balance_certificate.maximum_discrete_hydrostatic_residual
                 )
+                dataset.hydrostatic_residual_tolerance = (
+                    balance_certificate.hydrostatic_residual_tolerance
+                )
+                dataset.maximum_wind_matrix_relative_residual = (
+                    balance_certificate.maximum_wind_matrix_relative_residual
+                )
                 dataset.maximum_mass_continuity_residual = (
                     balance_certificate.maximum_mass_continuity_residual
                 )
@@ -505,6 +528,17 @@ def boundary_point_indices(
     return np.nonzero(distance <= width_m + 1.0e-6)
 
 
+def _face_coordinates(centres: np.ndarray) -> np.ndarray:
+    values = np.asarray(centres, dtype=np.float64)
+    if values.ndim != 1 or values.size < 2 or not np.all(np.diff(values) > 0.0):
+        raise ValueError("staggered boundary extraction requires increasing 1-D coordinates")
+    faces = np.empty(values.size + 1, dtype=np.float64)
+    faces[1:-1] = 0.5 * (values[:-1] + values[1:])
+    faces[0] = values[0] - 0.5 * (values[1] - values[0])
+    faces[-1] = values[-1] + 0.5 * (values[-1] - values[-2])
+    return faces
+
+
 def write_boundary_condition(
     path: Path,
     state: dict[str, np.ndarray],
@@ -521,13 +555,24 @@ def write_boundary_condition(
 ) -> None:
     """Extract a sparse physical-distance frame from the identically transformed state."""
     if balance_certificate is not None:
-        balance_certificate.validate(state)
+        balance_certificate.validate(state, valid_time=str(valid_time))
     elif not allow_unbalanced_state:
         raise RuntimeError(
             "HICAR pressure adjustment and variational wind projection have not been applied; "
             "lateral-boundary publication is blocked"
         )
     rows, cols = boundary_point_indices(x, y, boundary_width_m)
+    levels, ny, nx = state["T"].shape
+    native_u = state.get("U", np.empty(0)).shape == (levels, ny, nx + 1)
+    native_v = state.get("V", np.empty(0)).shape == (levels, ny + 1, nx)
+    if native_u:
+        u_rows, u_cols = boundary_point_indices(
+            _face_coordinates(np.asarray(x)), np.asarray(y), boundary_width_m
+        )
+    if native_v:
+        v_rows, v_cols = boundary_point_indices(
+            np.asarray(x), _face_coordinates(np.asarray(y)), boundary_width_m
+        )
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=f".{path.name}.", suffix=".partial", dir=path.parent
@@ -537,17 +582,33 @@ def write_boundary_condition(
     try:
         with netCDF4.Dataset(temporary, "w") as dataset:
             dataset.createDimension("boundary_point", rows.size)
-            dataset.createDimension("level", state["T"].shape[0])
-            dataset.createDimension("half_level", state["W"].shape[0])
+            dataset.createDimension("level", levels)
+            dataset.createDimension("half_level", state["HHL"].shape[0])
             dataset.createVariable("row", "i4", ("boundary_point",))[:] = rows
             dataset.createVariable("column", "i4", ("boundary_point",))[:] = cols
+            if native_u:
+                dataset.createDimension("u_boundary_point", u_rows.size)
+                dataset.createVariable("u_row", "i4", ("u_boundary_point",))[:] = u_rows
+                dataset.createVariable("u_column", "i4", ("u_boundary_point",))[:] = u_cols
+            if native_v:
+                dataset.createDimension("v_boundary_point", v_rows.size)
+                dataset.createVariable("v_row", "i4", ("v_boundary_point",))[:] = v_rows
+                dataset.createVariable("v_column", "i4", ("v_boundary_point",))[:] = v_cols
             for name, value in state.items():
                 if name == "W" and not include_lateral_w:
                     continue
                 if name in {"lat", "lon", "terrain_difference"}:
                     dimensions = ("boundary_point",)
                     payload = value[rows, cols]
-                elif name in {"W", "HHL"}:
+                elif name == "U" and native_u:
+                    dimensions = ("level", "u_boundary_point")
+                    payload = value[:, u_rows, u_cols]
+                elif name == "V" and native_v:
+                    dimensions = ("level", "v_boundary_point")
+                    payload = value[:, v_rows, v_cols]
+                elif name == "HHL" or (
+                    name == "W" and value.shape[0] != levels
+                ):
                     dimensions = ("half_level", "boundary_point")
                     payload = value[:, rows, cols]
                 else:
@@ -560,6 +621,9 @@ def write_boundary_condition(
             dataset.boundary_width_m = boundary_width_m
             dataset.initial_condition_sha256 = sha256(initial_condition_path)
             dataset.frame_definition = "distance_to_nearest_domain_edge <= boundary_width_m"
+            dataset.staggered_frame_definition = (
+                "U and V use their own extrapolated face-coordinate frames and index arrays"
+            )
             dataset.temporal_semantics = (
                 "instantaneous target-native state; runtime brackets consecutive valid times"
             )
@@ -579,13 +643,25 @@ def write_boundary_condition(
             )
             dataset.authoritative_temporal_basis = "T,P,U,V,QV,QC,QI and present QR,QS,QG; dependent diagnostics refreshed after interpolation"
             dataset.lateral_w_policy = (
-                "relax_projected_interface_w" if include_lateral_w else "diagnose_in_hicar"
+                "relax_projected_native_w" if include_lateral_w else "diagnose_in_hicar"
             )
             if balance_certificate:
                 dataset.balance_certificate_state_fingerprint = (
                     balance_certificate.state_fingerprint
                 )
                 dataset.balance_producer_commit = balance_certificate.producer_commit
+                dataset.maximum_discrete_hydrostatic_residual = (
+                    balance_certificate.maximum_discrete_hydrostatic_residual
+                )
+                dataset.hydrostatic_residual_tolerance = (
+                    balance_certificate.hydrostatic_residual_tolerance
+                )
+                dataset.maximum_wind_matrix_relative_residual = (
+                    balance_certificate.maximum_wind_matrix_relative_residual
+                )
+                dataset.maximum_mass_continuity_residual = (
+                    balance_certificate.maximum_mass_continuity_residual
+                )
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)

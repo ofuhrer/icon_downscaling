@@ -420,8 +420,10 @@ def main() -> int:
             "'ustar', 'surface_roughness', 'sfc_Ri', 'hpbl'"
         ),
         "engineering": (
-            "'u', 'v', 'w', 'w_grid', 'pressure', 'temperature', 'qv', "
-            "'density', 'z', 'jacobian', 'precipitation', 'psfc', 'psl'"
+            "'u', 'v', 'w', 'w_grid', 'pressure', 'temperature', "
+            "'potential_temperature', 'qv', 'qc', 'qi', 'qr', 'qs', 'qg', "
+            "'density', 'z', 'z_i', "
+            "'jacobian', 'precipitation', 'psfc', 'psl'"
         ),
     }
     values = {

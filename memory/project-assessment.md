@@ -43,7 +43,7 @@ resolution is not part of the question.
 The selected architectural direction is a greenfield, target-model-aware
 `hicarprep`, based on source review of WPS/WRF, int2lm, ICON, and EXTPAR. It is
 designed to transform native ICON profiles and HHL directly onto exact HICAR
-mass/U/V/interface locations, perform explicit coarse/fine-terrain profile
+mass and U/V columns plus HHL interfaces, perform explicit coarse/fine-terrain profile
 reconstruction, hydrostatically adjust the state with HICAR's discrete
 operator, apply the HICAR variational wind projection, and emit complete
 target-native IC and sparse LBC products from the same transformation.
@@ -65,12 +65,16 @@ only as a diagnostic control. This follows the actual int2lm dimensionless
 transfer policies and ICON's SMI-based nest transfer; it is not a claim that
 current evidence has selected SMI over relative saturation. All water species are jointly converted
 to HICAR's dry-air basis, cross-product land closure is checked, and ordered
-LBC sequences have a strict offline validator. Model-readiness still requires
-exposing exact HICAR staggering, pressure adjustment, and variational wind
-projection as shared initialization operators and implementing runtime
-bracketing for timestamped sparse LBC states. Both IC and LBC normal
-publication remain blocked; an explicitly marked research product is
-available only for tests. Operational REA-L soil/snow/skin GRIB decoding into
+LBC sequences have a strict offline validator. The shared cold-start core,
+`--initialize-only` driver, residual diagnostics, exact-staggering loader, and
+state/time/producer-bound certificate path are implemented. Independent winter
+and summer 701x701x80 REA-L states pass the real GPU-NCCL path, with maximum
+hydrostatic residuals `4.15e-4` and `4.42e-4`; both wind-matrix and continuity
+gates pass. A winter certified state also passes direct IC/LBC publication
+with separate mass, U-face, and V-face frames. This closes the engineering
+execution blocker, but the `5e-3` hydrostatic limit remains provisional pending
+a third regime and the runtime sparse-LBC reader remains unimplemented.
+Operational REA-L soil/snow/skin GRIB decoding into
 the canonical native-grid surface schema is implemented and exercised. Full
 atmospheric GRIB decoding remains an adapter into the strict canonical schema.
 

@@ -3,13 +3,14 @@
 set -euo pipefail
 
 exe=${1:?missing HICAR executable}
-nml=${2:?missing HICAR namelist}
+shift
+(( $# > 0 )) || { echo "missing HICAR arguments" >&2; exit 2; }
 local_id=${SLURM_LOCALID:?missing SLURM_LOCALID}
 export MPICH_GPU_SUPPORT_ENABLED=0 MPICH_GPU_MANAGED_MEMORY_SUPPORT_ENABLED=0
 
 if (( local_id == 4 )); then
   export CUDA_VISIBLE_DEVICES=
-  exec numactl --physcpubind=1 --membind=0 "$exe" "$nml"
+  exec numactl --physcpubind=1 --membind=0 "$exe" "$@"
 fi
 
 case "$local_id" in
@@ -20,4 +21,4 @@ case "$local_id" in
   *) echo "unexpected local rank: $local_id" >&2; exit 2 ;;
 esac
 export ACC_DEVICE_TYPE=nvidia ACC_DEVICE_NUM=0 CUDA_VISIBLE_DEVICES="$local_id"
-exec numactl --physcpubind="$cpu" --membind="$numa" "$exe" "$nml"
+exec numactl --physcpubind="$cpu" --membind="$numa" "$exe" "$@"
