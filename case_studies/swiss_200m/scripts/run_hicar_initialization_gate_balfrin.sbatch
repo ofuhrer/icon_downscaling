@@ -13,6 +13,7 @@
 #   HICAR_INITIALIZATION_COORDINATOR coordinator checkout containing hicarprep
 #   HICAR_INITIALIZATION_MAX_HYDROSTATIC_RESIDUAL (default 5e-3; provisional)
 #   HICAR_INITIALIZATION_FORCING_CACHE override for independent regimes
+#   HICAR_INITIALIZATION_CASE_TIME HHMM, exact hour (default 0000)
 #SBATCH --job-name=hicar-init-gate
 #SBATCH --partition=short
 #SBATCH --nodes=2
@@ -45,6 +46,7 @@ source_root=${HICAR_INITIALIZATION_SOURCE_ROOT:-$gate_root/source}
 coordinator=${HICAR_INITIALIZATION_COORDINATOR:-$gate_root/coordinator}
 renderer=${HICAR_INITIALIZATION_RENDERER:-$coordinator/case_studies/swiss_200m/scripts/render_hicar_namelist.py}
 date=${HICAR_INITIALIZATION_CASE_DATE:?Set HICAR_INITIALIZATION_CASE_DATE}
+time=${HICAR_INITIALIZATION_CASE_TIME:-0000}
 method=${HICAR_INITIALIZATION_SOIL_METHOD:?Set HICAR_INITIALIZATION_SOIL_METHOD}
 maximum_hydrostatic_residual=${HICAR_INITIALIZATION_MAX_HYDROSTATIC_RESIDUAL:-5e-3}
 
@@ -61,6 +63,10 @@ if test -z "$forcing_cache"; then
   esac
 fi
 case "$method" in smi|relative_saturation) ;; *) echo "unsupported method: $method" >&2; exit 2 ;; esac
+[[ "$time" =~ ^([01][0-9]|2[0-3])00$ ]] || {
+  echo "HICAR_INITIALIZATION_CASE_TIME must be an exact UTC hour (HH00)" >&2
+  exit 2
+}
 
 surface_root=${HICARPREP_SURFACE_ROOT:-$SCRATCH/icon_hicar/qualification/hicarprep_surface_cases_v11}
 static_file=$surface_root/$date/hicar_runtime_domain_${method}_${date}_0000.nc
@@ -68,7 +74,7 @@ exe=$build_root/HICAR_gpu
 wrapper=${HICAR_INITIALIZATION_GPU_WRAPPER:-$coordinator/case_studies/swiss_200m/scripts/gpu_rank_wrapper.sh}
 python_bin=$SCRATCH/icon_hicar/qualification/wind-spinup-morrison-b514/python-v2/bin/python
 hicarprep=$coordinator/scripts/hicarprep.py
-run=$gate_root/runs/${date}_${method}
+run=$gate_root/runs/${date}_${time}_${method}
 
 for path in "$static_file" "$static_file.ready" "$exe" "$wrapper" \
             "$renderer" "$python_bin" "$hicarprep"; do
@@ -81,8 +87,8 @@ fi
 mkdir -p "$run/output" "$run/restart"
 
 forcing_files=(
-  "$forcing_cache/rea_l_hicar_${date}_0000.nc"
-  "$forcing_cache/rea_l_hicar_${date}_0100.nc"
+  "$forcing_cache/rea_l_hicar_${date}_${time}.nc"
+  "$forcing_cache/rea_l_hicar_$(date -u -d "${date:0:4}-${date:4:2}-${date:6:2} ${time:0:2}:00:00 UTC + 1 hour" +%Y%m%d_%H%M).nc"
 )
 for path in "${forcing_files[@]}"; do
   test -s "$path" || { echo "missing cached forcing record: $path" >&2; exit 2; }
@@ -92,8 +98,8 @@ forcing_list=$run/forcing_list.txt
 printf '"%s"\n' "${forcing_files[@]}" > "$forcing_list"
 touch "$forcing_list.ready"
 
-start="${date:0:4}-${date:4:2}-${date:6:2} 00:00:00"
-end="${date:0:4}-${date:4:2}-${date:6:2} 01:00:00"
+start="${date:0:4}-${date:4:2}-${date:6:2} ${time:0:2}:00:00"
+end=$(date -u -d "$start UTC + 1 hour" '+%Y-%m-%d %H:%M:%S')
 "$python_bin" "$renderer" \
   --static-file "$static_file" \
   --forcing-file-list "$forcing_list" \
@@ -141,5 +147,5 @@ initialized_state=${outputs[0]}
 test -s "$run/balance_certificate.json"
 touch "$run/balance_certificate.json.ready"
 
-printf 'PASS date=%s method=%s initialized_state=%s certificate=%s\n' \
-  "$date" "$method" "$initialized_state" "$run/balance_certificate.json"
+printf 'PASS date=%s time=%s method=%s initialized_state=%s certificate=%s\n' \
+  "$date" "$time" "$method" "$initialized_state" "$run/balance_certificate.json"
