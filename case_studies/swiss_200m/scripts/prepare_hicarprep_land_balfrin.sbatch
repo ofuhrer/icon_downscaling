@@ -50,7 +50,8 @@ done
 
 native="$work/native_surface.nc"
 surface="$work/hicar_surface.nc"
-uenv run --view=rea-l-ch1 "$image" -- "$python" \
+# MIR is provided by the REA-L uenv Python, not by the project NetCDF venv.
+uenv run --view=rea-l-ch1 "$image" -- python \
   "$repo_root/case_studies/swiss_200m/validation/package_rea_l_native_surface.py" \
   --icon-extpar "$icon_extpar" --surface-grib "$work/surface.grib" \
   --soil-temperature-grib "$work/t_so.grib" --soil-water-grib "$work/w_so.grib" \
