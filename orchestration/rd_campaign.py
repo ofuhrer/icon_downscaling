@@ -226,6 +226,15 @@ class Campaign:
             submitted += 1
         return submitted
 
+    def inputs_complete(self) -> bool:
+        return all(
+            Path(f"{forcing}.ready").is_file()
+            and Path(f"{boundary}.ready").is_file()
+            for season in self.seasons
+            for when in hours(season.start, season.end)
+            for forcing, boundary in (self.paths(season, when),)
+        )
+
     def completed_attempt(self, segment_root: Path) -> Path | None:
         for path in sorted(segment_root.glob("attempt-*"), reverse=True):
             if (path / "segment.complete").is_file():
@@ -306,15 +315,22 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("config", type=Path)
     parser.add_argument("--watch", action="store_true", help="poll and retry until all chains finish")
+    parser.add_argument(
+        "--inputs-only",
+        action="store_true",
+        help="prepare forcing but do not submit model segments",
+    )
     parser.add_argument("--poll-seconds", type=int, default=60)
     args = parser.parse_args()
     campaign = Campaign(args.config)
     campaign.initialize()
     while True:
         campaign.prepare_inputs()
-        campaign.submit_segments()
+        if not args.inputs_only:
+            campaign.submit_segments()
         print(json.dumps(campaign.status(), indent=2, sort_keys=True), flush=True)
-        if campaign.complete() or not args.watch:
+        done = campaign.inputs_complete() if args.inputs_only else campaign.complete()
+        if done or not args.watch:
             return 0
         time.sleep(args.poll_seconds)
 
