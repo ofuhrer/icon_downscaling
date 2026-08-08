@@ -41,6 +41,7 @@ restart_input=${RESTART_INPUT:-}
 profile=${OUTPUT_PROFILE:-evaluation}
 output_interval=${OUTPUT_INTERVAL:-3600}
 model_debug=${HICAR_MODEL_DEBUG:-0}
+cfl_reduction=${HICAR_CFL_REDUCTION_FACTOR:-1.6}
 renderer="$repo_root/case_studies/swiss_200m/scripts/render_hicar_namelist.py"
 wrapper="$repo_root/case_studies/swiss_200m/scripts/gpu_rank_wrapper.sh"
 python=${HICAR_PYTHON:-python3}
@@ -89,6 +90,7 @@ fi
   --start-date "${start/T/ }" \
   --end-date "${end/T/ }" \
   --output-profile "$profile" \
+  --cfl-reduction-factor "$cfl_reduction" \
   "${debug_args[@]}" \
   --output-interval "$output_interval" \
   --restart-interval "$restart_records" \

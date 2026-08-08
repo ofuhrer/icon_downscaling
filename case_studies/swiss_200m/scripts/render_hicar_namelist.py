@@ -72,6 +72,7 @@ def main() -> int:
         "--output-profile", choices=("station", "evaluation", "debug"), default="evaluation"
     )
     parser.add_argument("--model-debug", action="store_true")
+    parser.add_argument("--cfl-reduction-factor", type=float, default=1.6)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
@@ -80,6 +81,8 @@ def main() -> int:
         raise SystemExit("--end-date must be after --start-date")
     if args.output_interval <= 0 or args.restart_interval <= 0:
         raise SystemExit("output and restart intervals must be positive")
+    if not 0.0 < args.cfl_reduction_factor <= 1.6:
+        raise SystemExit("--cfl-reduction-factor must be in (0, 1.6]")
     if not args.static_file.is_file():
         raise SystemExit(f"missing runtime domain: {args.static_file}")
     with netCDF4.Dataset(args.static_file) as static:
@@ -166,6 +169,7 @@ def main() -> int:
         "@LOWEST_LAYER_M@": str(SELECTED_LOWEST_LAYER_M),
         "@ADVECT_DENSITY@": ".True.",
         "@MODEL_DEBUG@": ".True." if args.model_debug else ".False.",
+        "@CFL_REDUCTION_FACTOR@": str(args.cfl_reduction_factor),
         "@STATIC_FILE@": str(args.static_file.resolve()),
         "@FORCING_FILE_LIST@": str(args.forcing_file_list.resolve()),
         "@SPARSE_LBC_FILE_LIST@": str(args.sparse_lbc_file_list.resolve()),

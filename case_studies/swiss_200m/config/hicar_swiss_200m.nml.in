@@ -71,7 +71,7 @@
 /
 &time_parameters
   RK3 = .True.
-  cfl_reduction_factor = 1.6
+  cfl_reduction_factor = @CFL_REDUCTION_FACTOR@
 /
 &lt_parameters
 /

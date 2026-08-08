@@ -80,6 +80,7 @@ def test_renderer_has_one_explicit_hicarprep_configuration(tmp_path: Path) -> No
         "soiltexture_var = 'soil_type_layer'", "nmp_opt_soil = 2",
         "Sx = .True.", "advect_density = .True.", "alpha_const = 1.0",
         "terrain_shading = .False.", "height_lowest_level = 26.0",
+        "cfl_reduction_factor = 1.6",
     ):
         assert setting in text
     assert str(boundary_list.resolve()) in text
