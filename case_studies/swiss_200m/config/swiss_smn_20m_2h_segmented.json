@@ -1,0 +1,28 @@
+{
+  "root": "/scratch/mch/olifu/icon_hicar/rd/swiss_all_stations_20m/pilot_2h_segmented",
+  "repo_root": "/scratch/mch/olifu/icon_hicar/rd/source/coordinator-diagnostics-aeec557",
+  "forcing_dir": "/scratch/mch/olifu/icon_hicar/rd/swiss_all_stations_20m/input/forcing",
+  "python": "/scratch/mch/olifu/icon_hicar/venv_static/bin/python",
+  "hicar_executable": "/scratch/mch/olifu/icon_hicar/rd/build/hicar-restart-16de4b84-gpu-nccl/HICAR_gpu",
+  "hicar_support_dir": "/scratch/mch/olifu/icon_hicar/rd/source/hicar-restart-16de4b84/run",
+  "hicar_build_provenance": "/scratch/mch/olifu/icon_hicar/rd/build/hicar-restart-16de4b84-gpu-nccl/hicar_build_provenance.txt",
+  "rbf_weights": "/scratch/mch/olifu/icon_hicar/rd/swiss_all_stations_20m/input/weights/rea_l_to_smn_40km_200m_scalar_9516103.nc",
+  "segment_hours": 1,
+  "max_attempts": 3,
+  "input_partitions": ["pp-long"],
+  "max_active_inputs": 3,
+  "input_cpus": 16,
+  "input_time": "06:00:00",
+  "model_nodes": 12,
+  "model_time": "02:00:00",
+  "output_profile": "evaluation",
+  "output_interval": 3600,
+  "seasons": [
+    {
+      "name": "autumn",
+      "start": "2020-10-02T00:00:00",
+      "end": "2020-10-02T02:00:00",
+      "static": "/scratch/mch/olifu/icon_hicar/rd/swiss_all_stations_20m/input/runtime/domain_runtime_smn_20201002_0000_20m.nc"
+    }
+  ]
+}

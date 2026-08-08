@@ -1,0 +1,46 @@
+{
+  "root": "/scratch/mch/olifu/icon_hicar/rd/swiss_all_stations_20m/campaign",
+  "repo_root": "/scratch/mch/olifu/icon_hicar/rd/source/coordinator-diagnostics-aeec557",
+  "forcing_dir": "/scratch/mch/olifu/icon_hicar/rd/swiss_all_stations_20m/input/forcing",
+  "python": "/scratch/mch/olifu/icon_hicar/venv_static/bin/python",
+  "hicar_executable": "/scratch/mch/olifu/icon_hicar/rd/build/hicar-restart-16de4b84-gpu-nccl/HICAR_gpu",
+  "hicar_support_dir": "/scratch/mch/olifu/icon_hicar/rd/source/hicar-restart-16de4b84/run",
+  "hicar_build_provenance": "/scratch/mch/olifu/icon_hicar/rd/build/hicar-restart-16de4b84-gpu-nccl/hicar_build_provenance.txt",
+  "rbf_weights": "/scratch/mch/olifu/icon_hicar/rd/swiss_all_stations_20m/input/weights/rea_l_to_smn_40km_200m_scalar_9516103.nc",
+  "segment_hours": 12,
+  "max_attempts": 4,
+  "input_partitions": ["pp-long"],
+  "max_active_inputs": 4,
+  "input_cpus": 16,
+  "input_time": "06:00:00",
+  "model_nodes": 12,
+  "model_time": "06:00:00",
+  "output_profile": "evaluation",
+  "output_interval": 3600,
+  "seasons": [
+    {
+      "name": "winter",
+      "start": "2020-01-15T00:00:00",
+      "end": "2020-01-16T00:00:00",
+      "static": "/scratch/mch/olifu/icon_hicar/rd/swiss_all_stations_20m/input/runtime/domain_runtime_smn_20200115_0000_20m.nc"
+    },
+    {
+      "name": "spring",
+      "start": "2020-04-29T00:00:00",
+      "end": "2020-04-30T00:00:00",
+      "static": "/scratch/mch/olifu/icon_hicar/rd/swiss_all_stations_20m/input/runtime/domain_runtime_smn_20200429_0000_20m.nc"
+    },
+    {
+      "name": "summer",
+      "start": "2020-07-01T00:00:00",
+      "end": "2020-07-02T00:00:00",
+      "static": "/scratch/mch/olifu/icon_hicar/rd/swiss_all_stations_20m/input/runtime/domain_runtime_smn_20200701_0000_20m.nc"
+    },
+    {
+      "name": "autumn",
+      "start": "2020-10-02T00:00:00",
+      "end": "2020-10-03T00:00:00",
+      "static": "/scratch/mch/olifu/icon_hicar/rd/swiss_all_stations_20m/input/runtime/domain_runtime_smn_20201002_0000_20m.nc"
+    }
+  ]
+}
