@@ -518,7 +518,20 @@ def assemble_hicar_runtime_domain(
                     raise ValueError(
                         "surface and runtime assembly use different external parameters"
                     )
-                evaluated = evaluate_external_fields(external_path, materialization_time)
+                external_backcast = str(
+                    getattr(surface, "external_epoch_back_extrapolation", "none")
+                )
+                if external_backcast not in {"none", "explicit_research_override"}:
+                    raise ValueError(
+                        f"unknown surface external-epoch policy {external_backcast!r}"
+                    )
+                evaluated = evaluate_external_fields(
+                    external_path,
+                    materialization_time,
+                    allow_epoch_back_extrapolation=(
+                        external_backcast == "explicit_research_override"
+                    ),
+                )
                 with netCDF4.Dataset(external_path) as external:
                     for name, values in evaluated.items():
                         source_variable = external[name]

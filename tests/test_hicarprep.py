@@ -1033,7 +1033,7 @@ class SurfaceStateTests(unittest.TestCase):
                 dataset.createDimension("y", 2)
                 dataset.createDimension("x", 2)
                 epoch = dataset.createVariable("epoch_time", "f8", ("epoch",))
-                epoch[:] = [dt.datetime(2019, 1, 1, tzinfo=dt.timezone.utc).timestamp()]
+                epoch[:] = [dt.datetime(2021, 1, 1, tzinfo=dt.timezone.utc).timestamp()]
                 epoch.units = "seconds since 1970-01-01 00:00:00 UTC"
                 landuse = dataset.createVariable("landuse", "i2", ("epoch", "y", "x"))
                 landuse[:] = 15
@@ -1049,6 +1049,7 @@ class SurfaceStateTests(unittest.TestCase):
                 noahmp_table=table,
                 soil_water_method="smi",
                 external_path=external,
+                allow_external_epoch_back_extrapolation=True,
             )
             with self.assertRaisesRegex(
                 ValueError, "not prepared with the supplied external parameters"
@@ -1069,6 +1070,10 @@ class SurfaceStateTests(unittest.TestCase):
                 self.assertEqual(
                     dataset.external_parameters_valid_time,
                     "2020-01-01T00:00:00+00:00",
+                )
+                self.assertEqual(
+                    dataset.land_state_external_epoch_back_extrapolation,
+                    "explicit_research_override",
                 )
 
             # Raw public static files carry a dated land-cover epoch.  The
