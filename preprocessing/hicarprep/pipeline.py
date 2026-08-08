@@ -243,7 +243,9 @@ def write_hicar_forcing_record(
             dataset.hicarprep_product_version = PRODUCT_VERSION
             dataset.valid_time = when.isoformat().replace("+00:00", "Z")
             dataset.water_representation = "dry-air mixing ratio"
-            dataset.wind_representation = "mass-grid average of exact target U/V faces"
+            dataset.wind_representation = (
+                "target mass-grid wind; sparse U/V faces reconstructed by midpoint interpolation"
+            )
             dataset.lateral_relaxation_authority = "hicarprep sparse_lbc_file_list"
             dataset.source_path = str(source_path)
             dataset.source_sha256 = sha256(source_path)
