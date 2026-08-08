@@ -29,11 +29,18 @@ dry-air mixing ratios. HICAR reads P/T/QV/QC/QI/U/V and HFL/HHL. W is omitted
 so HICAR diagnoses a dynamically compatible field. Sparse LBC is the only
 lateral-relaxation authority; set `relax_filters=.False.`.
 
+Scalar RBF caches must come from the conditioned builder: each stencil solve
+has condition number at most `1e10` after the smallest needed diagonal nugget,
+and cached normalized weights have L1 amplification at most `10`. Rebuild any
+older cache that violates this invariant. Earth-relative U/V remapping is
+clipped to the local donor component range; it must not create new wind extrema.
+
 ## Checks that matter
 
 - exact target latitude/longitude equality with the runtime domain;
 - 80 full and 81 half levels in bottom-to-top order;
 - finite fields and plausible P/T/QV/wind ranges;
+- target horizontal-wind speed no greater than the gross `200 m s-1` guard;
 - dry-air moisture representation;
 - identical sparse schema, point indices, geometry, and relaxation weights;
 - strictly ordered, gap-free hourly forcing and LBC times that bracket the
