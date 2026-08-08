@@ -24,6 +24,11 @@ hours and retaining one deterministic 24-hour core from the oldest eligible
 window. Overlaps quantify origin-age uncertainty. Do not taper or blend
 phase-shifted turbulent fields.
 
+The 72/48/24-hour layout is the policy tested by the existing overlap
+experiment, not a fixed production design. Window length, overlap, warm-up,
+and retained-core ownership remain choices to define from contrasting-regime
+evidence later.
+
 This is supported for one summer Alpine bridge case only. It is not a valid
 strategy for surface temperature, soil, snow, water budgets, precipitation,
 or a general continuous coupled trajectory. A long restart-continuous HICAR
@@ -320,6 +325,43 @@ selection or equilibration test. The next discriminator is a matched 6--24 h
 response experiment with independent flux/state constraints, including a
 test of whether that isolated winter flux tail relaxes or persists.
 
+The first matched discriminator, `hicarprep-land-response-6h-v1`, is now
+complete for summer 2020-07-02. It used the same forcing, executable, model
+settings, 30-minute diagnostics, and symmetric source-consistency gates for
+SMI and relative saturation. Both arms passed all solver/conservation,
+temperature, liquid/ice, snow, flux-tail, and REA-L source-consistency checks.
+No `hfss` or `hfls` value exceeded `500 W m-2` after hour four; final
+source-consistency RMSEs were about `1.64 K` for height-adjusted 2 m
+temperature, `7.5e-4` for 2 m specific humidity, and `0.747 m s-1` for 10 m
+wind speed in both arms. The methods remained materially distinct: at hour
+six SMI minus relative saturation had soil-water RMSE `0.0590 m3 m-3`, mean
+soil-column-water difference `42.24 kg m-2`, surface-temperature RMSE
+`0.138 K`, and 2 m-temperature RMSE `0.0317 K`.
+
+The frozen report is interpretable and records
+`RELATIVE_SATURATION_NOT_VIABLE_IN_SUMMER_6H`, but that decision has a narrow
+robustness envelope. Its only failures are total soil water below
+`DRYSMC - 1e-5 m3 m-3` at hours 5/5.5/6. Counts grow from 2 to 6 to 14, all in
+the top layer of loam cells initialized exactly at `DRYSMC=0.066`; the final
+14 are `0.00316%` of active columns (`0.000789%` of all active soil-layer
+states), in small southwestern patches near `46.003--46.142 N` and
+`7.724--7.800 E`. The maximum deficit is `1.956e-5 m3 m-3`, only 1.96 times
+the frozen tolerance, and no cell fails at a diagnostic tolerance of `2e-5`.
+SMI also trends slightly below `DRYSMC`, reaching `-5.16e-6` at hour six, but
+does not cross the frozen threshold.
+
+Do not rewrite that predeclared decision after seeing the result. Also do not
+interpret it as broad physical invalidity: the exact STAS table labels
+`DRYSMC` a dry threshold, sets it equal to `WLTSMC` for all 19 categories, and
+the pinned NoahMP source does not use `SoilMoistureDry` as a lower state clamp.
+The result establishes that relative saturation puts 252 top-layer loam cells
+at the dry/wilting threshold and 14 evolve marginally below it. Before a
+winter escalation, define a new, source-supported distinction between a hard
+admissible water bound and a dry/wilting response diagnostic, then re-read the
+existing summer output under that independently justified contract. The
+frozen and post-hoc reports are under
+`/scratch/mch/olifu/icon_hicar/qualification/hicarprep-land-response-6h-v1/runs-v3/`.
+
 The next direct-native absolute-`W_SO` candidate is implemented and statically
 bounded for both origins. It uses support-normalized native-grid interpolation
 of layer-integrated ICON water followed by the same exact vertical-overlap
@@ -352,7 +394,7 @@ the incomplete run has no causal scientific result.
 | Choice | Current evidence | Smallest next discriminator |
 | --- | --- | --- |
 | Independent 72 h windows for wind | Supported in one summer bridge case | Repeat the same causal comparison in a stable-winter regime |
-| Continuous versus reset coupled state | Reset soil and surface temperature are material. One SMI case was less compatible with a legacy-initialized trajectory, but that reference cannot identify the scientifically correct cross-soil transfer. Fresh SMI/relative/absolute inputs are plausible and materially different | Run small matched SMI versus relative-saturation response tests first; keep absolute VWC only as a control and use independent constraints where available |
+| Continuous versus reset coupled state | Reset soil and surface temperature are material. A matched summer SMI/relative test is numerically and source-consistent, but its frozen rejection of relative saturation rests on 14 marginal crossings of a `DRYSMC` gate that is not NoahMP's hard state floor | Define the admissible hydraulic bound independently of this result, re-assess the existing six-hour output, then use winter only if method uncertainty remains or ice/SWE adds a new discriminator |
 | Warm-up length | 48 h is sufficient in repeated-summer and chronological-summer wind tests; not universal | Bracket 48 h only in a regime where the winter/strong-wind comparison fails or shows age dependence |
 | 200 m versus 100 m | 200 m engineering foundation exists; 100 m has geometry evidence only | One matched representative 100/200 m skill-and-cost A/B after the wind method survives contrasting regimes |
 | Surface/PBL physics | Warm/dry V29 evidence and terrain/land candidates exist, but no wind-relevant causal benefit is shown | Intervene only after a regime comparison identifies a specific wind/PBL deficit |
@@ -360,11 +402,13 @@ the incomplete run has no causal scientific result.
 
 ## Ranked next goals
 
-1. Run bounded 200 m HICAR A/B tests from the newly validated winter, summer,
-   and autumn inputs: SMI versus relative saturation, with absolute VWC only as
-   a control. Start with 6--24 h land response and inspect hydraulic-bound
-   occupancy, soil liquid/ice partition, flux impulses, temperature, SWE, and
-   near-surface atmosphere before any 72 h comparison.
+1. Close the hydraulic-bound interpretation exposed by the completed summer
+   six-hour SMI/relative experiment: distinguish a non-negotiable physical
+   state bound from NoahMP's dry/wilting response thresholds using source and
+   table semantics, then re-assess the existing output without changing its
+   frozen report. If both methods remain viable, run the same matched response
+   in winter to exercise ice/SWE and the isolated startup-flux tail; retain
+   absolute VWC only as a diagnostic control.
 2. After selecting a viable cold start, or explicitly retaining uncertainty
    between candidates, repeat the independent-window
    comparison in one stable-winter or strong-wind regime. Bracket warm-up
