@@ -37,7 +37,7 @@ def test_runner_uses_private_non_overwriting_matched_inputs() -> None:
     assert 'test ! -e "$run"' in script
     assert "for hour in $(seq 0 7)" in script
     assert "--output-profile land_response_30min" in script
-    assert "--expected-hours 6" in script
+    assert "--expected-hours 7" in script
     assert '"$exe" -v soiltexture_var' in script
     assert '"$exe" -v soil_water_content_liq' not in script
     assert "hicarprep_hicar_soiltexture_v1/source" in script

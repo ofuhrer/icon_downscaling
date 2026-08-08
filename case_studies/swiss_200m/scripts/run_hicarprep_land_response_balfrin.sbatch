@@ -85,7 +85,9 @@ cd "$run"
 srun --distribution=block:block --cpu-bind=none "$wrapper" "$exe" "$run/input.nml" \
   2>&1 | tee "$run/model.out"
 grep -q 'Simulation completed successfully!' "$run/model.out"
+# The 06:01 end time deliberately advances one minute beyond the final 06:00
+# output boundary, so HICAR emits seven hourly timing/solve groups.
 "$python_bin" "$solver_evaluator" --model-log "$run/model.out" \
-  --expected-hours 6 --report "$run/solver_report.json"
+  --expected-hours 7 --report "$run/solver_report.json"
 touch "$run/model.out.ready"
 echo "PASS: six-hour hicarprep land response $method"
