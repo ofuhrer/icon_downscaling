@@ -58,12 +58,14 @@ complete="$run/segment.complete"
 test ! -e "$complete" || exit 0
 
 restart_args=()
+validation_restart_args=()
 if test -n "$restart_input"; then
   test -s "$restart_input" || { echo "missing restart input: $restart_input" >&2; exit 2; }
   start_file=${start/T/_}; start_file=${start_file//:/-}
   staged="$run/restart/${base}_${start_file}.nc"
   test -e "$staged" || ln -s "$(realpath "$restart_input")" "$staged"
   restart_args=(--restart-from "${start/T/ }")
+  validation_restart_args=(--continued)
 fi
 
 duration_seconds=$("$python" - "$start" "$end" <<'PY'
@@ -131,7 +133,8 @@ test -s "$restart" || { echo "missing terminal restart: $restart" >&2; exit 1; }
 "$python" "$repo_root/case_studies/swiss_200m/validation/validate_segment.py" \
   --output-dir "$run/output" --restart "$restart" --start "$start" --end "$end" \
   --output-interval "$output_interval" --forcing-list "$forcing_list" \
-  --boundary-list "$lbc_list" >"$run/segment_validation.json"
+  --boundary-list "$lbc_list" "${validation_restart_args[@]}" \
+  >"$run/segment_validation.json"
 
 "$python" - "$run/segment.json" "$start" "$end" "$static" "$exe" "$restart" <<'PY'
 import json, pathlib, subprocess, sys

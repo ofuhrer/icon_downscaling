@@ -76,6 +76,23 @@ def require_restart_state(dataset: netCDF4.Dataset) -> None:
         raise SystemExit("invalid terminal restart state: " + json.dumps(failures, sort_keys=True))
 
 
+def expected_output_times(
+    start: datetime, end: datetime, interval_seconds: int, *, continued: bool
+) -> list[datetime]:
+    """Return times written by a cold-start or restart segment.
+
+    HICAR writes the initial time for a cold start.  On restart that timestamp
+    already belongs to the preceding segment and only subsequent times are
+    written in the new output directory.
+    """
+    value = start + (timedelta(seconds=interval_seconds) if continued else timedelta())
+    result = []
+    while value <= end:
+        result.append(value)
+        value += timedelta(seconds=interval_seconds)
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -85,6 +102,7 @@ def main() -> int:
     parser.add_argument("--output-interval", type=int, required=True)
     parser.add_argument("--forcing-list", type=Path, required=True)
     parser.add_argument("--boundary-list", type=Path, required=True)
+    parser.add_argument("--continued", action="store_true")
     args = parser.parse_args()
 
     start = datetime.fromisoformat(args.start.replace("T", " ").replace("Z", ""))
@@ -96,11 +114,9 @@ def main() -> int:
     if not output_files:
         raise SystemExit("segment has no NetCDF output")
     output_times = sorted({value for path in output_files for value in decode_times(path)})
-    expected = []
-    value = start
-    while value <= end:
-        expected.append(value)
-        value += timedelta(seconds=args.output_interval)
+    expected = expected_output_times(
+        start, end, args.output_interval, continued=args.continued
+    )
     if output_times != expected:
         raise SystemExit(
             f"output times {output_times[0]}..{output_times[-1]} ({len(output_times)}) "
