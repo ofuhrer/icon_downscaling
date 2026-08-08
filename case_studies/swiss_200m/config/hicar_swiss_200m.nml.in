@@ -26,6 +26,8 @@
   soil_vwc_var = 'soil_vwc'
   swe_var = 'swe'
   snowh_var = 'snow_height'
+@SNOW_TEMPERATURE_LINE@
+@LAND_CLIMATOLOGY_LINES@
   use_map_factors = .True.
   auto_level = 1
   height_lowest_level = @LOWEST_LAYER_M@
@@ -88,6 +90,7 @@
 /
 &lsm_parameters
   LU_Categories = 'USGS'
+  monthly_vegfrac = @MONTHLY_VEGFRAC@
   ! HICAR's generic USGS default leaves glaciers disabled. WorldCover snow/ice
   ! is mapped to USGS category 24, so select Noah-MP glacier physics explicitly.
   ice_category = 24

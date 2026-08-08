@@ -34,7 +34,7 @@ trap 'rm -rf "$work"' EXIT
 
 cat > "$work/surface.mars" <<EOF
 retrieve,class=rd,stream=reanl,expver=r001,model=icon-rea-l-ch1,type=cf,
-date=$date,time=0000,levtype=sfc,param=500044/500147/502336,step=0
+date=$date,time=0000,levtype=sfc,param=500044/500147/500170/502336,step=0
 EOF
 cat > "$work/t_so.mars" <<EOF
 retrieve,class=rd,stream=reanl,expver=r001,model=icon-rea-l-ch1,type=cf,

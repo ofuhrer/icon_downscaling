@@ -159,9 +159,12 @@ def validate_native_surface_values(
         "SKT": np.asarray(surface_values["SKT"], dtype=np.float64),
         "W_SNOW": np.asarray(surface_values["W_SNOW"], dtype=np.float64),
         "RHO_SNOW": np.asarray(surface_values["RHO_SNOW"], dtype=np.float64),
+        "T_SNOW": np.asarray(surface_values["T_SNOW"], dtype=np.float64),
         "HSURF": np.asarray(source_topography, dtype=np.float64),
     }
-    if not all(np.isfinite(values).all() for values in arrays.values()):
+    if not all(
+        np.isfinite(values).all() for name, values in arrays.items() if name != "T_SNOW"
+    ):
         raise ValueError("decoded native surface state contains non-finite values")
     for name in ("T_SO", "SKT"):
         if np.any((arrays[name] < 180.0) | (arrays[name] > 350.0)):
@@ -171,6 +174,15 @@ def validate_native_surface_values(
     if np.any(arrays["W_SNOW"] < 0.0) or np.any(arrays["W_SNOW"] > 10_000.0):
         raise ValueError("W_SNOW is negative or implausibly large")
     snow = arrays["W_SNOW"] > 1.0e-9
+    if np.any(
+        snow
+        & (
+            ~np.isfinite(arrays["T_SNOW"])
+            | (arrays["T_SNOW"] < 180.0)
+            | (arrays["T_SNOW"] > 300.0)
+        )
+    ):
+        raise ValueError("positive W_SNOW has invalid T_SNOW")
     if np.any(snow & ((arrays["RHO_SNOW"] <= 0.0) | (arrays["RHO_SNOW"] > 917.0))):
         raise ValueError("positive W_SNOW has invalid RHO_SNOW")
     if np.any((arrays["HSURF"] < -500.0) | (arrays["HSURF"] > 9_000.0)):
@@ -183,6 +195,7 @@ EXPECTED_UNITS = {
     "W_SNOW": "kgm-2",
     "W_SO": "kgm-2",
     "RHO_SNOW": "kgm-3",
+    "T_SNOW": "k",
 }
 
 
@@ -252,7 +265,7 @@ def validate_grib_inventory(
         grouped.setdefault(str(metadata(field, "shortName") or "").upper(), []).append(field)
     surface_by_name: dict[str, object] = {}
     contract: dict[str, dict[str, object]] = {}
-    for name in ("SKT", "W_SNOW", "RHO_SNOW"):
+    for name in ("SKT", "W_SNOW", "RHO_SNOW", "T_SNOW"):
         matches = grouped.get(name, [])
         if len(matches) != 1:
             raise ValueError(f"surface GRIB requires exactly one {name} message, found {len(matches)}")
@@ -329,7 +342,7 @@ def main() -> int:
 
     surface_values = {
         name: np.asarray(surface_by_name[name].to_numpy(flatten=True), dtype=np.float64)
-        for name in ("SKT", "W_SNOW", "RHO_SNOW")
+        for name in ("SKT", "W_SNOW", "RHO_SNOW", "T_SNOW")
     }
     if any(values.size != cells for values in surface_values.values()):
         raise ValueError("surface GRIB cell count differs from EXTPAR")
@@ -352,6 +365,7 @@ def main() -> int:
                 ("SKT", surface_values["SKT"], "K"),
                 ("W_SNOW", surface_values["W_SNOW"], "kg m-2"),
                 ("RHO_SNOW", surface_values["RHO_SNOW"], "kg m-3"),
+                ("T_SNOW", surface_values["T_SNOW"], "K"),
             ):
                 variable = output.createVariable(name, "f8", ("cell",), zlib=True)
                 variable[:] = values

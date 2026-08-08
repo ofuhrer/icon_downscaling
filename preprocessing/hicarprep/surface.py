@@ -49,6 +49,9 @@ class SurfaceDiagnostics:
     water_snow_zeroed_cell_count: int
     maximum_fallback_distance_km: float
     fallback_distance_p99_km: float
+    snow_temperature_source: str
+    snow_temperature_lower_bound_count: int
+    snow_temperature_upper_bound_count: int
 
 
 def parse_noahmp_stas_hydraulics(path: Path) -> dict[str, np.ndarray]:
@@ -570,6 +573,9 @@ def prepare_surface_state(
         skt = _layer_cell(source, "SKT")
         snow_water = _layer_cell(source, "W_SNOW")
         snow_density = _layer_cell(source, "RHO_SNOW")
+        source_snow_temperature = (
+            _layer_cell(source, "T_SNOW") if "T_SNOW" in source.variables else None
+        )
         source_topography = (
             _layer_cell(source, "HSURF") if "HSURF" in source.variables else None
         )
@@ -662,6 +668,15 @@ def prepare_surface_state(
     source_snow = snow_water > 1.0e-9
     if np.any(source_snow & (~np.isfinite(snow_density) | (snow_density <= 0.0))):
         raise ValueError("positive source W_SNOW requires finite positive RHO_SNOW")
+    if source_snow_temperature is not None and np.any(
+        source_snow
+        & (
+            ~np.isfinite(source_snow_temperature)
+            | (source_snow_temperature < 180.0)
+            | (source_snow_temperature > 300.0)
+        )
+    ):
+        raise ValueError("positive source W_SNOW requires plausible finite T_SNOW")
     # Snow density is undefined in snow-free cells and must not be treated as
     # a sparse scalar whose fallback donor can be tens of kilometres away.
     # Remap the two extensive-per-area state components (water and volume),
@@ -798,12 +813,45 @@ def prepare_surface_state(
         snow_water_equivalent[~target_land] = 0.0
         snow_density[~target_land] = 0.0
         snow_depth[~target_land] = 0.0
+    target_snow = snow_water_equivalent > 1.0e-9
+    snow_temperature = np.minimum(mapped_skt, 273.15)
+    snow_temperature_source = "skin_temperature_capped_at_freezing"
+    if source_snow_temperature is not None and np.any(target_snow):
+        mapped_snow_temperature, count, global_count = _supported_remap(
+            weights,
+            source_snow_temperature,
+            source_snow,
+            target_snow,
+            required_target=target_snow,
+            **coordinate_arguments,
+            fallback_distances_km=fallback_distances_km,
+        )
+        fallbacks += count
+        global_fallbacks += global_count
+        snow_temperature[target_snow] = mapped_snow_temperature[target_snow]
+        snow_temperature_source = "ICON T_SNOW"
+    snow_temperature_upper_bound = np.minimum(mapped_skt, 273.15)
+    snow_temperature_lower_bound = np.minimum(
+        np.maximum(mapped_skt - 10.0, 180.0), snow_temperature_upper_bound
+    )
+    snow_temperature_lower_bound_count = int(
+        np.sum(target_snow & (snow_temperature < snow_temperature_lower_bound))
+    )
+    snow_temperature_upper_bound_count = int(
+        np.sum(target_snow & (snow_temperature > snow_temperature_upper_bound))
+    )
+    snow_temperature[target_snow] = np.clip(
+        snow_temperature[target_snow],
+        snow_temperature_lower_bound[target_snow],
+        snow_temperature_upper_bound[target_snow],
+    )
     for label, values in {
         "soil_temperature": soil_temperature[:, target_land],
         "soil_vwc": soil_vwc[:, target_soil_active],
         "skin_temperature": mapped_skt,
         "snow_water_equivalent": snow_water_equivalent,
         "snow_depth": snow_depth,
+        "snow_temperature": snow_temperature,
     }.items():
         if not np.isfinite(values).all():
             raise ValueError(f"prepared {label} contains non-finite values on its support")
@@ -833,6 +881,7 @@ def prepare_surface_state(
                 "snow_water_equivalent": (snow_water_equivalent, ("y", "x"), "kg m-2"),
                 "snow_density": (snow_density, ("y", "x"), "kg m-3"),
                 "snow_depth": (snow_depth, ("y", "x"), "m"),
+                "snow_temperature_initial": (snow_temperature, ("y", "x"), "K"),
                 "source_topography_on_target": (
                     mapped_source_topography,
                     ("y", "x"),
@@ -870,6 +919,14 @@ def prepare_surface_state(
             output.glacier_cell_count = int(np.sum(target_glacier))
             output.water_snow_policy = water_snow_policy
             output.water_snow_zeroed_cell_count = int(np.sum(water_snow_zeroed))
+            output.snow_temperature_source = snow_temperature_source
+            output.snow_temperature_policy = (
+                "same-snow-support remap; target snow bounded to min(max(TSK-10 K,"
+                "180 K),upper)..upper with upper=min(TSK,273.15 K); snow-free cells "
+                "use min(TSK,273.15 K)"
+            )
+            output.snow_temperature_lower_bound_count = snow_temperature_lower_bound_count
+            output.snow_temperature_upper_bound_count = snow_temperature_upper_bound_count
             output.target_soil_type_source = target_soil_type_source
             output.temperature_height_method = temperature_height_method
             output.climatological_lapse_rate_k_m = climatological_lapse_rate_k_m
@@ -951,4 +1008,7 @@ def prepare_surface_state(
         fallback_distance_p99_km=(
             float(np.quantile(fallback_distances_km, 0.99)) if fallback_distances_km else 0.0
         ),
+        snow_temperature_source=snow_temperature_source,
+        snow_temperature_lower_bound_count=snow_temperature_lower_bound_count,
+        snow_temperature_upper_bound_count=snow_temperature_upper_bound_count,
     )

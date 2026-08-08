@@ -162,6 +162,9 @@ def validate_surface_case(
             swe = np.asarray(product["snow_water_equivalent"][:], dtype=np.float64)
             density = np.asarray(product["snow_density"][:], dtype=np.float64)
             depth = np.asarray(product["snow_depth"][:], dtype=np.float64)
+            snow_temperature = np.asarray(
+                product["snow_temperature_initial"][:], dtype=np.float64
+            )
             source_topography = np.asarray(
                 product["source_topography_on_target"][:], dtype=np.float64
             )
@@ -199,7 +202,7 @@ def validate_surface_case(
             )
             continue
         arrays[method] = vwc
-        common_state[method] = (temperature, skin, swe, density, depth)
+        common_state[method] = (temperature, skin, swe, density, depth, snow_temperature)
         dry = hydraulics["DRYSMC"][target_index]
         maximum = hydraulics["MAXSMC"][target_index]
         if not np.isfinite(vwc[target_active_soil_3d]).all():
@@ -234,6 +237,19 @@ def validate_surface_case(
             hard_failures.append(f"{method}: snow density exceeds pure-ice density")
         if np.any(swe > 10_000.0) or np.any(depth > 20.0):
             hard_failures.append(f"{method}: snow storage exceeds conservative physical limits")
+        snow_temperature_upper = np.minimum(skin, 273.15)
+        snow_temperature_lower = np.minimum(
+            np.maximum(skin - 10.0, 180.0), snow_temperature_upper
+        )
+        if np.any(
+            snow
+            & (
+                ~np.isfinite(snow_temperature)
+                | (snow_temperature < snow_temperature_lower)
+                | (snow_temperature > snow_temperature_upper)
+            )
+        ):
+            hard_failures.append(f"{method}: snow temperature violates target bounds")
         if water_snow_policy == "zero" and np.any(swe[~land] > 0.0):
             hard_failures.append(f"{method}: zero water-snow policy left snow off land")
         consistent_snow = snow & np.isfinite(density) & (density > 0.0)
@@ -327,6 +343,7 @@ def validate_surface_case(
             "skin_temperature_k": _quantiles(skin),
             "snow_water_equivalent_kg_m2": _quantiles(swe),
             "snow_depth_m": _quantiles(depth),
+            "snow_temperature_k": _quantiles(snow_temperature[snow]),
             "dry_clip_count": dry_clips,
             "saturation_clip_count": saturation_clips,
             "hydraulic_clip_rate": clip_rate,
@@ -359,7 +376,14 @@ def validate_surface_case(
             if method == reference_method:
                 continue
             for label, left, right in zip(
-                ("soil_temperature", "skin_temperature", "SWE", "snow_density", "snow_depth"),
+                (
+                    "soil_temperature",
+                    "skin_temperature",
+                    "SWE",
+                    "snow_density",
+                    "snow_depth",
+                    "snow_temperature",
+                ),
                 reference,
                 state,
             ):

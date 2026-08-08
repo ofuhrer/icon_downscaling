@@ -408,6 +408,40 @@ def _write_runtime_field(
     variable.hicar_lifetime = FieldLifetime.INITIAL_ONLY.value
 
 
+def _normalize_external_runtime_field(
+    name: str, values: np.ndarray
+) -> tuple[np.ndarray, str | None]:
+    """Normalize optional land climatologies to HICAR's runtime conventions."""
+    numeric = np.asarray(values)
+    if name in {"VEGFRA", "vegetation_fraction_max"}:
+        numeric = np.asarray(numeric, dtype=np.float64)
+        if not np.isfinite(numeric).all() or np.any(numeric < 0.0):
+            raise ValueError(f"external {name} must be finite and non-negative")
+        conversion = None
+        if numeric.size and float(np.max(numeric)) <= 1.0:
+            numeric = numeric * 100.0
+            conversion = "fraction_to_percent"
+        if np.any(numeric > 100.0):
+            raise ValueError(f"external {name} lies outside 0..100 percent")
+        return numeric, conversion
+    if name == "LAI":
+        numeric = np.asarray(numeric, dtype=np.float64)
+        if not np.isfinite(numeric).all() or np.any((numeric < 0.0) | (numeric > 20.0)):
+            raise ValueError("external LAI lies outside the conservative 0..20 range")
+    elif name == "ALBEDO":
+        numeric = np.asarray(numeric, dtype=np.float64)
+        if not np.isfinite(numeric).all() or np.any(numeric < 0.0):
+            raise ValueError("external ALBEDO must be finite and non-negative")
+        conversion = None
+        if numeric.size and float(np.max(numeric)) > 1.0:
+            if np.any(numeric > 100.0):
+                raise ValueError("external ALBEDO lies outside 0..100 percent")
+            numeric = numeric / 100.0
+            conversion = "percent_to_fraction"
+        return numeric, conversion
+    return numeric, None
+
+
 def validate_hicar_runtime_domain(path: Path) -> None:
     """Validate the single-file land-state contract read by HICAR today."""
     required_2d = {
@@ -491,6 +525,25 @@ def validate_hicar_runtime_domain(path: Path) -> None:
             snow = swe > 1.0e-9
             if np.any(snow & ((density <= 0.0) | (density > 917.0))):
                 raise ValueError("HICAR runtime positive snow has invalid bulk density")
+        if "snow_temperature_initial" in dataset.variables:
+            snow_temperature = np.asarray(
+                dataset["snow_temperature_initial"][:], dtype=np.float64
+            )
+            if snow_temperature.shape != target_shape or not np.isfinite(
+                snow_temperature
+            ).all():
+                raise ValueError("HICAR runtime initial snow temperature is invalid")
+            snow = swe > 1.0e-9
+            upper = np.minimum(surface_temperature, 273.15)
+            lower = np.minimum(np.maximum(surface_temperature - 10.0, 180.0), upper)
+            if np.any(
+                snow
+                & (
+                    (snow_temperature < lower)
+                    | (snow_temperature > upper)
+                )
+            ):
+                raise ValueError("HICAR runtime initial snow temperature violates bounds")
 
 
 def assemble_hicar_runtime_domain(
@@ -576,6 +629,9 @@ def assemble_hicar_runtime_domain(
                                 for dimension in source_variable.dimensions
                                 if dimension not in {"epoch", "month", "time"}
                             )
+                        values, unit_conversion = _normalize_external_runtime_field(
+                            name, values
+                        )
                         for dimension, size in zip(dimensions, np.asarray(values).shape):
                             if dimension not in runtime.dimensions:
                                 runtime.createDimension(dimension, size)
@@ -599,6 +655,12 @@ def assemble_hicar_runtime_domain(
                             )
                             _copy_attributes(source_variable, destination, omit=("_FillValue",))
                         destination[:] = values
+                        if name in {"VEGFRA", "vegetation_fraction_max"}:
+                            destination.units = "percent"
+                        elif name == "ALBEDO":
+                            destination.units = "1"
+                        if unit_conversion is not None:
+                            destination.hicar_unit_conversion = unit_conversion
                         if preserve_monthly_vegfrac:
                             destination.materialization_policy = (
                                 "preserved_12_month_climatology_for_hicar_monthly_vegfrac"
@@ -655,6 +717,12 @@ def assemble_hicar_runtime_domain(
                     ("y", "x"),
                     "kg m-3",
                     "initial bulk snow density diagnostic",
+                ),
+                "snow_temperature_initial": (
+                    np.asarray(surface["snow_temperature_initial"][:]),
+                    ("y", "x"),
+                    "K",
+                    "initial bulk snow temperature",
                 ),
             }
             for name, (values, dimensions, units, long_name) in mappings.items():

@@ -1016,6 +1016,7 @@ class SurfaceStateTests(unittest.TestCase):
                     ("SKT", 281.0),
                     ("W_SNOW", 10.0),
                     ("RHO_SNOW", 200.0),
+                    ("T_SNOW", 270.0),
                     ("SOILTYP", terra_soil_type),
                     ("FR_LAND", 1.0),
                     ("HSURF", 800.0),
@@ -1083,6 +1084,12 @@ class SurfaceStateTests(unittest.TestCase):
                 self.assertEqual(smi_data.soil_water_method, "smi")
                 self.assertEqual(relative_data.soil_water_method, "relative_saturation")
                 self.assertEqual(smi_data.soil_water_default, "smi")
+                np.testing.assert_allclose(
+                    smi_data["snow_temperature_initial"][:],
+                    np.array([[271.0, 271.0], [271.0, 273.15]]),
+                )
+                self.assertEqual(smi_data.snow_temperature_source, "ICON T_SNOW")
+                self.assertEqual(smi_data.snow_temperature_lower_bound_count, 3)
                 expected_absolute = np.full((4, 2, 2), source_vwc)
                 expected_absolute[:, 1, 1] = 0.0
                 np.testing.assert_allclose(absolute_data["soil_vwc"][:], expected_absolute)
@@ -1146,8 +1153,14 @@ class SurfaceStateTests(unittest.TestCase):
                 landuse[:] = 15
                 landuse.hicar_lifetime = "epoch"
                 vegfrac = dataset.createVariable("VEGFRA", "f4", ("month", "y", "x"))
-                vegfrac[:] = np.arange(12)[:, None, None]
+                vegfrac[:] = np.linspace(0.2, 0.8, 12)[:, None, None]
                 vegfrac.hicar_lifetime = "climatology"
+                lai = dataset.createVariable("LAI", "f4", ("month", "y", "x"))
+                lai[:] = np.linspace(1.0, 4.0, 12)[:, None, None]
+                lai.hicar_lifetime = "climatology"
+                albedo = dataset.createVariable("ALBEDO", "f4", ("month", "y", "x"))
+                albedo[:] = 20.0
+                albedo.hicar_lifetime = "climatology"
             prepare_surface_state(
                 source,
                 static,
@@ -1170,6 +1183,13 @@ class SurfaceStateTests(unittest.TestCase):
             with netCDF4.Dataset(runtime_external) as dataset:
                 np.testing.assert_array_equal(dataset["landuse"][:], 15)
                 self.assertEqual(dataset["VEGFRA"].shape, (12, 2, 2))
+                self.assertGreaterEqual(float(np.min(dataset["VEGFRA"][:])), 20.0)
+                self.assertLessEqual(float(np.max(dataset["VEGFRA"][:])), 80.0)
+                self.assertEqual(dataset["VEGFRA"].units, "percent")
+                self.assertEqual(dataset["VEGFRA"].hicar_unit_conversion, "fraction_to_percent")
+                self.assertEqual(dataset["LAI"].shape, (2, 2))
+                self.assertEqual(dataset["ALBEDO"].units, "1")
+                np.testing.assert_allclose(dataset["ALBEDO"][:], 0.2)
                 self.assertEqual(
                     dataset["VEGFRA"].materialization_policy,
                     "preserved_12_month_climatology_for_hicar_monthly_vegfrac",

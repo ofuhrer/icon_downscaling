@@ -73,6 +73,11 @@ def main() -> int:
     )
     parser.add_argument("--model-debug", action="store_true")
     parser.add_argument("--cfl-reduction-factor", type=float, default=1.6)
+    parser.add_argument(
+        "--require-land-climatology",
+        action="store_true",
+        help="reject runtime domains without both VEGFRA and LAI",
+    )
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
@@ -85,6 +90,9 @@ def main() -> int:
         raise SystemExit("--cfl-reduction-factor must be in (0, 1.6]")
     if not args.static_file.is_file():
         raise SystemExit(f"missing runtime domain: {args.static_file}")
+    land_climatology_lines: list[str] = []
+    monthly_vegfrac = False
+    snow_temperature_line = ""
     with netCDF4.Dataset(args.static_file) as static:
         missing = sorted(
             {
@@ -99,6 +107,52 @@ def main() -> int:
         if soil.ndim != 3 or soil.shape[0] != 4:
             raise SystemExit("soil_type_layer must contain four Noah-MP layers")
         horizontal = static["lat"].shape
+        if "snow_temperature_initial" in static.variables:
+            snow_temperature = np.asarray(
+                static["snow_temperature_initial"][:], dtype=np.float64
+            )
+            if snow_temperature.shape != horizontal or not np.isfinite(
+                snow_temperature
+            ).all():
+                raise SystemExit("snow_temperature_initial must be finite on the target grid")
+            snow_temperature_line = "  snow_temp_var = 'snow_temperature_initial'"
+
+        available_climatology = set(static.variables) & {
+            "VEGFRA", "LAI", "ALBEDO", "vegetation_fraction_max"
+        }
+        if args.require_land_climatology and not {"VEGFRA", "LAI"}.issubset(
+            available_climatology
+        ):
+            missing = sorted({"VEGFRA", "LAI"} - available_climatology)
+            raise SystemExit(
+                "runtime domain lacks required land climatology fields: "
+                + ", ".join(missing)
+            )
+        if "VEGFRA" in available_climatology:
+            variable = static["VEGFRA"]
+            valid_shapes = {horizontal, (12, *horizontal)}
+            if variable.shape not in valid_shapes:
+                raise SystemExit("VEGFRA must have y,x or 12-month month,y,x dimensions")
+            values = np.asarray(variable[:], dtype=np.float64)
+            if not np.isfinite(values).all() or np.any((values < 0.0) | (values > 100.0)):
+                raise SystemExit("VEGFRA must be finite and in 0..100 percent")
+            monthly_vegfrac = variable.shape == (12, *horizontal)
+            land_climatology_lines.append("  vegfrac_var = 'VEGFRA'")
+        for name, namelist_name, lower, upper in (
+            ("LAI", "lai_var", 0.0, 20.0),
+            ("ALBEDO", "albedo_var", 0.0, 1.0),
+            ("vegetation_fraction_max", "vegfracmax_var", 0.0, 100.0),
+        ):
+            if name not in available_climatology:
+                continue
+            values = np.asarray(static[name][:], dtype=np.float64)
+            if values.shape != horizontal or not np.isfinite(values).all() or np.any(
+                (values < lower) | (values > upper)
+            ):
+                raise SystemExit(
+                    f"{name} must be finite on y,x and lie in {lower:g}..{upper:g}"
+                )
+            land_climatology_lines.append(f"  {namelist_name} = '{name}'")
         if static["HHL"].shape != (81, *horizontal) or static["HFL"].shape != (80, *horizontal):
             raise SystemExit("runtime domain HHL/HFL do not match the selected 80-level grid")
         geometry_settings = {
@@ -170,6 +224,9 @@ def main() -> int:
         "@ADVECT_DENSITY@": ".True.",
         "@MODEL_DEBUG@": ".True." if args.model_debug else ".False.",
         "@CFL_REDUCTION_FACTOR@": str(args.cfl_reduction_factor),
+        "@SNOW_TEMPERATURE_LINE@": snow_temperature_line,
+        "@LAND_CLIMATOLOGY_LINES@": "\n".join(land_climatology_lines),
+        "@MONTHLY_VEGFRAC@": ".True." if monthly_vegfrac else ".False.",
         "@STATIC_FILE@": str(args.static_file.resolve()),
         "@FORCING_FILE_LIST@": str(args.forcing_file_list.resolve()),
         "@SPARSE_LBC_FILE_LIST@": str(args.sparse_lbc_file_list.resolve()),

@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RENDERER = ROOT / "case_studies/swiss_200m/scripts/render_hicar_namelist.py"
 
 
-def static_file(path: Path) -> None:
+def static_file(path: Path, *, land_climatology: bool = False) -> None:
     with netCDF4.Dataset(path, "w") as dataset:
         dataset.createDimension("soil_layer", 4)
         dataset.createDimension("level", 80)
@@ -22,6 +22,13 @@ def static_file(path: Path) -> None:
         for name in ("lat", "lon", "topo", "landmask", "landuse", "swe", "snow_height"):
             dataset.createVariable(name, "f4", ("y", "x"))[:] = 0.0
         dataset.createVariable("soil_type_layer", "i2", ("soil_layer", "y", "x"))[:] = 6
+        if land_climatology:
+            dataset.createDimension("month", 12)
+            dataset.createVariable("VEGFRA", "f4", ("month", "y", "x"))[:] = 50.0
+            dataset.createVariable("LAI", "f4", ("y", "x"))[:] = 2.0
+            dataset.createVariable("ALBEDO", "f4", ("y", "x"))[:] = 0.2
+            dataset.createVariable("vegetation_fraction_max", "f4", ("y", "x"))[:] = 80.0
+            dataset.createVariable("snow_temperature_initial", "f4", ("y", "x"))[:] = 270.0
         hhl = np.linspace(0.0, 12_000.0, 81)
         dataset.createVariable("HHL", "f4", ("half_level", "y", "x"))[:] = hhl[:, None, None]
         dataset.createVariable("HFL", "f4", ("level", "y", "x"))[:] = (
@@ -146,3 +153,89 @@ def test_renderer_rejects_mismatched_lbc_times(tmp_path: Path) -> None:
     )
     assert result.returncode != 0
     assert "same two or more times" in result.stderr
+
+
+def test_renderer_wires_available_land_climatology_and_snow_temperature(
+    tmp_path: Path,
+) -> None:
+    static = tmp_path / "static.nc"
+    static_file(static, land_climatology=True)
+    pairs = [input_pair(tmp_path, hour) for hour in range(2)]
+    forcing_list = tmp_path / "forcing.txt"
+    boundary_list = tmp_path / "lbc.txt"
+    forcing_list.write_text("".join(f'"{forcing}"\n' for forcing, _ in pairs))
+    boundary_list.write_text("".join(f'"{boundary}"\n' for _, boundary in pairs))
+    namelist = tmp_path / "input.nml"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(RENDERER),
+            "--static-file",
+            str(static),
+            "--forcing-file-list",
+            str(forcing_list),
+            "--sparse-lbc-file-list",
+            str(boundary_list),
+            "--start-date",
+            "2020-01-01 00:00:00",
+            "--end-date",
+            "2020-01-01 01:00:00",
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--restart-dir",
+            str(tmp_path / "restart"),
+            "--require-land-climatology",
+            "--output",
+            str(namelist),
+        ],
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    text = namelist.read_text()
+    for setting in (
+        "snow_temp_var = 'snow_temperature_initial'",
+        "vegfrac_var = 'VEGFRA'",
+        "lai_var = 'LAI'",
+        "albedo_var = 'ALBEDO'",
+        "vegfracmax_var = 'vegetation_fraction_max'",
+        "monthly_vegfrac = .True.",
+    ):
+        assert setting in text
+
+
+def test_renderer_can_require_land_climatology(tmp_path: Path) -> None:
+    static = tmp_path / "static.nc"
+    static_file(static)
+    pairs = [input_pair(tmp_path, hour) for hour in range(2)]
+    forcing_list = tmp_path / "forcing.txt"
+    boundary_list = tmp_path / "lbc.txt"
+    forcing_list.write_text("".join(f'"{forcing}"\n' for forcing, _ in pairs))
+    boundary_list.write_text("".join(f'"{boundary}"\n' for _, boundary in pairs))
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(RENDERER),
+            "--static-file",
+            str(static),
+            "--forcing-file-list",
+            str(forcing_list),
+            "--sparse-lbc-file-list",
+            str(boundary_list),
+            "--start-date",
+            "2020-01-01 00:00:00",
+            "--end-date",
+            "2020-01-01 01:00:00",
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--restart-dir",
+            str(tmp_path / "restart"),
+            "--require-land-climatology",
+            "--output",
+            str(tmp_path / "input.nml"),
+        ],
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode != 0
+    assert "lacks required land climatology fields" in result.stderr

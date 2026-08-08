@@ -64,6 +64,7 @@
     {"name": "snow_water_equivalent", "aliases": ["SNOW"], "lifetime": "initial_only", "support": "cell", "interpolation": "bounded"},
     {"name": "snow_density", "lifetime": "initial_only", "support": "cell", "interpolation": "bounded", "units": "kg m-3"},
     {"name": "snow_depth", "aliases": ["SNOWH"], "lifetime": "initial_only", "support": "cell", "interpolation": "bounded"},
+    {"name": "snow_temperature_initial", "aliases": ["T_SNOW"], "lifetime": "initial_only", "support": "snow", "interpolation": "same_surface_bounded", "units": "K"},
     {"name": "skin_temperature", "aliases": ["TSK", "surface_temperature"], "lifetime": "initial_only", "support": "cell", "interpolation": "same_surface", "units": "K"},
     {"name": "source_topography_on_target", "lifetime": "initial_only", "support": "cell", "interpolation": "same_surface", "units": "m"},
     {"name": "terrain_height_difference", "lifetime": "initial_only", "support": "cell", "interpolation": "diagnostic", "units": "m"},
