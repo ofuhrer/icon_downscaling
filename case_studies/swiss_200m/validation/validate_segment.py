@@ -47,7 +47,7 @@ def main() -> int:
         raise SystemExit("segment has no NetCDF output")
     output_times = sorted({value for path in output_files for value in decode_times(path)})
     expected = []
-    value = start + timedelta(seconds=args.output_interval)
+    value = start
     while value <= end:
         expected.append(value)
         value += timedelta(seconds=args.output_interval)
