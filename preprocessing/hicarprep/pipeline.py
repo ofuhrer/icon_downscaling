@@ -361,8 +361,12 @@ def _source_wind(
 ) -> tuple[np.ndarray, np.ndarray]:
     if "U" in dataset.variables and "V" in dataset.variables:
         return operator.apply(
-            _level_cell(dataset, "U", ("level", "full_level"), ("m s-1", "m/s"))
-        ), operator.apply(_level_cell(dataset, "V", ("level", "full_level"), ("m s-1", "m/s")))
+            _level_cell(dataset, "U", ("level", "full_level"), ("m s-1", "m/s")),
+            monotone=True,
+        ), operator.apply(
+            _level_cell(dataset, "V", ("level", "full_level"), ("m s-1", "m/s")),
+            monotone=True,
+        )
     edge_fields = {"VN", "edge_lat", "edge_lon", "edge_normal_east", "edge_normal_north"}
     if not edge_fields.issubset(dataset.variables):
         raise KeyError(

@@ -16,6 +16,7 @@ from scipy.spatial import cKDTree
 EARTH_RADIUS_M = 6_371_000.0
 RBF_SCALE_REFERENCE = 0.05
 RBF_GRID_DISTANCE_REFERENCE_M = 13_000.0
+MAXIMUM_RBF_CONDITION_NUMBER = 1.0e10
 
 
 def coordinates_in_degrees(values: np.ndarray, units: str | None) -> np.ndarray:
@@ -75,16 +76,32 @@ def _rbf_scale_radians(source_xyz: np.ndarray, shape_factor: float) -> float:
 
 
 def _solve_kernel(matrix: np.ndarray, rhs: np.ndarray) -> tuple[np.ndarray, float]:
-    """Solve the reference RBF system, adding the smallest viable diagonal nugget."""
+    """Solve an RBF system with the smallest numerically conditioned nugget.
+
+    A finite direct solve is not sufficient: nearly singular ICON stencils can
+    otherwise produce normalized scalar weights of O(100), turning ordinary
+    source winds into isolated O(300 m s-1) target-grid spikes.  Keep the
+    smallest nugget whose 2-norm condition number is bounded before accepting
+    the solution.
+    """
     identity = np.eye(matrix.shape[0])
-    for nugget in (0.0, 1.0e-14, 1.0e-12, 1.0e-10, 1.0e-8):
+    for nugget in (0.0, 1.0e-14, 1.0e-12, 1.0e-10, 1.0e-8, 1.0e-7, 1.0e-6):
+        regularized = matrix + nugget * identity
+        condition_number = float(np.linalg.cond(regularized))
+        if (
+            not np.isfinite(condition_number)
+            or condition_number > MAXIMUM_RBF_CONDITION_NUMBER
+        ):
+            continue
         try:
-            coefficient = np.linalg.solve(matrix + nugget * identity, rhs)
+            coefficient = np.linalg.solve(regularized, rhs)
         except np.linalg.LinAlgError:
             continue
         if np.isfinite(coefficient).all():
             return coefficient, nugget
-    raise ValueError("RBF stencil kernel is singular even after bounded regularization")
+    raise ValueError(
+        "RBF stencil kernel remains ill-conditioned after bounded regularization"
+    )
 
 
 def grid_fingerprint(lat: np.ndarray, lon: np.ndarray, *geometry: np.ndarray) -> str:

@@ -16,6 +16,7 @@ from preprocessing.hicarprep.external import append_epoch, evaluate_external_fie
 from preprocessing.hicarprep.pipeline import (
     _face_grid_wind,
     _remap_vertical_interfaces,
+    _source_wind,
     boundary_relaxation_weights,
     boundary_point_indices,
     convert_water_to_hicar_mixing_ratios,
@@ -269,6 +270,7 @@ class HorizontalRemapTests(unittest.TestCase):
         operator = build_rbf_weights(
             self.source_lat, self.source_lon, self.target_lat, self.target_lon, donors=10
         )
+        self.assertLessEqual(float(np.max(np.sum(np.abs(operator.weight), axis=1))), 10.0)
         result = operator.apply(np.full(self.source_lat.size, 17.25))
         np.testing.assert_allclose(result, 17.25, atol=1.0e-12)
         with tempfile.TemporaryDirectory() as directory:
@@ -279,6 +281,37 @@ class HorizontalRemapTests(unittest.TestCase):
             np.testing.assert_allclose(restored.weight, operator.weight)
             self.assertEqual(restored.method, "int2lm_gaussian_kernel_solve_nearest10_v2")
             self.assertGreater(restored.scale_radians, 0.0)
+
+    def test_scalar_rbf_wind_remap_cannot_create_new_component_extrema(self) -> None:
+        operator = RBFWeights(
+            donor_index=np.array([[0, 1]]),
+            weight=np.array([[2.0, -1.0]]),
+            target_shape=(1, 1),
+            source_fingerprint="source",
+            target_fingerprint="target",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "source.nc"
+            with netCDF4.Dataset(path, "w") as dataset:
+                dataset.createDimension("level", 1)
+                dataset.createDimension("cell", 2)
+                for name, values in (
+                    ("U", [[20.0, -10.0]]),
+                    ("V", [[-15.0, 5.0]]),
+                ):
+                    variable = dataset.createVariable(name, "f8", ("level", "cell"))
+                    variable[:] = values
+                    variable.units = "m s-1"
+            with netCDF4.Dataset(path) as dataset:
+                u, v = _source_wind(
+                    dataset,
+                    operator,
+                    np.array([[46.0]]),
+                    np.array([[8.0]]),
+                    None,
+                )
+        np.testing.assert_allclose(u, 20.0)
+        np.testing.assert_allclose(v, -15.0)
 
     def test_vertical_interface_remap_reconstructs_positive_layers_after_rbf_overshoot(
         self,

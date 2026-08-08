@@ -62,12 +62,16 @@ def main() -> int:
         pressure = np.asarray(forcing["P"][:])
         temperature = np.asarray(forcing["T"][:])
         qv = np.asarray(forcing["QV"][:])
+        u = np.asarray(forcing["U"][:])
+        v = np.asarray(forcing["V"][:])
         if pressure.min() < 100.0 or pressure.max() > 120_000.0:
             raise SystemExit("pressure range is implausible")
         if temperature.min() < 150.0 or temperature.max() > 350.0:
             raise SystemExit("temperature range is implausible")
         if qv.min() < 0.0 or qv.max() > 0.1:
             raise SystemExit("water-vapour range is implausible")
+        if np.max(np.hypot(u, v)) > 200.0:
+            raise SystemExit("horizontal-wind speed exceeds 200 m s-1")
         hhl = np.asarray(forcing["HHL"][:])
         hfl = np.asarray(forcing["HFL"][:])
         if np.any(np.diff(hhl, axis=0) <= 0.0) or np.any(np.diff(hfl, axis=0) <= 0.0):
