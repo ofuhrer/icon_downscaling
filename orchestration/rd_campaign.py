@@ -94,10 +94,32 @@ def submitted_attempt(directory: Path, maximum: int) -> tuple[int, str] | None:
     return None
 
 
-def submit(script: Path, environment: dict[str, str], job_name: str) -> str:
+def validate_partition(partition: str) -> None:
+    description = run(["scontrol", "show", "partition", partition, "-o"])
+    fields = dict(
+        item.split("=", 1) for item in description.split() if "=" in item
+    )
+    allowed = set(fields.get("AllowGroups", "").split(","))
+    if not ({"ALL", "s83"} & allowed):
+        raise RuntimeError(
+            f"partition {partition} is not currently allowed for exact group s83"
+        )
+
+
+def submit(
+    script: Path,
+    environment: dict[str, str],
+    job_name: str,
+    *,
+    partition: str,
+) -> str:
+    validate_partition(partition)
     exports = ["ALL", *(f"{key}={value}" for key, value in environment.items())]
     return run(
-        ["sbatch", "--parsable", "--job-name", job_name, "--export=" + ",".join(exports), str(script)]
+        [
+            "sbatch", "--parsable", "--partition", partition,
+            "--job-name", job_name, "--export=" + ",".join(exports), str(script),
+        ]
     ).split(";")[0]
 
 
@@ -198,6 +220,7 @@ class Campaign:
                     "HICAR_PYTHON": self.config["python"],
                 },
                 "hp-" + when.strftime("%m%d%H"),
+                partition="pp-short",
             )
             (directory / f"attempt-{attempt}.job").write_text(job + "\n")
             submitted += 1
@@ -257,6 +280,7 @@ class Campaign:
                 job = submit(
                     self.repo / "case_studies/swiss_200m/scripts/run_rea_l_stream_chunk_balfrin.sbatch",
                     environment, f"hc-{season.name[:3]}-{index:03d}-a{attempt}",
+                    partition="preemptible",
                 )
                 (segment_root / f"attempt-{attempt}.job").write_text(job + "\n")
                 submitted += 1
