@@ -62,14 +62,16 @@ if test ! -s "$weights"; then
     build-weights --icon-grid "$native" --static "$static" --output "$weights"
 fi
 external_args=()
+epoch_args=(--allow-static-epoch-back-extrapolation)
 if test -n "$external"; then
   test -s "$external" || { echo "missing external-parameter product: $external" >&2; exit 2; }
   external_args=(--external "$external")
+  epoch_args=(--allow-external-epoch-back-extrapolation)
 fi
 uenv run --view=rea-l-ch1 "$image" -- "$python" "$repo_root/scripts/hicarprep.py" \
   prepare-surface --icon-surface "$native" --static "$static" --weights "$weights" \
   --noahmp-table "$noahmp" --soil-water-method smi "${external_args[@]}" \
-  --allow-static-epoch-back-extrapolation --output "$surface"
+  "${epoch_args[@]}" --output "$surface"
 uenv run --view=rea-l-ch1 "$image" -- "$python" "$repo_root/scripts/hicarprep.py" \
   assemble-runtime-domain --static "$static" --surface "$surface" \
   "${external_args[@]}" --valid-time "${valid}Z" --output "$output"

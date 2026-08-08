@@ -145,6 +145,7 @@ def evaluate_external_fields(
     valid_time: dt.datetime,
     *,
     registry: FieldRegistry | None = None,
+    allow_epoch_back_extrapolation: bool = False,
 ) -> dict[str, np.ndarray]:
     """Evaluate step epochs, monthly cycles, and linear series at one valid time."""
     registry = registry or FieldRegistry.default()
@@ -162,7 +163,9 @@ def evaluate_external_fields(
             if spec.lifetime is FieldLifetime.EPOCH:
                 index = int(np.searchsorted(epochs, when, side="right") - 1)
                 if index < 0:
-                    raise ValueError(f"{name}: no epoch is valid at {valid_time.isoformat()}")
+                    if not allow_epoch_back_extrapolation:
+                        raise ValueError(f"{name}: no epoch is valid at {valid_time.isoformat()}")
+                    index = 0
                 result[name] = np.take(data, index, axis=variable.dimensions.index("epoch"))
             elif spec.lifetime is FieldLifetime.CLIMATOLOGY:
                 axis = variable.dimensions.index("month")

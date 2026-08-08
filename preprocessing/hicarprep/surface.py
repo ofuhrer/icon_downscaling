@@ -453,6 +453,7 @@ def prepare_surface_state(
     glacier_landuse_category: int = 24,
     external_path: Path | None = None,
     allow_static_epoch_back_extrapolation: bool = False,
+    allow_external_epoch_back_extrapolation: bool = False,
     temperature_height_method: str = "int2lm_climatological",
     climatological_lapse_rate_k_m: float = 0.007,
     valid_time: str | None = None,
@@ -472,6 +473,10 @@ def prepare_surface_state(
         raise ValueError(
             "static epoch back-extrapolation override is incompatible with an external product"
         )
+    if external_path is None and allow_external_epoch_back_extrapolation:
+        raise ValueError(
+            "external epoch back-extrapolation override requires an external product"
+        )
     hydraulics = parse_noahmp_stas_hydraulics(noahmp_table)
     with netCDF4.Dataset(source_path) as source:
         source_time = str(getattr(source, "valid_time", ""))
@@ -483,6 +488,8 @@ def prepare_surface_state(
         raise ValueError("requested valid_time disagrees with the ICON surface state")
     static_epoch_back_extrapolated = False
     static_landuse_epoch_valid_from = ""
+    external_epoch_back_extrapolated = False
+    external_epoch_valid_from = ""
     with netCDF4.Dataset(static_path) as static:
         target_lat = np.asarray(static["lat"][:], dtype=np.float64)
         target_lon = np.asarray(static["lon"][:], dtype=np.float64)
@@ -492,7 +499,17 @@ def prepare_surface_state(
             from .external import evaluate_external_fields
 
             when = dt.datetime.fromisoformat(chosen_time.replace("Z", "+00:00"))
-            external = evaluate_external_fields(external_path, when)
+            with netCDF4.Dataset(external_path) as external_dataset:
+                epochs = np.asarray(external_dataset["epoch_time"][:], dtype=np.float64)
+                if epochs.size:
+                    first = dt.datetime.fromtimestamp(float(epochs[0]), tz=dt.timezone.utc)
+                    external_epoch_valid_from = first.isoformat().replace("+00:00", "Z")
+                    external_epoch_back_extrapolated = when < first
+            external = evaluate_external_fields(
+                external_path,
+                when,
+                allow_epoch_back_extrapolation=allow_external_epoch_back_extrapolation,
+            )
             if "landuse" not in external:
                 raise KeyError("external product lacks landuse required for glacier policy")
             target_landuse = np.asarray(external["landuse"], dtype=np.int64)
@@ -883,6 +900,12 @@ def prepare_surface_state(
             output.static_epoch_back_extrapolation = (
                 "explicit_research_override"
                 if static_epoch_back_extrapolated
+                else "none"
+            )
+            output.external_epoch_valid_from = external_epoch_valid_from
+            output.external_epoch_back_extrapolation = (
+                "explicit_research_override"
+                if external_epoch_back_extrapolated
                 else "none"
             )
             output.same_surface_fallback_count = fallbacks

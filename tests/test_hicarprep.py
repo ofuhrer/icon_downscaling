@@ -202,6 +202,25 @@ class RegistryAndStaticTests(unittest.TestCase):
             self.assertAlmostEqual(float(sampled["SST"][0, 0]), 282.0)
             expected_lai = (1.0 - 17.5 / 31.0) * 11.0
             self.assertAlmostEqual(float(sampled["LAI"][0, 0]), expected_lai)
+            epoch_path = Path(directory) / "epoch.nc"
+            with netCDF4.Dataset(epoch_path, "w") as dataset:
+                dataset.createDimension("epoch", None)
+                dataset.createDimension("y", 1)
+                dataset.createDimension("x", 1)
+                dataset.product_type = "time_varying_external_parameters"
+                dataset.createVariable("epoch_time", "f8", ("epoch",))[:] = [86_400.0]
+                landuse = dataset.createVariable("landuse", "i2", ("epoch", "y", "x"))
+                landuse[:] = 15
+                landuse.hicar_lifetime = "epoch"
+            before_epoch = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
+            with self.assertRaisesRegex(ValueError, "no epoch is valid"):
+                evaluate_external_fields(epoch_path, before_epoch)
+            extrapolated = evaluate_external_fields(
+                epoch_path,
+                before_epoch,
+                allow_epoch_back_extrapolation=True,
+            )
+            self.assertEqual(int(extrapolated["landuse"][0, 0]), 15)
 
     def test_epoch_append_rejects_incomplete_coupled_record(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -154,6 +154,7 @@ def _prepare_surface(args: argparse.Namespace) -> int:
         glacier_landuse_category=args.glacier_landuse_category,
         external_path=args.external,
         allow_static_epoch_back_extrapolation=args.allow_static_epoch_back_extrapolation,
+        allow_external_epoch_back_extrapolation=args.allow_external_epoch_back_extrapolation,
         temperature_height_method=args.temperature_height_method,
         climatological_lapse_rate_k_m=args.climatological_lapse_rate_k_m,
         valid_time=args.valid_time,
@@ -403,6 +404,14 @@ def parser() -> argparse.ArgumentParser:
         help=(
             "research-only: explicitly use a static epoch before its valid-from time; "
             "the exception is recorded in the surface product"
+        ),
+    )
+    surface.add_argument(
+        "--allow-external-epoch-back-extrapolation",
+        action="store_true",
+        help=(
+            "research-only: explicitly use the earliest external epoch before its valid-from "
+            "time; the exception is recorded in the surface product"
         ),
     )
     surface.add_argument("--valid-time", help="required only when source lacks valid_time")

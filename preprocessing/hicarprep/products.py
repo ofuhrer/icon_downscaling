@@ -636,6 +636,12 @@ def assemble_hicar_runtime_domain(
             runtime.land_state_static_epoch_back_extrapolation = str(
                 getattr(surface, "static_epoch_back_extrapolation", "unknown")
             )
+            runtime.land_state_external_epoch_back_extrapolation = str(
+                getattr(surface, "external_epoch_back_extrapolation", "unknown")
+            )
+            runtime.land_state_external_epoch_valid_from = str(
+                getattr(surface, "external_epoch_valid_from", "")
+            )
             runtime.land_state_static_landuse_epoch_valid_from = str(
                 getattr(surface, "static_landuse_epoch_valid_from", "")
             )
