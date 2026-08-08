@@ -101,16 +101,14 @@ costly runs that require recoverability.
   matrices.
 - For direct REA-L land initialization, use the tuned operational ICON-CH1-EPS
   EXTPAR file only after verifying that its `uuidOfHGrid` exactly matches the
-  GRIB grid. The July 2020 coupled comparison rejected the full TERRA-SMI ->
-  NoahMP-STAS transform: after 48 h it produced about `39--42 kg m-2` mean
-  soil-column-water bias and `0.0624 m3 m-3` soil-water RMSE, substantially
-  worse than the legacy absolute-water initialization. Retain direct native
-  ICON -> HICAR interpolation, but use direct-native absolute `W_SO` plus exact
-  vertical overlap as the next/default candidate. Treat any future SMI variant
-  as a bounded research intervention, not a production default. If testing it,
-  derive TERRA SMI from `W_SO` and `SOILTYP` on the native grid, normalize
-  finite support across sea boundaries, and reconstruct with the exact target
-  soil class and selected NoahMP table.
+  GRIB grid. SMI is the selected cold-start policy: derive TERRA SMI from
+  `W_SO` and native `SOILTYP`, normalize finite support across sea boundaries,
+  remap vertically by overlap, and reconstruct water with the exact target
+  soil class and selected NoahMP table. The July 2020 comparison against a
+  legacy-absolute-water continuous trajectory found a large wet offset; retain
+  that as sensitivity evidence, not as a reason to silently revert policy.
+  Keep relative saturation available for diagnosis and direct absolute
+  `W_SO` only as a historical/control path.
 - Fail on missing land values. If positive `W_SNOW` has invalid `RHO_SNOW`,
   fail unless an explicit density fallback is supplied and recorded in the
   manifest.

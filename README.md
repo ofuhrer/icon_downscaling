@@ -70,7 +70,6 @@ validation reports are.
 | `fieldextra/` | Optional private fieldextra checkout, ignored by the outer repository |
 | `.agents/skills/` | Durable project procedures for source, forcing, domain, configuration, and runtime work |
 | `memory/project-assessment.md` | Current synthesis, ranked goals, and next step |
-| `memory/project-state.md` | Legacy evidence ledger and canonical artifact locators |
 | `docs/architecture.md` | Design boundaries, data lifecycle, and extension rules |
 | `docs/disaster-recovery.md` | Deletion gate and clean-room rebuild procedure |
 
@@ -196,14 +195,11 @@ make test-hicar-contract
 make test-all
 ```
 
-They are intentionally not part of public coordinator CI. The current experimental baseline
-at `6bd302f8` passes the four restart-initialization checks and the adjusted
-horizontal-wind advancement contract. It deliberately fails three cumulative-
-water metadata/diagnostic checks that describe the scientifically failed V29
-line. Do not weaken or xfail that explicit integration gate. No production
-claim follows from those V29 contracts until that line is deliberately
-integrated and scientifically requalified. A local dirty HICAR tree must never
-be smuggled into the outer repository through passing tests.
+They are intentionally not part of public coordinator CI. The current
+experimental baseline is HICAR `5d557495`; it includes the corrected wind
+tendency, restart state, water-budget diagnostics, initialization-only path,
+and sparse LBC reader. A local dirty HICAR tree must never be smuggled into the
+outer repository through passing tests.
 
 Run the repository-level syntax and whitespace checks with:
 
@@ -212,8 +208,7 @@ make check
 ```
 
 Before changing an operational path, read `AGENTS.md`,
-`memory/project-assessment.md`, and the smallest matching project skill. Use
-`memory/project-state.md` only for relevant historical evidence. See
+`memory/project-assessment.md`, and the smallest matching project skill. See
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for change ownership and validation
 expectations.
 

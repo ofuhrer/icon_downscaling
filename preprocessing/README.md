@@ -82,7 +82,7 @@ python scripts/hicarprep.py build-vector-weights \
 ```
 
 Prepare the valid-time land state with an explicit soil-water policy. SMI is
-the provisional default: it derives a PWP-to-field-capacity index on native
+the selected cold-start default: it derives a PWP-to-field-capacity index on native
 ICON cells using native `SOILTYP`, remaps it with bounded finite same-surface
 support, and reconstructs VWC using the exact target soil class and selected
 Noah-MP table. `relative_saturation` instead preserves the fraction of pore
@@ -137,8 +137,8 @@ For depth-varying hydraulics, render HICAR with `soiltexture_var =
 requires exactly four layers and passes them to Noah-MP's existing per-layer
 texture inputs. The provenance-bound winter/summer coupled smoke report is
 `case_studies/swiss_200m/validation/hicarprep_coupled_smoke_2020_v1.json`;
-it establishes evolved 10-minute ingestion and bounded state only, not a
-scientific choice between SMI and relative saturation. The five-file reader
+it establishes evolved 10-minute ingestion and bounded state. The project has
+subsequently selected SMI; relative saturation remains a diagnostic sensitivity. The five-file reader
 implementation is committed in the local HICAR repository as `bae0c94c`; the
 report retains the exact isolated qualification-build source identity.
 

@@ -83,10 +83,11 @@ artifacts.
 
 The validated engineering reference for the current scientific assessment is:
 `feature/icon_downscaling` at
-`6bd302f8b97062cd43c1b8d4e59bd3cf0dc8ae07`. This tip contains the qualified
-V26 restart state, selectively validated SCHNAPS fixes, fixed-height wind
-diagnostics, and the restored adjusted horizontal-wind tendency. V29 remains
-a separate failed scientific evidence branch.
+`5d5574959f5c62feb183d184ab6ef99d2adfce80`. This tip contains the corrected
+wind tendency, qualified restart state, water-budget diagnostics,
+initialization-only path, and sparse target-native LBC reader. Terrain
+radiation remains off in restartable campaigns; its component is available
+only for bounded uninterrupted sensitivities.
 
 Build the exact pinned commit with the canonical GPU/NCCL builder:
 

@@ -51,9 +51,17 @@ temperature. The differences decay but remain outside the declared tolerance.
 
 The resulting decision is therefore
 `TERRAIN_COMPONENT_PASS_RESTART_GATE_FAIL`. This authorizes neither a valley
-experiment nor production use. Until restart equivalence is fixed, any later
-causal experiment must keep preconditioning and scoring in one uninterrupted
-run.
+promotion nor restart-linked use. A bounded uninterrupted sensitivity is
+permitted when preconditioning and scoring remain in the same run.
+
+Two targeted restart repairs are negative evidence. Persisting module-local
+surface humidity had no effect. Restoring the full outward-facing NoahMP
+energy-state group (radiative temperature, surface properties, 2 m states,
+ground temperatures, stomatal/canopy fields, and exchange coefficients) also
+left every restart-gate metric unchanged. The missing trajectory dependency is
+therefore deeper module-private state or call ordering. No speculative patch
+or active worktree is retained; reopen only with an instrumented hidden-state
+audit or an upstream NoahMP restart solution.
 
 The durable complete artifact is
 `/store_new/mch/msopr/olifu/icon_downscaling/qualification/terrain_radiation_model_gate_v4`.

@@ -98,53 +98,15 @@ the runner's passing production-provenance block. It qualifies engineering
 capacity only; it does not establish 100 m scientific added value or authorize
 production.
 
-- Escalate duration as paired 72-hour summer/winter events, then one
-  continuous month, then an annual seasonal cycle. A successful event does
-  not by itself qualify a seasonal or 20-year campaign.
-- For the month stage, use five exact-end restart segments of
-  7/7/7/7/3 days, declare the first seven days as spin-up, and retain 24
-  days. Require 249 unique three-hourly records. Start an independent
-  uninterrupted eight-day reference from the first seven-day restart so it
-  crosses the next boundary, then compare every qualification field for at
-  least 24 hours after that boundary using the tolerances frozen in
-  `config/scientific_pilot_plan.json`. A shared-timestamp boundary check alone
-  is not restart-equivalence evidence. The month promotion assessor must also
-  require the exact station/model time axis, all 31 unique TabsD days, all 30
-  unique RhiresD windows, and 247 unique in-period SIS matches; raw list
-  lengths are not sufficient coverage evidence.
-- After the final month segment, run the physical-budget, REA-L-source,
-  SwissMetNet, and OGD-grid comparisons independently. Screen all retained
-  elevation and active-soil class means for large nearly monotonic tendencies;
-  treat a screen hit as an attribution requirement, not automatic numerical
-  drift. Annual execution requires an exact signed classification of every
-  flag, zero unexplained flags, all frozen HICAR-versus-REA-L degradation
-  limits, every lossless compression publication, and an `APPROVED` durable
-  archive contract with a published restore drill. An unresolved archive
-  contract must produce a specific hold even when the science passes. Also
-  require a separately approved application-quality contract containing
-  absolute limits and metric weights; relative non-degradation against the
-  driver alone must not authorize an annual run. Every month/annual model
-  completion must also carry a passing production-provenance block: clean
-  pre-run tracked status plus no untracked build inputs under the declared
-  HICAR source/configuration paths, full source commit, executable SHA-256
-  verified again after execution, exact archived plan and
-  forcing-publication hashes, static-domain hash, and model-log hash.
-  Unrelated untracked runtime logs are permitted. A legacy completion without
-  this block may inform event science but cannot authorize an annual or
-  20-year campaign. Every segment and equivalence run in one gate must share
-  a single source commit, executable hash, and static-domain hash.
-- Before submitting a month or 100 m capacity DAG, require its submitter to
-  validate semantic provenance markers in the runner, model validator, and
-  final assessor, then checksum every referenced Slurm script plus those
-  critical Python runtime files into the dry run and submission receipt. This
-  is a pre-submission stale-stack gate; file existence alone is insufficient.
-- In a long streaming chain, schedule forcing retirement only after the
-  consuming model publication has validated output and exact-end restart.
-  Recheck the published plan, forcing hashes, and model-provenance hashes;
-  withdraw all forcing ready markers before deleting payloads; atomically
-  publish a checksum-bearing retirement report; and require that report in the
-  promotion assessor. A policy sentence without an executable retirement job
-  is not a bounded-storage workflow.
+- Treat window length, overlap, warm-up, and retained-core ownership as an
+  experiment policy, not fixed defaults. The existing 72-hour summer tests
+  are evidence for one layout only. Contrast regimes and model ages before
+  selecting a production window policy.
+- Scale to month, annual, or 100 m work only when a shorter experiment changes
+  a scientific decision. Use the preemptible controller and shared forcing
+  cache when they save compute; retain source/configuration identity and key
+  outputs, without imposing production archive or promotion ceremony during
+  R&D.
 - Do not integrate legacy HICAR `runoff_surface` or `runoff_subsurface`
   snapshots as `mm s-1`. NoahMP converts its internal rates to millimetres per
   soil timestep before HICAR copies the last-step depth, despite the legacy

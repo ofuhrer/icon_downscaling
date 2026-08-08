@@ -59,17 +59,16 @@ optional unless they materially affect those requirements.
 - HICAR remote: `git@github.com:ofuhrer/HICAR.git`
 - Validated engineering branch: `feature/icon_downscaling`
 - Current experimental HICAR baseline:
-  `6bd302f8b97062cd43c1b8d4e59bd3cf0dc8ae07`
+  `5d5574959f5c62feb183d184ab6ef99d2adfce80`
 - Available long/costly-run workflow: short segments managed by
   `orchestration/preemptible_campaign.py`
 - Retired solver-research source: checksum-bound bundles and manifests under
   `recovery/` and the durable online root; do not recreate active branches or
   scratch worktrees for it.
 
-Use `memory/project-assessment.md` for the current synthesis and ranked goals.
-Use `memory/project-state.md` only as the legacy evidence ledger while its
-facts are progressively compacted into case manifests. Do not add dated
-investigation diaries.
+Use `memory/project-assessment.md` for the current synthesis, decisions, branch
+closure, and ranked goals. Exact experiment details belong in concise case
+manifests. Do not add dated investigation diaries or general evidence ledgers.
 
 ## Skill routing
 
@@ -83,8 +82,7 @@ Project skills live under `.agents/skills/` and apply only when Codex is working
 - Project-local `$hicar-balfrin-runtime`: HICAR builds, Slurm execution, CPU/GPU transport, debugging and benchmarking.
 
 Skills contain durable procedures and defaults. `memory/project-assessment.md`
-contains the active synthesis and priorities; `memory/project-state.md` is the
-legacy evidence ledger.
+contains the active synthesis and priorities.
 
 ## Code discovery
 
@@ -149,7 +147,6 @@ After each prompt, persist only information that changes future decisions:
 - Update `memory/project-assessment.md` when evidence changes the current
   synthesis, ranked goals, or next step.
 - Record exact commits, validated artifacts, and reproducible run details in
-  case manifests; use `memory/project-state.md` only when a legacy canonical
-  locator is not yet available elsewhere.
+  concise case manifests.
 - Update this file only for project-wide routing, locations, or operating rules.
 - Do not preserve command transcripts, failed guesses, job-by-job narratives, or facts superseded by the current validated state.

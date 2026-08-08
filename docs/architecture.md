@@ -80,13 +80,11 @@ advance the outer gitlink in a separate, reviewable change.
 `AGENTS.md` routes maintainers and automated collaborators to the correct
 procedure. `.agents/skills/` records durable schemas, invariants, and cluster
 procedures. `memory/project-assessment.md` records the current synthesis,
-ranked goals, and reassessment triggers. `memory/project-state.md` is the
-legacy evidence ledger while older facts are moved into case manifests.
+decisions, ranked goals, and reassessment triggers.
 
 Do not add chronological command diaries. Reusable knowledge belongs in a
-skill; current scientific understanding belongs in the assessment; legacy
-locators belong in the state ledger; reproducible run details belong in a case
-manifest.
+skill; current scientific understanding belongs in the assessment;
+reproducible run details belong in a concise case manifest.
 
 ## Data lifecycle
 
