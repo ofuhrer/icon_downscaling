@@ -56,13 +56,11 @@ done
 touch "$forcing_list.ready"
 while IFS='"' read -r _ path _; do sha256sum "$path"; done < "$forcing_list" > "$run/forcing.sha256"
 
-for variable in soiltexture_var soil_water_content_liq; do
-  "$exe" -v "$variable" > "$run/${variable}_query.txt" 2>&1
-  if grep -q "not a valid namelist variable" "$run/${variable}_query.txt"; then
-    echo "selected executable lacks $variable" >&2
-    exit 2
-  fi
-done
+"$exe" -v soiltexture_var > "$run/soiltexture_var_query.txt" 2>&1
+if grep -q "not a valid namelist variable" "$run/soiltexture_var_query.txt"; then
+  echo "selected executable lacks depth-varying soiltexture_var support" >&2
+  exit 2
+fi
 
 "$python_bin" "$renderer" \
   --static-file "$static_file" --forcing-file-list "$forcing_list" \
