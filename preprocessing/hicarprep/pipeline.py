@@ -392,6 +392,59 @@ def _source_wind(
     return vector_operator.apply(vn)
 
 
+def _remap_vertical_interfaces(
+    native_hhl: np.ndarray,
+    weights: RBFWeights,
+) -> tuple[np.ndarray, dict[str, float | str]]:
+    """Remap bottom-to-top interfaces without allowing layer crossings.
+
+    RBF weights may be negative, so applying them independently to every
+    interface does not preserve the ordering that is present in each native
+    ICON column.  Remap the two endpoints and the strictly positive native
+    layer thicknesses with donor-range clipping, then rescale the thicknesses
+    to span the remapped endpoints.  This retains the RBF endpoint estimates
+    and the vertical distribution of layer depth without sorting interfaces.
+    """
+    native = np.asarray(native_hhl, dtype=np.float64)
+    if native.ndim != 2:
+        raise ValueError("native ICON HHL must have interface and cell dimensions")
+    native_thickness = np.diff(native, axis=0)
+    if not np.isfinite(native).all() or not np.all(native_thickness > 0.0):
+        raise ValueError("native ICON HHL must be finite and strictly bottom-to-top")
+
+    bottom = weights.apply(native[0], monotone=True)
+    top = weights.apply(native[-1], monotone=True)
+    endpoint_span = top - bottom
+    thickness = weights.apply(native_thickness, monotone=True)
+    thickness_sum = np.sum(thickness, axis=0)
+    if (
+        not np.isfinite(bottom).all()
+        or not np.isfinite(top).all()
+        or not np.isfinite(thickness).all()
+        or np.any(endpoint_span <= 0.0)
+        or np.any(thickness <= 0.0)
+        or np.any(thickness_sum <= 0.0)
+    ):
+        raise ValueError("constrained ICON HHL remap did not produce positive target columns")
+
+    scale = endpoint_span / thickness_sum
+    thickness *= scale[None, ...]
+    remapped = np.empty((native.shape[0], *weights.target_shape), dtype=np.float64)
+    remapped[0] = bottom
+    remapped[1:] = bottom[None, ...] + np.cumsum(thickness, axis=0)
+    remapped[-1] = top
+    differences = np.diff(remapped, axis=0)
+    if not np.isfinite(remapped).all() or not np.all(differences > 0.0):
+        raise ValueError("constrained ICON HHL remap produced a crossed target column")
+    return remapped, {
+        "source_geometry_remap": "positive_layer_thickness_rescaled_to_rbf_endpoints",
+        "source_geometry_min_layer_thickness_m": float(np.min(differences)),
+        "source_geometry_max_layer_thickness_m": float(np.max(differences)),
+        "source_geometry_min_thickness_scale": float(np.min(scale)),
+        "source_geometry_max_thickness_scale": float(np.max(scale)),
+    }
+
+
 def transform_icon_state(
     source_path: Path,
     static_path: Path,
@@ -415,8 +468,49 @@ def transform_icon_state(
         source_lon = read_coordinate(source, "clon")
         if weights.source_fingerprint != grid_fingerprint(source_lat, source_lon):
             raise ValueError("cached weights do not belong to this ICON source grid")
-        source_hhl = weights.apply(
-            _level_cell(source, "HHL", ("half_level", "interface"), ("m", "meter", "metre"))
+        native_hhl = _level_cell(
+            source, "HHL", ("half_level", "interface"), ("m", "meter", "metre")
+        )
+        declared_order = (
+            str(getattr(source["HHL"], "level_order", getattr(source, "vertical_order", "infer")))
+            .strip()
+            .lower()
+        )
+        native_differences = np.diff(native_hhl, axis=0)
+        if np.all(native_differences > 0.0):
+            source_order = "bottom_to_top"
+        elif np.all(native_differences < 0.0):
+            source_order = "top_to_bottom"
+        else:
+            increasing = np.all(native_differences > 0.0, axis=0)
+            decreasing = np.all(native_differences < 0.0, axis=0)
+            mixed = ~(increasing | decreasing)
+            raise ValueError(
+                "native ICON HHL is not consistently ordered in every column: "
+                f"increasing_columns={int(np.sum(increasing))}, "
+                f"decreasing_columns={int(np.sum(decreasing))}, "
+                f"mixed_columns={int(np.sum(mixed))}, "
+                f"minimum_layer_delta_m={float(np.nanmin(native_differences)):.9g}, "
+                f"maximum_layer_delta_m={float(np.nanmax(native_differences)):.9g}, "
+                f"nonfinite_deltas={int(np.sum(~np.isfinite(native_differences)))}"
+            )
+        declared_aliases = {
+            "bottom_to_top": "bottom_to_top",
+            "bottom-to-top": "bottom_to_top",
+            "ascending": "bottom_to_top",
+            "top_to_bottom": "top_to_bottom",
+            "top-to-bottom": "top_to_bottom",
+            "descending": "top_to_bottom",
+            "infer": source_order,
+            "": source_order,
+        }
+        if declared_order not in declared_aliases:
+            raise ValueError(f"unsupported ICON vertical order declaration {declared_order!r}")
+        if declared_aliases[declared_order] != source_order:
+            raise ValueError("declared ICON vertical order contradicts native HHL")
+        bottom_to_top_hhl = native_hhl if source_order == "bottom_to_top" else native_hhl[::-1]
+        source_hhl, geometry_diagnostics = _remap_vertical_interfaces(
+            bottom_to_top_hhl, weights
         )
         unit_policy = {
             "T": ("k", "kelvin"),
@@ -457,46 +551,7 @@ def transform_icon_state(
         reference_time = str(getattr(source, "reference_time", "unknown"))
         forecast_step_hours = int(getattr(source, "forecast_step_hours", -1))
         missing_qi_policy = str(getattr(source, "missing_qi_policy", "unknown"))
-        declared_order = (
-            str(getattr(source["HHL"], "level_order", getattr(source, "vertical_order", "infer")))
-            .strip()
-            .lower()
-        )
-
-    differences = np.diff(source_hhl, axis=0)
-    if np.all(differences > 0.0):
-        source_order = "bottom_to_top"
-    elif np.all(differences < 0.0):
-        source_order = "top_to_bottom"
-    else:
-        increasing = np.all(differences > 0.0, axis=0)
-        decreasing = np.all(differences < 0.0, axis=0)
-        mixed = ~(increasing | decreasing)
-        raise ValueError(
-            "remapped ICON HHL is not consistently ordered in every column: "
-            f"increasing_columns={int(np.sum(increasing))}, "
-            f"decreasing_columns={int(np.sum(decreasing))}, "
-            f"mixed_columns={int(np.sum(mixed))}, "
-            f"minimum_layer_delta_m={float(np.nanmin(differences)):.9g}, "
-            f"maximum_layer_delta_m={float(np.nanmax(differences)):.9g}, "
-            f"nonfinite_deltas={int(np.sum(~np.isfinite(differences)))}"
-        )
-    declared_aliases = {
-        "bottom_to_top": "bottom_to_top",
-        "bottom-to-top": "bottom_to_top",
-        "ascending": "bottom_to_top",
-        "top_to_bottom": "top_to_bottom",
-        "top-to-bottom": "top_to_bottom",
-        "descending": "top_to_bottom",
-        "infer": source_order,
-        "": source_order,
-    }
-    if declared_order not in declared_aliases:
-        raise ValueError(f"unsupported ICON vertical order declaration {declared_order!r}")
-    if declared_aliases[declared_order] != source_order:
-        raise ValueError("declared ICON vertical order contradicts remapped HHL")
     if source_order == "top_to_bottom":
-        source_hhl = source_hhl[::-1]
         source_w = source_w[::-1]
         remapped = {name: value[::-1] for name, value in remapped.items()}
         hydro = {name: value[::-1] for name, value in hydro.items()}
@@ -562,6 +617,7 @@ def transform_icon_state(
         "source_forecast_step_hours": forecast_step_hours,
         "missing_qi_policy": missing_qi_policy,
         "source_vertical_order": source_order,
+        **geometry_diagnostics,
         "terrain_difference_min_m": float(np.min(terrain_differences)),
         "terrain_difference_max_m": float(np.max(terrain_differences)),
         "below_source_target_levels": below_count,

@@ -15,6 +15,7 @@ from preprocessing.hicarprep.geometry import SleveConfig, build_sleve_geometry
 from preprocessing.hicarprep.external import append_epoch, evaluate_external_fields
 from preprocessing.hicarprep.pipeline import (
     _face_grid_wind,
+    _remap_vertical_interfaces,
     boundary_relaxation_weights,
     boundary_point_indices,
     convert_water_to_hicar_mixing_ratios,
@@ -271,6 +272,36 @@ class HorizontalRemapTests(unittest.TestCase):
             np.testing.assert_allclose(restored.weight, operator.weight)
             self.assertEqual(restored.method, "int2lm_gaussian_kernel_solve_nearest10_v2")
             self.assertGreater(restored.scale_radians, 0.0)
+
+    def test_vertical_interface_remap_reconstructs_positive_layers_after_rbf_overshoot(
+        self,
+    ) -> None:
+        operator = RBFWeights(
+            donor_index=np.array([[0, 1]]),
+            weight=np.array([[2.0, -1.0]]),
+            target_shape=(1, 1),
+            source_fingerprint="source",
+            target_fingerprint="target",
+        )
+        native_hhl = np.array(
+            [
+                [0.0, 10.0],
+                [1.0, 110.0],
+                [2.0, 111.0],
+            ]
+        )
+        direct = operator.apply(native_hhl)
+        self.assertTrue(np.any(np.diff(direct, axis=0) <= 0.0))
+
+        remapped, diagnostics = _remap_vertical_interfaces(native_hhl, operator)
+
+        self.assertTrue(np.all(np.diff(remapped, axis=0) > 0.0))
+        np.testing.assert_allclose(remapped[0], operator.apply(native_hhl[0], monotone=True))
+        np.testing.assert_allclose(remapped[-1], operator.apply(native_hhl[-1], monotone=True))
+        self.assertEqual(
+            diagnostics["source_geometry_remap"],
+            "positive_layer_thickness_rescaled_to_rbf_endpoints",
+        )
 
     def test_native_radian_coordinates_are_normalized(self) -> None:
         np.testing.assert_allclose(
