@@ -361,6 +361,10 @@ admissible water bound and a dry/wilting response diagnostic, then re-read the
 existing summer output under that independently justified contract. The
 frozen and post-hoc reports are under
 `/scratch/mch/olifu/icon_hicar/qualification/hicarprep-land-response-6h-v1/runs-v3/`.
+Their concise checksum-bound case record is
+`case_studies/swiss_200m/validation/hicarprep_land_response_6h_20200702_v1.json`;
+the small reports are durably published under
+`/store_new/mch/msopr/olifu/icon_downscaling/qualification/hicarprep-land-response-6h-v1`.
 
 The next direct-native absolute-`W_SO` candidate is implemented and statically
 bounded for both origins. It uses support-normalized native-grid interpolation
@@ -457,6 +461,9 @@ interpretation, or become part of the selected strategy.
   sparse LBC sequence, and bracket-crossing runtime qualification:
   `case_studies/swiss_200m/validation/hicarprep_storm_sparse_lbc_20200210_v1.json`
   and `/scratch/mch/olifu/icon_hicar/qualification/remaining-milestone-8051f4c`
+- Matched six-hour summer SMI/relative land response, frozen result,
+  robustness interpretation, and exact artifact identities:
+  `case_studies/swiss_200m/validation/hicarprep_land_response_6h_20200702_v1.json`
 - Historical detail and superseded decisions: `memory/project-state.md`
 
 The legacy ledger is evidence, not a work queue. Results produced before the

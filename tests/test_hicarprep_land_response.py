@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFINITION = ROOT / "case_studies/swiss_200m/config/hicarprep_land_response_6h_v1.json"
 ASSESSOR = ROOT / "case_studies/swiss_200m/validation/assess_hicarprep_land_response.py"
 ROBUSTNESS = ROOT / "case_studies/swiss_200m/validation/diagnose_hicarprep_land_response_robustness.py"
+CASE_REPORT = ROOT / "case_studies/swiss_200m/validation/hicarprep_land_response_6h_20200702_v1.json"
 SPEC = importlib.util.spec_from_file_location("assess_hicarprep_land_response", ASSESSOR)
 MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
@@ -80,3 +81,17 @@ def test_posthoc_diagnostic_cannot_rewrite_frozen_decision() -> None:
     assert '"status": "POST_HOC_DIAGNOSTIC_ONLY"' in script
     assert '"frozen_decision_unchanged": assessment["decision"]' in script
     assert "decision_states" not in script
+
+
+def test_case_report_closes_provenance_without_rewriting_result() -> None:
+    report = json.loads(CASE_REPORT.read_text())
+    decision = report["decision"]
+    assert decision["frozen_result"] == "RELATIVE_SATURATION_NOT_VIABLE_IN_SUMMER_6H"
+    assert decision["frozen_result_altered_by_posthoc_analysis"] is False
+    assert report["forcing"]["common_to_both_arms"] is True
+    assert len(report["forcing"]["records"]) == 8
+    assert report["runs"]["smi"]["viability_status"] == "PASS_VIABILITY"
+    assert report["runs"]["relative_saturation"]["viability_status"] == "FAIL_VIABILITY"
+    stored = report["durable_publication"]["stored_files"]
+    assert all("output" not in name and "model" not in name for name in stored)
+    assert all(len(value) == 64 for value in stored.values())

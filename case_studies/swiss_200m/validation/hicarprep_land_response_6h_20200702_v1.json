@@ -1,0 +1,190 @@
+{
+  "case_id": "hicarprep-land-response-6h-v1",
+  "case_time": {
+    "end": "2020-07-02T06:00:00Z",
+    "output_interval_seconds": 1800,
+    "records": 13,
+    "start": "2020-07-02T00:00:00Z"
+  },
+  "decision": {
+    "basis": "only_smi_passes",
+    "frozen_result": "RELATIVE_SATURATION_NOT_VIABLE_IN_SUMMER_6H",
+    "frozen_result_altered_by_posthoc_analysis": false,
+    "interpretation": "The frozen result is valid under its predeclared DRYSMC-minus-1e-5 gate, but its only failures are 14 sparse, marginal top-layer crossings. This is not evidence of broad physical or numerical invalidity.",
+    "next_discriminator": "Define a source-supported hard hydraulic admissibility bound separately from dry/wilting response thresholds, then re-assess the existing output. Use a matched winter case only if method uncertainty remains or ice/SWE supplies a new discriminator.",
+    "status": "PASS_INTERPRETABLE_EXPERIMENT"
+  },
+  "durable_publication": {
+    "locator": "/store_new/mch/msopr/olifu/icon_downscaling/qualification/hicarprep-land-response-6h-v1",
+    "ready_marker": "/store_new/mch/msopr/olifu/icon_downscaling/qualification/hicarprep-land-response-6h-v1/READY",
+    "sha256sums_sha256": "6b519c885b1c464712e53b9d790d006e4b2e4875a67bbd99fd14a34b9514375e",
+    "status": "READY",
+    "stored_files": {
+      "assessment.json": "faf46d530a54641ed8780007f7a1b5fc1b36871716d9f8f9658fcd1796879268",
+      "assessment_posthoc_robustness.json": "1c0995d09aca8a8659b8fd6c8ce1a608f7ca5bc37fee129fb88b105a2f414d2e",
+      "experiment_definition.json": "d28e844c194764b3d9f8584411902cb635ff07579889188a46107a4032358cd1",
+      "reference_publication.json": "5b357102c7efda609843c19221345d8855aa7d0211f6586ae7bc01cf8d580592",
+      "relative_saturation_solver_report.json": "55f0bfe5c0588e57faf07900b2dcd3582c31bbad08bbad22810bea75d7d1c2df",
+      "relative_saturation_source_consistency.json": "1f3587f8cadb44590798c4b2976a81c663d2b5d9cceb59ca4876fca4adc9dfe6",
+      "smi_solver_report.json": "235e7d599e7b4a9a83efc71290d6bc9022069ed6bb78aed08e9c7b26b07e5196",
+      "smi_source_consistency.json": "bc5f1d702ff65babc1e5d2cf61e0d1c377ad703139d998fc6e812c8f7e9d111e"
+    }
+  },
+  "forcing": {
+    "common_to_both_arms": true,
+    "forcing_manifest_sha256": "3bb60c67c493f218ff17ce4b7afd54f8f966af20737ebf88def82f924c3207db",
+    "forcing_list_sha256": "2787eadc02b24125f81407d27f76a44a0bb5de26d94f5b807924f8663dc2d559",
+    "records": [
+      {
+        "path": "/scratch/mch/olifu/icon_hicar/qualification/chronological-overlap-summer-202007/v2/campaign/forcing_cache/records/rea_l_hicar_20200702_0000.nc",
+        "sha256": "35b24f747534e8119fa5844cc5e5cb37ed7e9d1e3bfa2973acc0b223e188914c"
+      },
+      {
+        "path": "/scratch/mch/olifu/icon_hicar/qualification/chronological-overlap-summer-202007/v2/campaign/forcing_cache/records/rea_l_hicar_20200702_0100.nc",
+        "sha256": "2d82e31d9ca05d78e82082b6bbb092c2911f05b3d4aabd952d0ae945d7c3bd48"
+      },
+      {
+        "path": "/scratch/mch/olifu/icon_hicar/qualification/chronological-overlap-summer-202007/v2/campaign/forcing_cache/records/rea_l_hicar_20200702_0200.nc",
+        "sha256": "431672fddf04efbd29f6f0a988cd617a5a63b34469831a82d57103b67031fe4f"
+      },
+      {
+        "path": "/scratch/mch/olifu/icon_hicar/qualification/chronological-overlap-summer-202007/v2/campaign/forcing_cache/records/rea_l_hicar_20200702_0300.nc",
+        "sha256": "0cf7229f03d71089ef15f48025a368ef79ef3713cacb8e401a31db82dba5f9c5"
+      },
+      {
+        "path": "/scratch/mch/olifu/icon_hicar/qualification/chronological-overlap-summer-202007/v2/campaign/forcing_cache/records/rea_l_hicar_20200702_0400.nc",
+        "sha256": "bc3afda5ddc91095ec3502fbb3ebf24c7a4ff3433fed20afa75fe12ecbdc115a"
+      },
+      {
+        "path": "/scratch/mch/olifu/icon_hicar/qualification/chronological-overlap-summer-202007/v2/campaign/forcing_cache/records/rea_l_hicar_20200702_0500.nc",
+        "sha256": "5b2f2a326e21fc76676af3828a9a5a6fdd30f6d2e274ce95d12f8f88463148cb"
+      },
+      {
+        "path": "/scratch/mch/olifu/icon_hicar/qualification/chronological-overlap-summer-202007/v2/campaign/forcing_cache/records/rea_l_hicar_20200702_0600.nc",
+        "sha256": "f8638390571c908e0bfac4dd332f0c6ee1130fde89360ee28c484cc3a2946580"
+      },
+      {
+        "path": "/scratch/mch/olifu/icon_hicar/qualification/chronological-overlap-summer-202007/v2/campaign/forcing_cache/records/rea_l_hicar_20200702_0700.nc",
+        "sha256": "ac84829ad2df528a44d9f62bdb374163e3863d7a265e1af4dac91af1587836f9"
+      }
+    ]
+  },
+  "generated_at": "2026-08-08T07:13:12Z",
+  "key_metrics": {
+    "final_smi_minus_relative_saturation": {
+      "hfls_rmse_w_m2": 4.188561999679292,
+      "hfss_rmse_w_m2": 2.032660720760975,
+      "soil_column_total_water_rmse_kg_m2": 86.23644626390882,
+      "soil_column_total_water_signed_mean_kg_m2": 42.237226498395266,
+      "soil_temperature_rmse_k": 0.0364490610589984,
+      "soil_water_content_rmse_m3_m3": 0.058987146853003304,
+      "soil_water_content_signed_mean_m3_m3": 0.027300779727074165,
+      "surface_temperature_rmse_k": 0.1384721698902028,
+      "temperature_2m_rmse_k": 0.03167968959306784,
+      "wind_10m_u_rmse_m_s": 0.0022944850176866787,
+      "wind_10m_v_rmse_m_s": 0.0024004282528121553
+    },
+    "relative_saturation_drysmc_robustness": {
+      "active_column_count": 443362,
+      "active_soil_state_count": 1773448,
+      "counts_below_frozen_tolerance_at_hours_5_5p5_6": [2, 6, 14],
+      "final_fraction_of_active_columns": 0.00003157690555347549,
+      "final_fraction_of_active_soil_states": 0.000007894226388368873,
+      "final_violation_count_at_2e_5_tolerance": 0,
+      "final_violation_count_at_frozen_1e_5_tolerance": 14,
+      "frozen_tolerance_m3_m3": 0.00001,
+      "initial_states_exactly_at_drysmc": 252,
+      "latitude_range_degrees_north": [46.00302505493164, 46.14201736450195],
+      "longitude_range_degrees_east": [7.723505973815918, 7.79960298538208],
+      "maximum_final_deficit_m3_m3": 0.00001955813169479681,
+      "soil_name": "loam",
+      "soil_type": 6,
+      "zero_based_layer": 0
+    },
+    "source_consistency_rmse": {
+      "relative_saturation": {
+        "snow_height_m": 0.05092554798328746,
+        "specific_humidity_2m": 0.0007517180840887934,
+        "swe_kg_m2": 20.352768949270512,
+        "temperature_2m_height_adjusted_k": 1.6478812507895055,
+        "wind_speed_10m_m_s": 0.746505734419898
+      },
+      "smi": {
+        "snow_height_m": 0.05092546595324837,
+        "specific_humidity_2m": 0.0007491493956037448,
+        "swe_kg_m2": 20.35291009402284,
+        "temperature_2m_height_adjusted_k": 1.6439010902597078,
+        "wind_speed_10m_m_s": 0.7466655544224639
+      }
+    }
+  },
+  "provenance": {
+    "coordinator_evidence_parent_commit": "9523e0942e7eb37233ebac16e45638abcdc40a3b",
+    "coordinator_run_commit": "e5c711e0e4a7fc231d2bd429902348c166afd985",
+    "coordinator_scientific_contract_commit": "695410da13654aa1b8d82874637c5d3a5bf470fa",
+    "definition_sha256": "d28e844c194764b3d9f8584411902cb635ff07579889188a46107a4032358cd1",
+    "executable_path": "/scratch/mch/olifu/icon_hicar/qualification/hicarprep_hicar_soiltexture_v2/build-gpu-nccl/HICAR_gpu",
+    "executable_sha256": "379f26c2d3eafd168bbf5c4db271e179ea4cf0d948c68ab46bb0081f3c30d284",
+    "hicar_source_commit": "e46671bccb628c43ea87a50630c4a041bb10bc84",
+    "noahmp_stas_table_path": "/scratch/mch/olifu/icon_hicar/qualification/hicarprep_hicar_soiltexture_v1/source/run/NoahmpTable.TBL",
+    "noahmp_stas_table_sha256": "211649cf09e11081637003e0f185172e90d362cdde701ed4bae1d324c6c4b541",
+    "posthoc_assessor_sha256": "229908479a1eeb570f5613220cf1be8e00e6cb04390d1e196467abfc2c43a5c3",
+    "scientific_assessor_sha256": "8aee42cf19d3bc6be51741b996434e94af1de17462de0eddd6055cd33816c3c9"
+  },
+  "reference": {
+    "publication_path": "/scratch/mch/olifu/icon_hicar/qualification/hicarprep-land-response-6h-v1/reference_chunk/reference/reference_publication.json",
+    "publication_sha256": "5b357102c7efda609843c19221345d8855aa7d0211f6586ae7bc01cf8d580592",
+    "records": [
+      {
+        "sha256": "3efe1d8820b460d74465bcae286c5f9f49fbc54526254c96db26f7c7ddc57963",
+        "valid_time": "2020-07-02T00:00:00Z"
+      },
+      {
+        "sha256": "21dfb2ba2be7bc487023a19e481f6b9a710d9e0bd340f571a94d545deb820962",
+        "valid_time": "2020-07-02T03:00:00Z"
+      },
+      {
+        "sha256": "72a6c0061c21f17c9a72cd407d87e8c770d6f24accfd74fb9b729f28616fdc20",
+        "valid_time": "2020-07-02T06:00:00Z"
+      }
+    ],
+    "status": "PASS"
+  },
+  "reports": {
+    "frozen_assessment": {
+      "scratch_path": "/scratch/mch/olifu/icon_hicar/qualification/hicarprep-land-response-6h-v1/runs-v3/assessment.json",
+      "sha256": "faf46d530a54641ed8780007f7a1b5fc1b36871716d9f8f9658fcd1796879268"
+    },
+    "posthoc_robustness": {
+      "scratch_path": "/scratch/mch/olifu/icon_hicar/qualification/hicarprep-land-response-6h-v1/runs-v3/assessment_posthoc_robustness.json",
+      "sha256": "1c0995d09aca8a8659b8fd6c8ce1a608f7ca5bc37fee129fb88b105a2f414d2e",
+      "status": "POST_HOC_DIAGNOSTIC_ONLY"
+    }
+  },
+  "runs": {
+    "relative_saturation": {
+      "model_log_sha256": "4928391251933fea108681f8bae314567178cf8c8bdeb6b8e92f78fc62010436",
+      "output_sha256": "3a34c74ebdde89bf8b19650116c5226f48e5b007ad9a9502d128052f520f23b6",
+      "run_path": "/scratch/mch/olifu/icon_hicar/qualification/hicarprep-land-response-6h-v1/runs-v3/relative_saturation",
+      "runtime_domain_path": "/scratch/mch/olifu/icon_hicar/qualification/hicarprep_surface_cases_v11/20200702/hicar_runtime_domain_relative_saturation_20200702_0000.nc",
+      "runtime_domain_sha256": "e1d12ab31e0d62c714a0fd389d50c44da6c0a22e11a844ee9dd355d4d0996ac9",
+      "solver_report_sha256": "55f0bfe5c0588e57faf07900b2dcd3582c31bbad08bbad22810bea75d7d1c2df",
+      "solver_status": "PASS",
+      "source_consistency_report_sha256": "1f3587f8cadb44590798c4b2976a81c663d2b5d9cceb59ca4876fca4adc9dfe6",
+      "viability_status": "FAIL_VIABILITY"
+    },
+    "smi": {
+      "model_log_sha256": "dde5b8f7387b7dffb02a32be8e88cbbcd0c39face10d2bf15ed8e9a3ab8f85d7",
+      "output_sha256": "b84ce9cdc0260ae75ac2a848b1cc6eaf25ecf1dcb6a6c3ec8339e586f12fd634",
+      "run_path": "/scratch/mch/olifu/icon_hicar/qualification/hicarprep-land-response-6h-v1/runs-v3/smi",
+      "runtime_domain_path": "/scratch/mch/olifu/icon_hicar/qualification/hicarprep_surface_cases_v11/20200702/hicar_runtime_domain_smi_20200702_0000.nc",
+      "runtime_domain_sha256": "0bae172816a750971953c45aba95c936bf3d5b1ca56b7fcdf8980ed42a997b05",
+      "solver_report_sha256": "235e7d599e7b4a9a83efc71290d6bc9022069ed6bb78aed08e9c7b26b07e5196",
+      "solver_status": "PASS",
+      "source_consistency_report_sha256": "bc5f1d702ff65babc1e5d2cf61e0d1c377ad703139d998fc6e812c8f7e9d111e",
+      "viability_status": "PASS_VIABILITY"
+    }
+  },
+  "schema_version": 1,
+  "scratch_root": "/scratch/mch/olifu/icon_hicar/qualification/hicarprep-land-response-6h-v1"
+}
