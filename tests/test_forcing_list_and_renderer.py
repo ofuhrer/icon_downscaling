@@ -75,7 +75,7 @@ def test_renderer_has_one_explicit_hicarprep_configuration(tmp_path: Path) -> No
     assert result.returncode == 0, result.stderr
     text = namelist.read_text()
     for setting in (
-        "qcvar = 'QC'", "qivar = 'QI'", "wvar = ''",
+        "debug = .False.", "qcvar = 'QC'", "qivar = 'QI'", "wvar = ''",
         "qv_is_spec_humidity = .False.", "relax_filters = .False.",
         "soiltexture_var = 'soil_type_layer'", "nmp_opt_soil = 2",
         "Sx = .True.", "advect_density = .True.", "alpha_const = 1.0",

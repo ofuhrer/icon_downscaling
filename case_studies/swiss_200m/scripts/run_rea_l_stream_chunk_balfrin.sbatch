@@ -40,6 +40,7 @@ run=${SEGMENT_RUN_DIR:?}
 restart_input=${RESTART_INPUT:-}
 profile=${OUTPUT_PROFILE:-evaluation}
 output_interval=${OUTPUT_INTERVAL:-3600}
+model_debug=${HICAR_MODEL_DEBUG:-0}
 renderer="$repo_root/case_studies/swiss_200m/scripts/render_hicar_namelist.py"
 wrapper="$repo_root/case_studies/swiss_200m/scripts/gpu_rank_wrapper.sh"
 python=${HICAR_PYTHON:-python3}
@@ -73,6 +74,10 @@ PY
 )
 test "$hours" -gt 0 || { echo "invalid segment duration" >&2; exit 2; }
 restart_records=$((hours * 3600 / output_interval))
+debug_args=()
+if [[ "$model_debug" == 1 ]]; then
+  debug_args=(--model-debug)
+fi
 
 "$python" "$renderer" \
   --static-file "$static" \
@@ -81,6 +86,7 @@ restart_records=$((hours * 3600 / output_interval))
   --start-date "${start/T/ }" \
   --end-date "${end/T/ }" \
   --output-profile "$profile" \
+  "${debug_args[@]}" \
   --output-interval "$output_interval" \
   --restart-interval "$restart_records" \
   "${restart_args[@]}" \

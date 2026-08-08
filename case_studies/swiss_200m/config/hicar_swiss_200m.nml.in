@@ -1,6 +1,7 @@
 &general
   start_date = '@START_DATE@'
   end_date = '@END_DATE@'
+  debug = @MODEL_DEBUG@
 /
 &restart
   restart_folder = '@RESTART_DIR@'

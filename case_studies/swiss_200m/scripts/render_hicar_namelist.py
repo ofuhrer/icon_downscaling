@@ -71,6 +71,7 @@ def main() -> int:
     parser.add_argument(
         "--output-profile", choices=("station", "evaluation", "debug"), default="evaluation"
     )
+    parser.add_argument("--model-debug", action="store_true")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
@@ -164,6 +165,7 @@ def main() -> int:
         "@NZ@": str(SELECTED_NZ),
         "@LOWEST_LAYER_M@": str(SELECTED_LOWEST_LAYER_M),
         "@ADVECT_DENSITY@": ".True.",
+        "@MODEL_DEBUG@": ".True." if args.model_debug else ".False.",
         "@STATIC_FILE@": str(args.static_file.resolve()),
         "@FORCING_FILE_LIST@": str(args.forcing_file_list.resolve()),
         "@SPARSE_LBC_FILE_LIST@": str(args.sparse_lbc_file_list.resolve()),
