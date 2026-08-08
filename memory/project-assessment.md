@@ -35,7 +35,7 @@ and restart completeness.
 | Atmospheric input | Hourly native REA-L decoded and transformed by hicarprep | Corrected 00/01/02 UTC products and a two-hour turnover run pass; seasonal generality is untested |
 | Moisture | Dry-air mixing ratios; QI explicitly zero only because source is absent; W diagnosed by HICAR | Explicit and interpretable; W remains a sensitivity |
 | LBC | Hourly sparse hicarprep states, 10 km shoulder | Usable provisional choice; width is not closed |
-| Land initialization | Native TERRA soil state plus bulk ICON SWE/depth transferred to NoahMP | Selected starting point; glacier snow is erased at cold start and vegetated cells still use uniform LAI/cover defaults |
+| Land initialization | Native TERRA soil state plus ICON SWE/depth/density and bulk `T_SNOW` transferred to NoahMP | Integrated starting point; glacier snow is preserved and sourced vegetation climatologies are wired, but the winter response and any supplied climatology still need controlled tests |
 | Radiation | RRTMGP, 600 s update; terrain radiation off | Correct campaign baseline until focused terrain-radiation tests pass |
 
 The forcing renderer now accepts only this configuration plus three output
@@ -58,25 +58,27 @@ forcing/LBC records, exact segment bracketing, and explicit restart input.
   model choice, not a certification result. Static-epoch back extrapolation is
   still an acknowledged approximation and should be quantified if land-state
   errors dominate.
-- Snow initialization transfers instantaneous ICON `W_SNOW` and `RHO_SNOW`.
-  Hicarprep remaps SWE and the derived snow volume separately with nonnegative,
-  same-surface weights, diagnoses target depth and bulk density, and gives
-  NoahMP both SWE and depth. It does not import a fractional snow-cover field or
-  apply a target-minus-source terrain-height correction. More importantly, the
-  pinned NoahMP cold-start path resets both fields to zero on terrestrial cells
-  assigned the configured USGS ice category 24. A time-zero winter diagnostic
-  must quantify this glacier loss before snow or surface-energy results are
-  interpreted.
+- Snow initialization transfers instantaneous ICON `W_SNOW`, `RHO_SNOW`, and
+  `T_SNOW`. Hicarprep remaps SWE and derived snow volume separately with
+  nonnegative, same-surface weights, diagnoses target depth and bulk density,
+  and remaps bulk snow temperature on snow support with conservative skin-
+  temperature bounds. HICAR uses that bulk value in active NoahMP snow layers
+  only on cold starts; restart snow temperatures remain prognostic. The pinned
+  NoahMP driver now preserves caller-provided SWE and depth on configured USGS
+  ice category 24 rather than erasing glacier snow. This path is unit-tested
+  and compiles locally, but still needs the staged two-hour winter diagnostic
+  before snow or surface-energy improvement is claimed. Fractional snow cover
+  and elevation-dependent redistribution remain deliberately unimplemented.
 - The WorldCover path already reclassifies every 10 m pixel before 200 m area
   aggregation and retains all USGS category fractions; replacing that mapping
-  is not the first land-cover intervention. The easier exposed weakness is at
-  runtime: absent explicit fields, HICAR initializes LAI to 1, vegetation
-  fraction to 60%, and maximum vegetation fraction to 80%. A small,
-  internally consistent first sensitivity is to seed valid-time LAI from the
-  bundled NoahMP month-by-USGS table, preferably fraction-weighted with the
-  retained land-cover fractions. Green-vegetation fraction should only be
-  replaced when a defensible source climatology is supplied, not inferred by
-  an arbitrary LAI formula.
+  is not the first land-cover intervention. Runtime-domain `VEGFRA`, `LAI`,
+  `ALBEDO`, and maximum vegetation fraction are now range checked, normalized,
+  and wired into HICAR when supplied. Twelve-month `VEGFRA` uses HICAR's native
+  monthly path; the other climatologies are materialized at the initial valid
+  time. No climatology is fabricated: absent explicit fields, HICAR retains its
+  LAI 1, vegetation fraction 60%, and maximum vegetation fraction 80% defaults.
+  A sourced `VEGFRA`/`LAI` sensitivity remains the next interpretable land-cover
+  test.
 - The independent preprocessing audit found real launch defects. The renderer
   now resolves `NZ` and `ADVECT_DENSITY`; the forcing/LBC pair is validated
   before either ready marker; forcing caches are season/domain-specific; and
@@ -240,10 +242,12 @@ intervals before a claim of added value is robust.
 
 ## Verification status
 
-- Coordinator tests: 85 passed.
+- Coordinator tests: 89 passed.
 - Repository syntax/policy checks: passed.
-- HICAR source is clean at `5fc3c71b`; its tree equals restart-safe
-  `d023e40d`. Temporary turnover tracing and the confounded adaptive-CFL change
-  were removed. The reflected-shortwave fix remains in this tree.
+- HICAR source is clean at `e89b3f0c`; its tree equals the selected restart-safe
+  `5fc3c71b` simulation baseline plus the land/snow initialization changes.
+  The rejected restart-wind intervention remains absent. A fresh local
+  CPU/debug build passed; a topology-matched Balfrin build and two-hour winter
+  process pilot remain pending.
 - Four-season campaign: not launched; no readiness claim should precede the
   restart-equivalence pilot.
