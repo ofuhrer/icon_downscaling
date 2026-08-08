@@ -139,6 +139,34 @@ design, status, and remaining gate are in
   from them. They are infrastructure, not prerequisites for scientific
   acceptance.
 
+## Active technical branch closure: terrain radiation restart
+
+The causal terrain-radiation implementation remains an experimental component,
+not part of the qualified HICAR baseline. Its direct/diffuse separation and
+synthetic flat/open, blocked-horizon, and sky-view-factor behavior pass, but an
+exact-current-source rerun at HICAR `5d557495` reproduced the split-restart
+failure for the same ten coupled radiation/surface variables. The first
+post-restart differences are about `52.83 W m-2` in latent heat,
+`44.04 W m-2` in sensible heat, and `0.996 K` in surface temperature.
+
+Matched all-output diagnostics now prove that the uninterrupted and first
+segment histories are bitwise identical at the 08:00 checkpoint, and that the
+first segment's history record and restart checkpoint are bitwise identical
+for every stored common variable. Divergence is created inside the first
+evolved NoahMP call after restart, led by stomatal resistance, canopy vapor
+pressure/temperature, transpiration, and surface exchange before feeding back
+to atmosphere and radiation. Persisting NoahMP's module-local surface humidity
+was a controlled negative test: it changed no gate metric and was reverted.
+
+Do not stack speculative restart fields. The next bounded discriminator is one
+instrumented build comparing device-side checksums/min/max for every
+`NoahmpIO` field after HICAR input mapping and every NoahMP state component
+after the five input-transfer calls at the same timestep in uninterrupted and
+restart runs. This will locate the defect on the HICAR mapping boundary, the
+NoahMP transfer boundary, or within NoahMP execution. Until that test names the
+missing state/order, keep terrain radiation off and run any scientific
+preconditioning plus score window uninterrupted.
+
 ## Latest experiment: chronological summer overlap
 
 ### Uncertainty and hypotheses
