@@ -99,6 +99,10 @@ def main() -> int:
     parser.add_argument("--restart", type=Path, required=True)
     parser.add_argument("--start", required=True)
     parser.add_argument("--end", required=True)
+    parser.add_argument(
+        "--restart-time",
+        help="checkpoint timestamp; defaults to --end for a final segment",
+    )
     parser.add_argument("--output-interval", type=int, required=True)
     parser.add_argument("--forcing-list", type=Path, required=True)
     parser.add_argument("--boundary-list", type=Path, required=True)
@@ -107,8 +111,13 @@ def main() -> int:
 
     start = datetime.fromisoformat(args.start.replace("T", " ").replace("Z", ""))
     end = datetime.fromisoformat(args.end.replace("T", " ").replace("Z", ""))
+    restart_time = datetime.fromisoformat(
+        (args.restart_time or args.end).replace("T", " ").replace("Z", "")
+    )
     if end <= start or args.output_interval <= 0:
         raise SystemExit("invalid segment interval")
+    if not start < restart_time <= end:
+        raise SystemExit("restart time must be inside the integrated segment")
 
     output_files = sorted(args.output_dir.glob("*.nc"))
     if not output_files:
@@ -125,8 +134,8 @@ def main() -> int:
     require_finite_outputs(output_files)
 
     restart_times = decode_times(args.restart)
-    if restart_times != [end]:
-        raise SystemExit(f"terminal restart time is {restart_times}, expected {[end]}")
+    if restart_times != [restart_time]:
+        raise SystemExit(f"checkpoint time is {restart_times}, expected {[restart_time]}")
     with netCDF4.Dataset(args.restart) as restart:
         require_restart_state(restart)
         required_physics = {
@@ -135,7 +144,6 @@ def main() -> int:
             "physics.pbl": "ysu",
             "physics.lsm": "noahmp",
             "physics.rad": "RRTMGP",
-            "wind.Sx": "T",
             "wind.wind_solver_iterations": "2500",
             "adv.advect_density": "T",
             "domain.nz": "80",
@@ -167,11 +175,12 @@ def main() -> int:
     boundaries = [line.strip().strip('"') for line in args.boundary_list.read_text().splitlines() if line.strip()]
     expected_inputs = math.ceil((end - start).total_seconds() / 3600) + 1
     if len(forcing) != expected_inputs or len(boundaries) != expected_inputs:
-        raise SystemExit("forcing/LBC lists do not contain every hourly bracket endpoint")
+        raise SystemExit("forcing/LBC lists do not contain every integrated hourly endpoint")
 
     print(json.dumps({
         "start": args.start,
         "end": args.end,
+        "restart_time": restart_time.isoformat(),
         "output_files": len(output_files),
         "output_times": len(output_times),
         "restart": str(args.restart),

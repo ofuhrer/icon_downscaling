@@ -36,6 +36,7 @@ forcing_list=${FORCING_FILE_LIST:?}
 lbc_list=${SPARSE_LBC_FILE_LIST:?}
 start=${SEGMENT_START:?}
 end=${SEGMENT_END:?}
+model_end=${SEGMENT_MODEL_END:-$end}
 run=${SEGMENT_RUN_DIR:?}
 restart_input=${RESTART_INPUT:-}
 profile=${OUTPUT_PROFILE:-evaluation}
@@ -69,18 +70,22 @@ if test -n "$restart_input"; then
   validation_restart_args=(--continued)
 fi
 
-duration_seconds=$("$python" - "$start" "$end" <<'PY'
+read -r checkpoint_seconds integration_seconds < <("$python" - "$start" "$end" "$model_end" <<'PY'
 from datetime import datetime
 import sys
-start, end = (datetime.fromisoformat(value) for value in sys.argv[1:])
-print(int((end - start).total_seconds()))
+start, checkpoint, model_end = (datetime.fromisoformat(value) for value in sys.argv[1:])
+print(int((checkpoint - start).total_seconds()), int((model_end - start).total_seconds()))
 PY
 )
-test "$duration_seconds" -gt 0 || { echo "invalid segment duration" >&2; exit 2; }
-test $((duration_seconds % output_interval)) -eq 0 || {
+test "$checkpoint_seconds" -gt 0 || { echo "invalid checkpoint duration" >&2; exit 2; }
+test "$integration_seconds" -ge "$checkpoint_seconds" || { echo "invalid model end" >&2; exit 2; }
+test $((checkpoint_seconds % output_interval)) -eq 0 || {
+  echo "checkpoint duration must be divisible by output interval" >&2; exit 2;
+}
+test $((integration_seconds % output_interval)) -eq 0 || {
   echo "segment duration must be divisible by output interval" >&2; exit 2;
 }
-restart_records=$((duration_seconds / output_interval))
+restart_records=$((checkpoint_seconds / output_interval))
 debug_args=()
 if [[ "$model_debug" == 1 ]]; then
   debug_args=(--model-debug)
@@ -95,7 +100,7 @@ fi
   --forcing-file-list "$forcing_list" \
   --sparse-lbc-file-list "$lbc_list" \
   --start-date "${start/T/ }" \
-  --end-date "${end/T/ }" \
+  --end-date "${model_end/T/ }" \
   --output-profile "$profile" \
   --cfl-reduction-factor "$cfl_reduction" \
   "${debug_args[@]}" \
@@ -137,14 +142,15 @@ grep -q 'Simulation completed successfully!' "$run/model.out"
 grep -q 'HICAR discretely adjoint wind projection enabled' "$run/model.out"
 test -s "$restart" || { echo "missing terminal restart: $restart" >&2; exit 1; }
 "$python" "$repo_root/case_studies/swiss_200m/validation/validate_segment.py" \
-  --output-dir "$run/output" --restart "$restart" --start "$start" --end "$end" \
+  --output-dir "$run/output" --restart "$restart" --start "$start" --end "$model_end" \
+  --restart-time "$end" \
   --output-interval "$output_interval" --forcing-list "$forcing_list" \
   --boundary-list "$lbc_list" "${validation_restart_args[@]}" \
   >"$run/segment_validation.json"
 
-"$python" - "$run/segment.json" "$start" "$end" "$static" "$exe" "$restart" <<'PY'
+"$python" - "$run/segment.json" "$start" "$end" "$model_end" "$static" "$exe" "$restart" <<'PY'
 import json, pathlib, subprocess, sys
-report, start, end, static, exe, restart = sys.argv[1:]
+report, start, end, model_end, static, exe, restart = sys.argv[1:]
 root = pathlib.Path(exe).resolve()
 commit = "unknown"
 for parent in (root, *root.parents):
@@ -156,7 +162,7 @@ for parent in (root, *root.parents):
         break
 validation = json.loads((pathlib.Path(report).parent / "segment_validation.json").read_text())
 validation.update({
-    "start": start, "end": end, "hicar_commit": commit,
+    "start": start, "end": end, "model_end": model_end, "hicar_commit": commit,
     "static": static, "executable": exe, "restart": restart,
 })
 pathlib.Path(report).write_text(json.dumps(validation, indent=2, sort_keys=True) + "\n")

@@ -625,6 +625,12 @@ def main() -> int:
     parser.add_argument("--boundary-width-m", type=float, default=10_000.0)
     parser.add_argument("--temperature-lapse-rate-k-m", type=float, default=-0.0065)
     parser.add_argument("--minimum-core-pairs", type=int, default=100)
+    parser.add_argument(
+        "--overlap-policy",
+        choices=("error", "last"),
+        default="error",
+        help="use 'last' for restart campaigns with one-hour overlap output",
+    )
     args = parser.parse_args()
 
     failures: list[str] = []
@@ -662,13 +668,16 @@ def main() -> int:
     }
 
     model_records: dict[datetime, tuple[netCDF4.Dataset, int]] = {}
+    overlap_times: list[datetime] = []
     output_datasets = [netCDF4.Dataset(path) for path in args.output_file]
     reference_datasets: list[netCDF4.Dataset] = []
     try:
         for dataset in output_datasets:
             for index, valid in enumerate(decoded_times(dataset)):
                 if valid in model_records:
-                    failures.append(f"duplicate HICAR time {valid.isoformat()}")
+                    overlap_times.append(valid)
+                    if args.overlap_policy == "error":
+                        failures.append(f"duplicate HICAR time {valid.isoformat()}")
                 model_records[valid] = (dataset, index)
         if not model_records:
             failures.append("no HICAR output records")
@@ -972,6 +981,9 @@ def main() -> int:
             (args.native_reference_csv or args.reference_list).resolve()
         ),
         "matched_model_times": [value.isoformat() for value in matched_times],
+        "overlap_times_replaced_by_later_file": [
+            value.isoformat() for value in overlap_times
+        ],
         "station_mapping": {
             "site_count": len(sites),
             "maximum_nearest_cell_distance_km": float(np.max(distances_km)),
