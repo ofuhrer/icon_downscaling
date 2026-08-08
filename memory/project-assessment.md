@@ -24,7 +24,7 @@ and restart completeness.
 | Component | Current choice | Assessment |
 | --- | --- | --- |
 | Grid | 200 m | Use the 701x701 Alpine bridge for turnover/restart pilots; the 2271x1651 national grid needs separate resource evidence |
-| Vertical grid | 80 levels, 12 km top, 15 m first level, stretch 0.65 | Sound starting point; not uniquely established |
+| Vertical grid | 80 levels, 12 km top, nominal 26 m first level, stretch 0.65; hard 20 m thickness floor | Sound starting point; Alpine-bridge minimum is 20.768 m, but the choice is not uniquely established |
 | Terrain coordinate | SLEVE 2/6; smoothing window 5, 10 cycles | Previously stable; retain for controlled comparison |
 | Wind | Adjoint variational, `Sx=true`, 500 m smoothing, alpha 1, 2500 iterations | Best-supported current option |
 | Dynamics | RK3, density advection | Explicit and internally consistent |
@@ -66,10 +66,20 @@ forcing/LBC records, exact segment bracketing, and explicit restart input.
   real two-hour turnover diagnostic because insertion occurs after the wind
   projection and can temporarily perturb discrete continuity.
 - Static construction now partitions the public-source product and appends
-  HHL/HFL before publication. No existing cluster artifact is directly usable:
-  the national 2271x1651 static has four soil layers but lacks HHL/HFL, while
-  the 701x701 hicarprep runtime products lack HHL/HFL (and some older products
-  also lack `soil_type_layer`). A new runtime domain must therefore be built.
+  HHL/HFL before publication. The first rebuilt Alpine-bridge grid exposed an
+  important weakness in the nominal-level setting: its true SLEVE minimum was
+  only 12.509 m. The active defaults now require every model layer to exceed
+  20 m and record both requested and achieved geometry limits. A nominal 26 m
+  first level gives a measured 20.768 m minimum and 0.2473 minimum Jacobian on
+  the 701x701 grid; the rejected artifact is retained separately and cannot be
+  accepted by runtime validation.
+- Native ICON HHL is ordered correctly, but unconstrained RBF interpolation of
+  each interface independently crossed one layer in four of 491,401 target
+  columns (worst thickness -123.6 m). Hicarprep now remaps the column endpoints
+  and positive layer thicknesses, enforces a 20 m source-geometry floor, and
+  redistributes only the thin-layer deficit while preserving the endpoints.
+  The first real 00 UTC forcing/LBC pair passed with thickness rescaling limited
+  to 0.9904--1.0023 and completed in 9:59 (job 5042543).
 - The national grid has 3.75 million horizontal cells. One hourly 80-level
   forcing record is of order 10 GB before allowing for compression and working
   arrays, so generating a week of cached hourly records as the first test would
@@ -111,8 +121,9 @@ intervals before a claim of added value is robust.
 
 ## Decision sequence
 
-1. Build a new 701x701 runtime domain with HHL/HFL and four Noah-MP soil layers,
-   then generate three real direct hicarprep forcing/LBC pairs.
+1. Finish the remaining two hourly pairs for the corrected 701x701 runtime
+   domain. The static geometry, four-layer Noah-MP land state, and 00 UTC direct
+   forcing/LBC pair already pass; 01 and 02 UTC are the remaining brackets.
 2. Run a continuous two-hour case and a one-hour plus one-hour restart case;
    require identical terminal model state and inspect the LBC turnover. Repeat
    with an independent cold-cloud/autumn-storm case.
@@ -128,10 +139,11 @@ intervals before a claim of added value is robust.
 
 ## Verification status
 
-- Coordinator focused tests: 75 passed.
+- Coordinator focused tests: 79 passed.
 - Repository syntax/policy checks: passed.
 - HICAR source is clean at `7ad54787`; reflected-shortwave compile and targeted
-  GPU unit-test evidence passed. A new clean campaign build is still required
-  because the compile proof used a disposable patch-based worktree.
+  GPU unit-test evidence passed. The clean campaign build from that exact
+  commit completed as job 5042485 and its targeted GPU test passed as job
+  5042502.
 - Four-season campaign: not launched; no readiness claim should precede the
   exact-staggering/direct-product and restart-equivalence pilots.
