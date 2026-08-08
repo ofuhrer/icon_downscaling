@@ -65,15 +65,18 @@ if test -n "$restart_input"; then
   restart_args=(--restart-from "${start/T/ }")
 fi
 
-hours=$("$python" - "$start" "$end" <<'PY'
+duration_seconds=$("$python" - "$start" "$end" <<'PY'
 from datetime import datetime
 import sys
 start, end = (datetime.fromisoformat(value) for value in sys.argv[1:])
-print(int((end - start).total_seconds() // 3600))
+print(int((end - start).total_seconds()))
 PY
 )
-test "$hours" -gt 0 || { echo "invalid segment duration" >&2; exit 2; }
-restart_records=$((hours * 3600 / output_interval))
+test "$duration_seconds" -gt 0 || { echo "invalid segment duration" >&2; exit 2; }
+test $((duration_seconds % output_interval)) -eq 0 || {
+  echo "segment duration must be divisible by output interval" >&2; exit 2;
+}
+restart_records=$((duration_seconds / output_interval))
 debug_args=()
 if [[ "$model_debug" == 1 ]]; then
   debug_args=(--model-debug)

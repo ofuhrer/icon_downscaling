@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timedelta
 import json
+import math
 from pathlib import Path
 
 import netCDF4
@@ -148,7 +149,7 @@ def main() -> int:
 
     forcing = [line.strip().strip('"') for line in args.forcing_list.read_text().splitlines() if line.strip()]
     boundaries = [line.strip().strip('"') for line in args.boundary_list.read_text().splitlines() if line.strip()]
-    expected_inputs = int((end - start).total_seconds() // 3600) + 1
+    expected_inputs = math.ceil((end - start).total_seconds() / 3600) + 1
     if len(forcing) != expected_inputs or len(boundaries) != expected_inputs:
         raise SystemExit("forcing/LBC lists do not contain every hourly bracket endpoint")
 
