@@ -10,6 +10,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 DEFINITION = ROOT / "case_studies/swiss_200m/config/hicarprep_land_response_6h_v1.json"
 ASSESSOR = ROOT / "case_studies/swiss_200m/validation/assess_hicarprep_land_response.py"
+ROBUSTNESS = ROOT / "case_studies/swiss_200m/validation/diagnose_hicarprep_land_response_robustness.py"
 SPEC = importlib.util.spec_from_file_location("assess_hicarprep_land_response", ASSESSOR)
 MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
@@ -72,3 +73,10 @@ def test_stats_and_source_gate_are_method_neutral(tmp_path: Path) -> None:
     ] = -6.0
     path.write_text(json.dumps(report))
     assert "absolute bias" in MODULE.source_gate(path, contract)["failures"][0]
+
+
+def test_posthoc_diagnostic_cannot_rewrite_frozen_decision() -> None:
+    script = ROBUSTNESS.read_text()
+    assert '"status": "POST_HOC_DIAGNOSTIC_ONLY"' in script
+    assert '"frozen_decision_unchanged": assessment["decision"]' in script
+    assert "decision_states" not in script
