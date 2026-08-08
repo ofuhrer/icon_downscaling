@@ -286,8 +286,8 @@ class HorizontalRemapTests(unittest.TestCase):
         native_hhl = np.array(
             [
                 [0.0, 10.0],
-                [1.0, 110.0],
-                [2.0, 111.0],
+                [10.0, 90.0],
+                [100.0, 110.0],
             ]
         )
         direct = operator.apply(native_hhl)
@@ -295,13 +295,29 @@ class HorizontalRemapTests(unittest.TestCase):
 
         remapped, diagnostics = _remap_vertical_interfaces(native_hhl, operator)
 
-        self.assertTrue(np.all(np.diff(remapped, axis=0) > 0.0))
+        self.assertGreaterEqual(float(np.min(np.diff(remapped, axis=0))), 20.0 - 1.0e-10)
         np.testing.assert_allclose(remapped[0], operator.apply(native_hhl[0], monotone=True))
         np.testing.assert_allclose(remapped[-1], operator.apply(native_hhl[-1], monotone=True))
         self.assertEqual(
             diagnostics["source_geometry_remap"],
-            "positive_layer_thickness_rescaled_to_rbf_endpoints",
+            "minimum_thickness_rescaled_to_rbf_endpoints",
         )
+        self.assertEqual(diagnostics["source_geometry_minimum_layer_thickness_m"], 20.0)
+
+    def test_vertical_interface_remap_rejects_an_impossible_minimum_thickness(self) -> None:
+        operator = RBFWeights(
+            donor_index=np.array([[0]]),
+            weight=np.array([[1.0]]),
+            target_shape=(1, 1),
+            source_fingerprint="source",
+            target_fingerprint="target",
+        )
+        with self.assertRaisesRegex(ValueError, "too shallow"):
+            _remap_vertical_interfaces(
+                np.array([[0.0], [10.0], [30.0]]),
+                operator,
+                minimum_layer_thickness_m=20.0,
+            )
 
     def test_native_radian_coordinates_are_normalized(self) -> None:
         np.testing.assert_allclose(

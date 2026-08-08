@@ -31,6 +31,7 @@ REQUIRED_FULL_LEVEL_FIELDS = ("T", "P", "QV")
 REQUIRED_HYDROMETEORS = ("QC", "QI")
 OPTIONAL_HYDROMETEORS = ("QR", "QS", "QG")
 WATER_FIELDS = ("QV", "QC", "QI", "QR", "QS", "QG")
+MINIMUM_REMAPPED_LAYER_THICKNESS_M = 20.0
 
 
 @dataclass(frozen=True)
@@ -395,19 +396,26 @@ def _source_wind(
 def _remap_vertical_interfaces(
     native_hhl: np.ndarray,
     weights: RBFWeights,
-) -> tuple[np.ndarray, dict[str, float | str]]:
+    *,
+    minimum_layer_thickness_m: float = MINIMUM_REMAPPED_LAYER_THICKNESS_M,
+) -> tuple[np.ndarray, dict[str, float | int | str]]:
     """Remap bottom-to-top interfaces without allowing layer crossings.
 
     RBF weights may be negative, so applying them independently to every
     interface does not preserve the ordering that is present in each native
     ICON column.  Remap the two endpoints and the strictly positive native
     layer thicknesses with donor-range clipping, then rescale the thicknesses
-    to span the remapped endpoints.  This retains the RBF endpoint estimates
-    and the vertical distribution of layer depth without sorting interfaces.
+    to span the remapped endpoints.  Layers below the configured floor are
+    raised to it and their deficit is removed proportionally from the excess
+    above that floor in thicker layers.  This retains the RBF endpoint
+    estimates and most of the vertical distribution without sorting
+    interfaces.
     """
     native = np.asarray(native_hhl, dtype=np.float64)
     if native.ndim != 2:
         raise ValueError("native ICON HHL must have interface and cell dimensions")
+    if not np.isfinite(minimum_layer_thickness_m) or minimum_layer_thickness_m <= 0.0:
+        raise ValueError("minimum remapped layer thickness must be positive and finite")
     native_thickness = np.diff(native, axis=0)
     if not np.isfinite(native).all() or not np.all(native_thickness > 0.0):
         raise ValueError("native ICON HHL must be finite and strictly bottom-to-top")
@@ -427,17 +435,49 @@ def _remap_vertical_interfaces(
     ):
         raise ValueError("constrained ICON HHL remap did not produce positive target columns")
 
+    layer_count = native.shape[0] - 1
+    required_span = layer_count * minimum_layer_thickness_m
+    if np.any(endpoint_span < required_span):
+        raise ValueError(
+            "remapped ICON column is too shallow for the minimum layer-thickness constraint"
+        )
+
     scale = endpoint_span / thickness_sum
     thickness *= scale[None, ...]
+    thin = thickness < minimum_layer_thickness_m
+    deficit = np.sum(
+        np.where(thin, minimum_layer_thickness_m - thickness, 0.0), axis=0
+    )
+    excess = np.where(thin, 0.0, thickness - minimum_layer_thickness_m)
+    total_excess = np.sum(excess, axis=0)
+    if np.any(deficit > total_excess + 1.0e-8):
+        raise ValueError("minimum layer-thickness redistribution has insufficient excess")
+    reduction = np.divide(
+        deficit,
+        total_excess,
+        out=np.zeros_like(deficit),
+        where=total_excess > 0.0,
+    )
+    thickness = np.where(
+        thin,
+        minimum_layer_thickness_m,
+        minimum_layer_thickness_m + excess * (1.0 - reduction[None, ...]),
+    )
     remapped = np.empty((native.shape[0], *weights.target_shape), dtype=np.float64)
     remapped[0] = bottom
     remapped[1:] = bottom[None, ...] + np.cumsum(thickness, axis=0)
     remapped[-1] = top
     differences = np.diff(remapped, axis=0)
-    if not np.isfinite(remapped).all() or not np.all(differences > 0.0):
-        raise ValueError("constrained ICON HHL remap produced a crossed target column")
+    if not np.isfinite(remapped).all() or np.any(
+        differences < minimum_layer_thickness_m - 1.0e-8
+    ):
+        raise ValueError(
+            "constrained ICON HHL remap violated the minimum layer-thickness constraint"
+        )
     return remapped, {
-        "source_geometry_remap": "positive_layer_thickness_rescaled_to_rbf_endpoints",
+        "source_geometry_remap": "minimum_thickness_rescaled_to_rbf_endpoints",
+        "source_geometry_minimum_layer_thickness_m": float(minimum_layer_thickness_m),
+        "source_geometry_corrected_layer_count": int(np.sum(thin)),
         "source_geometry_min_layer_thickness_m": float(np.min(differences)),
         "source_geometry_max_layer_thickness_m": float(np.max(differences)),
         "source_geometry_min_thickness_scale": float(np.min(scale)),
