@@ -96,6 +96,30 @@ def test_nearest_hicar_cells_refines_coarse_search():
     assert distance[0] < 0.25
 
 
+def test_station_selection_excludes_sites_outside_hicar_domain():
+    sites = [
+        MODULE.Site("1", "IN", 46.0, 7.0, 500.0),
+        MODULE.Site("2", "OUT", 48.0, 9.0, 500.0),
+    ]
+    selected, y_index, x_index, distance, excluded = (
+        MODULE.select_sites_by_distance(
+            sites,
+            np.array([2, 0]),
+            np.array([3, 0]),
+            np.array([0.12, 108.0]),
+            maximum_distance_km=1.0,
+        )
+    )
+
+    assert [site.key for site in selected] == ["IN:1"]
+    np.testing.assert_array_equal(y_index, [2])
+    np.testing.assert_array_equal(x_index, [3])
+    np.testing.assert_allclose(distance, [0.12])
+    assert excluded == [
+        {"key": "OUT:2", "nearest_cell_distance_km": 108.0}
+    ]
+
+
 def test_wind_and_thermodynamic_conversions():
     u = np.array([0.0, -1.0, 0.0, 1.0])
     v = np.array([-1.0, 0.0, 1.0, 0.0])

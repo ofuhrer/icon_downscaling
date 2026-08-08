@@ -349,6 +349,34 @@ def nearest_hicar_cells(
     )
 
 
+def select_sites_by_distance(
+    sites: list[Site],
+    y_indices: np.ndarray,
+    x_indices: np.ndarray,
+    distances_km: np.ndarray,
+    maximum_distance_km: float,
+) -> tuple[list[Site], np.ndarray, np.ndarray, np.ndarray, list[dict]]:
+    inside_domain = distances_km <= maximum_distance_km
+    excluded_sites = [
+        {
+            "key": site.key,
+            "nearest_cell_distance_km": float(distance),
+        }
+        for site, distance, inside in zip(sites, distances_km, inside_domain)
+        if not inside
+    ]
+    selected_sites = [site for site, inside in zip(sites, inside_domain) if inside]
+    if not selected_sites:
+        raise ValueError("no observation sites fall within the HICAR domain")
+    return (
+        selected_sites,
+        y_indices[inside_domain],
+        x_indices[inside_domain],
+        distances_km[inside_domain],
+        excluded_sites,
+    )
+
+
 def regular_bilinear_setup(
     latitude: np.ndarray,
     longitude: np.ndarray,
@@ -638,8 +666,6 @@ def main() -> int:
         args.observations
     )
     sites = sorted(sites_by_key.values(), key=lambda site: site.key)
-    site_position = {site.key: index for index, site in enumerate(sites)}
-    site_elevation = np.asarray([site.elevation_m for site in sites])
 
     with netCDF4.Dataset(args.static_file) as static:
         latitude = read_2d(static, "lat")
@@ -649,10 +675,18 @@ def main() -> int:
     y_indices, x_indices, distances_km = nearest_hicar_cells(
         latitude, longitude, sites
     )
-    if float(np.max(distances_km)) > max(1.0, 3.0 * dx_m / 1000.0):
-        failures.append(
-            f"maximum station-to-grid distance is {np.max(distances_km):.3f} km"
+    maximum_distance_km = max(1.0, 3.0 * dx_m / 1000.0)
+    sites, y_indices, x_indices, distances_km, excluded_sites = (
+        select_sites_by_distance(
+            sites,
+            y_indices,
+            x_indices,
+            distances_km,
+            maximum_distance_km,
         )
+    )
+    site_position = {site.key: index for index, site in enumerate(sites)}
+    site_elevation = np.asarray([site.elevation_m for site in sites])
     classes, relative_terrain = class_memberships(
         sites,
         y_indices,
@@ -986,6 +1020,9 @@ def main() -> int:
         ],
         "station_mapping": {
             "site_count": len(sites),
+            "maximum_accepted_distance_km": maximum_distance_km,
+            "excluded_outside_domain_site_count": len(excluded_sites),
+            "excluded_outside_domain_sites": excluded_sites,
             "maximum_nearest_cell_distance_km": float(np.max(distances_km)),
             "mean_nearest_cell_distance_km": float(np.mean(distances_km)),
             "class_site_counts": {
