@@ -469,7 +469,18 @@ def transform_icon_state(
     elif np.all(differences < 0.0):
         source_order = "top_to_bottom"
     else:
-        raise ValueError("remapped ICON HHL is not consistently ordered in every column")
+        increasing = np.all(differences > 0.0, axis=0)
+        decreasing = np.all(differences < 0.0, axis=0)
+        mixed = ~(increasing | decreasing)
+        raise ValueError(
+            "remapped ICON HHL is not consistently ordered in every column: "
+            f"increasing_columns={int(np.sum(increasing))}, "
+            f"decreasing_columns={int(np.sum(decreasing))}, "
+            f"mixed_columns={int(np.sum(mixed))}, "
+            f"minimum_layer_delta_m={float(np.nanmin(differences)):.9g}, "
+            f"maximum_layer_delta_m={float(np.nanmax(differences)):.9g}, "
+            f"nonfinite_deltas={int(np.sum(~np.isfinite(differences)))}"
+        )
     declared_aliases = {
         "bottom_to_top": "bottom_to_top",
         "bottom-to-top": "bottom_to_top",
