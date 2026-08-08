@@ -67,16 +67,40 @@ current evidence has selected SMI over relative saturation. All water species ar
 to HICAR's dry-air basis, cross-product land closure is checked, and ordered
 LBC sequences have a strict offline validator. The shared cold-start core,
 `--initialize-only` driver, residual diagnostics, exact-staggering loader, and
-state/time/producer-bound certificate path are implemented. Independent winter
-and summer 701x701x80 REA-L states pass the real GPU-NCCL path, with maximum
-hydrostatic residuals `4.15e-4` and `4.42e-4`; both wind-matrix and continuity
-gates pass. A winter certified state also passes direct IC/LBC publication
-with separate mass, U-face, and V-face frames. This closes the engineering
-execution blocker, but the `5e-3` hydrostatic limit remains provisional pending
-a third regime and the runtime sparse-LBC reader remains unimplemented.
-Operational REA-L soil/snow/skin GRIB decoding into
-the canonical native-grid surface schema is implemented and exercised. Full
-atmospheric GRIB decoding remains an adapter into the strict canonical schema.
+state/time/producer-bound certificate path are implemented. Independent winter,
+summer, and Storm Sabine 701x701x80 REA-L states pass the real GPU-NCCL path.
+The storm snapshots at 00/01/02Z have maximum hydrostatic residuals
+`4.0648e-4`, `3.8800e-4`, and `3.7469e-4`; all wind-matrix and continuity gates
+pass. This independently supports retaining the provisional `5e-3` gate with
+roughly twelve-fold observed margin, but does not justify tightening it from
+three adjacent storm snapshots. Certified storm states also pass direct
+IC/LBC publication with separate mass, U-face, and V-face frames.
+
+Operational REA-L soil/snow/skin and atmospheric GRIB decoding into the
+canonical native-grid schemas is implemented and exercised on archived data.
+The atmospheric decoder enforces the exact 561 dynamic plus 83 geometry
+message inventories, parameter IDs, units, level types and inventories,
+reference/valid times, step metadata, native-grid UUID, cell count, vertical
+ordering, and EXTPAR identity. REA-L has no QI field: decoding fails by default
+and permits zero QI only through an explicit provenance-marked
+`source-absent-zero` policy; QC is never reinterpreted as ice.
+
+HICAR now has a sparse, time-bracketing LBC runtime reader. It retains only the
+two active endpoint records per rank, reads only contiguous local mass/U/V
+support runs, rejects cadence, coverage, identity, support, weight, schema, and
+balance-contract changes, and advances only at exact forcing events without
+skipping or extrapolation. It interpolates the authoritative `T/P/U/V` and
+water basis in absolute time, derives potential temperature from interpolated
+T/P, keeps water nonnegative, respects native U/V staggering, applies exact
+edge assignment plus the stored physical-distance shoulder, and refreshes
+HICAR diagnostics after application. A two-node, two-hour Storm Sabine run at
+HICAR commit `5d5574959f5c` crosses the 01Z bracket turnover, writes all 13
+ten-minute records, and passes chunked finite/range checks for thermodynamics,
+water, density, and U/V/W. The diagnosed vertical-wind extrema (`w` about
+`-50.7..45.4 m s-1`, terrain-coordinate `w_grid` about `-69.8..77.8 m s-1`)
+are finite and do not destabilize the run, but remain a scientific diagnostic
+for relaxation-width and lateral-W-policy experiments rather than evidence
+that the present boundary policy is physically optimal.
 
 Do not preserve the current regular forcing-grid NetCDF or HICAR runtime
 horizontal/vertical interpolation as the future public input contract. Target
@@ -385,6 +409,10 @@ interpretation, or become part of the selected strategy.
 - Direct-absolute statics, comparisons, and active causal campaign:
   `/scratch/mch/olifu/icon_hicar/qualification/native_land_absolute_v1` and
   `/scratch/mch/olifu/icon_hicar/qualification/native-land-absolute-cold-start-july/v2`
+- Strict atmospheric decoding, Storm Sabine balance certificates, certified
+  sparse LBC sequence, and bracket-crossing runtime qualification:
+  `case_studies/swiss_200m/validation/hicarprep_storm_sparse_lbc_20200210_v1.json`
+  and `/scratch/mch/olifu/icon_hicar/qualification/remaining-milestone-8051f4c`
 - Historical detail and superseded decisions: `memory/project-state.md`
 
 The legacy ledger is evidence, not a work queue. Results produced before the

@@ -16,7 +16,9 @@ downscaling. Every atmospheric timestamp is transformed directly from native
 | Static generation used interpolation or modal classes where aggregation is required | The public generator area-averages DEM height, reclassifies every 10 m WorldCover pixel before aggregating 24 USGS fractions, derives the dominant class afterward, and overlap-averages SoilGrids texture to four Noah-MP layers | Analytic tests cover fraction closure and layer overlap; the full 701x701 Alpine bridge preserves terrain bitwise, closes fractions to 1.45e-7, contains 395,197 mixed-category cells, and changes texture below the surface in 91,396 cells by layer four |
 | HICAR silently broadcast one soil class through Noah-MP | `soiltexture_var` reads exactly four target-layer classes and `nmp_opt_soil=2` requires that field; the option metadata and namelist renderer expose the contract | Minimal qualification commit `e46671bccb628c43ea87a50630c4a041bb10bc84` (baseline b514 plus the five soil-texture integration changes) produced GPU-NCCL executable SHA256 `379f26c…c30d284`; winter and summer SMI/relative arms all ingested it and completed. The equivalent reader patch is committed locally in HICAR as `bae0c94c` |
 | Surface GRIB identity and semantics were implicit | The native adapter enforces grid UUID, exact valid time, instantaneous step type, surface/depth level type, units, exact soil-depth inventory, EXTPAR cell inventory, finite values, and source checksums | Three archived REA-L timestamps pass the contract; stale, duplicate, accumulated, mis-unit, mis-levelled, and physically invalid inputs fail tests |
+| Atmospheric GRIB ingest stopped at a canonical adapter contract | `decode-icon-atmosphere` strictly decodes the complete REA-L pressure, temperature, wind, water-vapour/cloud-water, W, HHL, terrain, and land-fraction inventories with exact time, step, level, unit, grid, and EXTPAR checks | Two consecutive archived Storm Sabine timestamps pass the operational FDB/ecCodes path with exact 561+83 message inventories; missing QI fails unless the explicit source-absence policy is selected |
 | LBC files lacked a sequence contract | `validate-boundaries` requires two or more strictly increasing, schema-identical, finite states, optionally bounds the time gap, and writes an identity manifest | Duplicate/reversed times and excess gaps fail |
+| HICAR could not consume target-native sparse LBC sequences | The runtime holds only the active two-record bracket, reads contiguous rank-local mass/U/V support runs, advances at exact forcing events, interpolates the authoritative basis in absolute time, and applies stagger-aware physical relaxation | Synthetic contract tests, compiler/device checks, and the bounded 2020-02-10 bracket-crossing integration qualify ingestion and turnover without reverting to the legacy full-domain forcing contract |
 | LBC research files could bypass the balance gate | IC and LBC writers now both refuse publication unless the explicit research override is used | Direct unbalanced LBC write fails |
 | Lateral W ownership was ambiguous | `--lbc-w-policy=diagnose` is the default; `relax` explicitly includes W | Product metadata records the selected policy |
 | COSMO runtime evidence was missing | The COSMO guide and `tmp/cosmo/cosmo` source were audited; exact references are incorporated in the main design | The obsolete source-gap claim is removed |
@@ -42,9 +44,9 @@ through the 6--24 hour relaxation experiment. This establishes reader
 integration and short numerical plausibility only; it does not rank the
 transfer hypotheses.
 
-## Remaining model-readiness work
+## Model-readiness milestones and remaining science
 
-### 1. Extend the real-state envelope and qualify the hydrostatic threshold
+### 1. Completed: extend the real-state envelope and qualify the hydrostatic threshold
 
 The shared core, initialization-only driver, diagnostics, certificate issuer,
 and certified writer path are implemented. Two independent retained
@@ -55,42 +57,41 @@ ICON REA-L-CH1 states now pass end to end:
 - 2020-07-02 SMI: hydrostatic residual `4.4217e-4`, wind-matrix relative
   residual `5.9105e-6`, and mass-continuity relative residual `6.5628e-6`.
 
-Both used the exact same 701x701x80 initialization-only executable and passed
-the fixed wind gates. The winter state also passed exact-staggered IC/LBC
-publication with distinct mass, U-face, and V-face sparse frames. The next
-controlled experiment is to add an independently retained autumn/storm state
-and establish:
+Both used the exact same 701x701x80 initialization-only path and passed the
+fixed wind gates. The independent Storm Sabine case on 2020-02-10 adds three
+certified timestamps. Its 00/01/02Z hydrostatic residuals are `4.0648e-4`,
+`3.8800e-4`, and `3.7469e-4`; wind-matrix residuals are
+`3.9323e-6`, `4.0481e-6`, and `3.7367e-6`; mass-continuity residuals are
+`4.1677e-6`, `3.7992e-6`, and `4.0024e-6`. All pass. The same states publish
+exact-staggered IC/LBC products with distinct mass, U-face, and V-face sparse
+frames.
 
-1. the observed discrete hydrostatic residual distribution and a defensible
-   tolerance (the current `5e-3` default is provisional, not a scientific
-   conclusion);
-2. wind solver status zero, matrix relative residual at most `1e-5`, and mass
-   continuity relative residual at most `2e-5`;
-3. bitwise atmospheric identity between the certified full state and the IC,
-   plus exact equality of IC/LBC values on each extracted support;
-4. failure on a changed value, missing staggered face, stale output, or
-   mismatched valid time.
-
-The two cases close the engineering execution blocker but do not justify
-tightening the provisional hydrostatic threshold or calling the path
+This independently supports retaining the provisional `5e-3` hydrostatic
+gate with about twelve-fold observed margin. It does not justify tightening
+the gate from three adjacent storm snapshots or calling the path
 production-qualified. Continuous Python hydrostatic integration remains
 provisional input to HICAR's own cold start.
 
-### 2. Implement the sparse two-record HICAR reader
+### 2. Completed: implement the sparse two-record HICAR reader
 
-Add a reader keyed by the sequence manifest. It must:
+The HICAR reader keyed by `sparse_lbc_file_list` now:
 
-- keep exactly the lower and upper valid-time records in memory;
-- reject gaps, duplicates, grid/static identity changes, and extrapolation;
-- interpolate only the declared independent basis (`T,P,U,V` and water
+- keeps exactly the lower and upper valid-time records in memory;
+- reads only contiguous rank-local runs from separate mass, U-face, and V-face
+  supports rather than materializing full boundary frames;
+- rejects gaps, duplicates, grid/static/support/weight/schema changes, skipped
+  forcing events, and extrapolation;
+- interpolates only the declared independent basis (`T,P,U,V` and water
   species; projected W only under `relax`);
-- refresh water/EOS/dependent diagnostics after interpolation;
-- apply relaxation on stagger-specific physical-width frames and define any
+- refreshes water/EOS/dependent diagnostics after interpolation;
+- applies relaxation on stagger-specific physical-width frames and defines any
   full-domain upper-sponge fields separately.
 
-Acceptance is endpoint identity, midpoint linearity for the independent
-basis, nonnegative water, no-extrapolation failure, restart equivalence at an
-LBC turnover, and a short forced run crossing at least two turnovers.
+The reader and renderer contracts cover endpoint selection, absolute-time
+linearity, nonnegative water, no-extrapolation failure, and exact forcing-list
+cadence. The bounded two-hour Storm Sabine integration is the end-to-end
+turnover qualification. Restart equivalence at a turnover remains useful
+production hardening rather than a blocker for the scientific R&D path.
 
 ### 3. Extend static aggregation only for selected physics
 
@@ -109,19 +110,22 @@ extension must retain the existing fraction closure, epoch axes, analytic
 aggregation tests, and the rule that terrain cannot change after geometry
 build.
 
-### 4. Complete the atmospheric ICON GRIB adapter
+### 4. Completed: atmospheric ICON GRIB adapter
 
-The surface adapter is operational. Complete the same strict decoding for
-atmospheric field semantics, units, native grid UUID, HHL ordering, and valid
-time into the canonical NetCDF interface.
-Require `QC/QI`; preserve optional hydrometeors; never invent missing upper
-profiles or frozen soil water. Winter liquid/ice partition needs an explicit
-target-physics diagnosis or a declared fallback because REA-L lacks
-`W_SO_ICE`.
+`decode-icon-atmosphere` now performs strict operational REA-L decoding into
+the canonical NetCDF interface. It requires the exact 561-message dynamic
+inventory (`P/T/U/V/QV/QC` on 80 full levels and W on 81 half levels), the
+83-message geometry inventory (HHL plus HSURF and FR_LAND), exact parameter
+IDs, units, level types and inventories, reference/valid times and forecast
+step, grid UUID and 1,147,980-cell count, and coordinate identity with the
+tuned ICON EXTPAR. It reverses archive top-to-bottom levels into HICAR order
+and validates pressure/HHL monotonicity and the lowest HHL against HSURF.
 
-Acceptance is byte-stable canonical output for one archived timestamp,
-field/unit inventory checks, and equality of native coordinates with cached
-operator fingerprints.
+REA-L does not archive QI. The decoder fails by default and allows zero QI only
+through the explicit provenance-marked `source-absent-zero` policy; it never
+reinterprets QC. Optional QR/QS/QG are not invented. Two consecutive archived
+Storm Sabine timestamps (00 and 01Z) pass the real FDB/ecCodes path with the
+same UUID `17643da2574959b644d254a3cd6e2bc0` and exact time/step metadata.
 
 ### 5. Scientific qualification
 

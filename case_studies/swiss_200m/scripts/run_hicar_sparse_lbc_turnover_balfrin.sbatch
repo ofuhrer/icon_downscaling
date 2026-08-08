@@ -22,6 +22,7 @@ surface_root=${HICARPREP_SURFACE_ROOT:-$SCRATCH/icon_hicar/qualification/hicarpr
 static=$surface_root/$date/hicar_runtime_domain_${method}_${date}_0000.nc
 python_bin=${HICAR_VALIDATION_PYTHON:-$SCRATCH/icon_hicar/qualification/wind-spinup-morrison-b514/python-v2/bin/python}
 renderer=$coordinator/case_studies/swiss_200m/scripts/render_hicar_namelist.py
+validator=$coordinator/case_studies/swiss_200m/validation/validate_sparse_lbc_runtime_output.py
 wrapper=$coordinator/case_studies/swiss_200m/scripts/gpu_rank_wrapper.sh
 exe=$build_root/HICAR_gpu
 sparse_list=$root/sparse_lbc/sparse_lbc_list.txt
@@ -40,7 +41,7 @@ partition=${SLURM_JOB_PARTITION:?This gate must run under Slurm}
 case "$partition" in debug|short) ;; *) echo "unsupported partition: $partition" >&2; exit 2 ;; esac
 allow=$(scontrol show partition "$partition" -o | sed -n 's/.*AllowGroups=\([^ ]*\).*/\1/p')
 case ",$allow," in *,ALL,*|*,s83,*) ;; *) echo "partition access rejected: $allow" >&2; exit 2 ;; esac
-for path in "$static" "$static.ready" "$python_bin" "$renderer" "$wrapper" \
+for path in "$static" "$static.ready" "$python_bin" "$renderer" "$validator" "$wrapper" \
             "$exe" "$sparse_list" "$sparse_list.ready"; do
   test -e "$path" || { echo "missing required path: $path" >&2; exit 2; }
 done
@@ -102,33 +103,9 @@ grep -q 'Sparse LBC bracket advanced: left= *2 *right= *3' "$run/model.out"
 shopt -s nullglob
 outputs=("$run/output"/*.nc)
 test "${#outputs[@]}" -eq 1
-"$python_bin" - "${outputs[0]}" <<'PY'
-import json
-import pathlib
-import sys
-
-import netCDF4
-import numpy as np
-
-path = pathlib.Path(sys.argv[1])
-report = {"output": str(path), "status": "PASS", "variables": {}}
-with netCDF4.Dataset(path) as ds:
-    if len(ds.dimensions["time"]) != 13:
-        raise SystemExit(f"expected 13 ten-minute states, found {len(ds.dimensions['time'])}")
-    for name, lower, upper in (
-        ("temperature", 150.0, 350.0),
-        ("pressure", 1.0, 120000.0),
-        ("qv", 0.0, 1.0),
-        ("qc", 0.0, 1.0),
-        ("qi", 0.0, 1.0),
-    ):
-        values = np.asarray(ds[name][:], dtype=np.float64)
-        if not np.isfinite(values).all() or values.min() < lower or values.max() > upper:
-            raise SystemExit(f"{name} is non-finite or outside {lower}..{upper}")
-        report["variables"][name] = {"minimum": float(values.min()), "maximum": float(values.max())}
-report_path = path.parent.parent / "validation.json"
-report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
-PY
-touch "$run/validation.json.ready"
+"$python_bin" "$validator" \
+  --output "${outputs[0]}" --model-log "$run/model.out" \
+  --expected-records 13 --expected-interval-seconds 600 \
+  --report "$run/validation.json"
 
 printf 'PASS output=%s validation=%s\n' "${outputs[0]}" "$run/validation.json"

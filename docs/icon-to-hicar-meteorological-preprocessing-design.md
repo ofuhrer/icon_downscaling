@@ -31,15 +31,19 @@ initial condition instead of being mislabeled as static.
 
 Model-ready integration gates remain explicit. HICAR's pressure-adjustment
 path and variational wind projection are not duplicated in Python. Normal
-cold start and `--initialize-only` now share those operators, and hicarprep
-can certify and publish the exact native mass/U/V/W state with HHL interfaces.
-The HICAR reader does not yet bracket the new sparse LBC records, so this
-closes time-zero IC generation but not multi-time forcing. A marked
+cold start and `--initialize-only` share those operators, and hicarprep can
+certify and publish the exact native mass/U/V/W state with HHL interfaces.
+HICAR's sparse runtime reader brackets successive certified LBC records,
+interpolates their authoritative basis at absolute model time, reads only
+rank-local support runs, and rejects extrapolation or contract drift. A marked
 continuously hydrostatic Python research output remains available for tests,
 but cannot be mistaken for a model-ready IC.
-Operational GRIB decoding likewise remains a source-adapter concern; the
-implemented core consumes a strict canonical native-grid ICON NetCDF
-representation.
+
+Operational atmospheric GRIB decoding is implemented at the source-adapter
+boundary. The strict REA-L decoder validates exact field, unit, level, time,
+step, grid, and EXTPAR contracts before emitting the canonical native-grid
+ICON NetCDF representation. Missing QI is an explicit source-absence policy,
+never an inference from QC.
 
 ## Decision
 
@@ -637,11 +641,13 @@ The audit also makes the remaining boundaries of the implementation explicit:
   the top class;
 - all ICON water species are jointly converted with one dry-air denominator;
   true staggering, discrete pressure adjustment, and variational wind
-  projection remain shared-initialization blockers;
-- sparse LBC records carry valid time and an offline sequence validator now
-  rejects schema changes, gaps above a configured interval, duplicates, and
-  non-finite states; HICAR still needs the two-record sparse reader and
-  dependent-variable refresh;
+  projection remain shared HICAR-initialization responsibilities rather than
+  duplicated Python operators;
+- sparse LBC records carry valid time and an offline sequence validator rejects
+  schema changes, gaps above a configured interval, duplicates, and non-finite
+  states. HICAR retains the active two-record bracket, reads rank-local sparse
+  supports, advances it at exact forcing events, and refreshes dependent
+  diagnostics after applying the interpolated authoritative basis;
 - int2lm's one-anchor pressure reconstruction and ICON's source-bracketed
   pressure blend are retained as a focused Alpine column A/B choice before the
   mandatory HICAR discrete adjustment.

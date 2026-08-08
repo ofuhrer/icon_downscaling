@@ -296,10 +296,14 @@ directly at an unsplit static file. The research-only
 `--allow-static-epoch-back-extrapolation` switch is required for a dated proxy
 map used before its validity epoch, and records that exception in both the
 surface and assembled HICAR runtime products.
-HICAR's reader has not yet been changed to bracket the timestamped sparse LBC
-snapshots. That reader remains the model-readiness gate for multi-time forcing;
-the certificate proves initialization of an individual state, not runtime LBC
-ingestion or interpolation.
+HICAR brackets timestamped sparse LBC snapshots through
+`sparse_lbc_file_list`. The runtime validates full-sequence coverage and
+cadence, immutable grid/static/support/weight/schema contracts, and exact
+forcing-event turnover; each rank reads only its local contiguous sparse runs.
+The two endpoint states are interpolated in absolute time before HICAR refreshes
+dependent thermodynamics. Initialization certificates still prove individual
+states, while the sequence validator and bracket-crossing runtime test cover
+multi-time ingestion and interpolation.
 
 Soil-water conservation is deliberately not an acceptance criterion. Soil
 state remains initial-only and must instead be finite, mask-consistent, and
