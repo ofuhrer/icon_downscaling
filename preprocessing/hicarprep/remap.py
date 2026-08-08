@@ -17,6 +17,7 @@ EARTH_RADIUS_M = 6_371_000.0
 RBF_SCALE_REFERENCE = 0.05
 RBF_GRID_DISTANCE_REFERENCE_M = 13_000.0
 MAXIMUM_RBF_CONDITION_NUMBER = 1.0e10
+MAXIMUM_RBF_WEIGHT_AMPLIFICATION = 10.0
 
 
 def coordinates_in_degrees(values: np.ndarray, units: str | None) -> np.ndarray:
@@ -129,6 +130,13 @@ class RBFWeights:
             raise ValueError("donor indices and weights must have identical shapes")
         if self.donor_index.shape[0] != int(np.prod(self.target_shape)):
             raise ValueError("weight target count does not match target shape")
+        amplification = np.sum(np.abs(self.weight), axis=1)
+        if not np.isfinite(self.weight).all() or np.any(
+            amplification > MAXIMUM_RBF_WEIGHT_AMPLIFICATION
+        ):
+            raise ValueError(
+                "RBF weights exceed the bounded interpolation amplification"
+            )
         if not np.allclose(np.sum(self.weight, axis=1), 1.0, atol=2.0e-7):
             raise ValueError("horizontal weights do not preserve constants")
 

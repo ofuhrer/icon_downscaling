@@ -313,6 +313,16 @@ class HorizontalRemapTests(unittest.TestCase):
         np.testing.assert_allclose(u, 20.0)
         np.testing.assert_allclose(v, -15.0)
 
+    def test_cached_rbf_operator_rejects_unbounded_amplification(self) -> None:
+        with self.assertRaisesRegex(ValueError, "bounded interpolation amplification"):
+            RBFWeights(
+                donor_index=np.array([[0, 1]]),
+                weight=np.array([[20.0, -19.0]]),
+                target_shape=(1, 1),
+                source_fingerprint="source",
+                target_fingerprint="target",
+            )
+
     def test_vertical_interface_remap_reconstructs_positive_layers_after_rbf_overshoot(
         self,
     ) -> None:
