@@ -31,8 +31,9 @@ python3 "$ROOT/scripts/hicarprep.py" build-domain \
   --source "$RAW" --static "$TEMP_OUTPUT" --external "$TEMP_EXTERNAL" \
   --initial-surface "$TEMP_INITIAL" --epoch-valid-from 2021-01-01T00:00:00Z \
   --initial-valid-time 2021-01-01T00:00:00Z \
-  --nz 80 --model-top-m 12000 --lowest-layer-m 15 --stretch-factor 0.65 \
-  --decay-rate-large 2 --decay-rate-small 6 --smooth-window-radius 5 --smooth-cycles 10
+  --nz 80 --model-top-m 12000 --lowest-layer-m 26 --stretch-factor 0.65 \
+  --decay-rate-large 2 --decay-rate-small 6 --smooth-window-radius 5 --smooth-cycles 10 \
+  --minimum-layer-thickness-m 20
 mv "$TEMP_OUTPUT" "$OUTPUT"
 mv "$TEMP_EXTERNAL" "$EXTERNAL"
 mv "$TEMP_INITIAL" "$INITIAL"

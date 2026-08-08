@@ -131,6 +131,8 @@ class RegistryAndStaticTests(unittest.TestCase):
                 self.assertNotIn("soil_vwc", dataset.variables)
                 self.assertNotIn("landuse", dataset.variables)
                 self.assertEqual(dataset["HHL"].shape, (9, 2, 3))
+                self.assertEqual(dataset.sleve_lowest_layer_m, 40.0)
+                self.assertEqual(dataset.required_minimum_sleve_layer_thickness_m, 20.0)
             with netCDF4.Dataset(external) as dataset:
                 self.assertIn("landuse", dataset.variables)
                 self.assertNotIn("soil_vwc", dataset.variables)
@@ -175,6 +177,11 @@ class RegistryAndStaticTests(unittest.TestCase):
         np.testing.assert_allclose(geometry["HHL"][-1], 6000.0, atol=1.0e-8)
         self.assertGreater(float(np.min(geometry["LAYER_THICKNESS"])), 0.0)
         self.assertGreater(float(np.min(geometry["SLEVE_JACOBIAN"])), 0.0)
+
+    def test_default_sleve_configuration_enforces_twenty_metre_floor(self) -> None:
+        terrain = np.array([[400.0, 600.0], [900.0, 1200.0]])
+        geometry = build_sleve_geometry(terrain)
+        self.assertGreater(float(np.min(geometry["LAYER_THICKNESS"])), 20.0)
 
     def test_climatology_and_continuous_external_fields_vary_with_time(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -928,6 +935,16 @@ class SurfaceStateTests(unittest.TestCase):
                 dataset.createVariable(
                     "soil_type_layer", "i2", ("soil_layer", "y", "x")
                 )[:] = np.array([6, 7, 8, 9])[:, None, None]
+            append_sleve_geometry(
+                static,
+                config=SleveConfig(
+                    nz=3,
+                    model_top_m=2500.0,
+                    lowest_layer_m=200.0,
+                    smooth_cycles=0,
+                    minimum_layer_thickness_m=20.0,
+                ),
+            )
 
             source_lat, source_lon = np.meshgrid(
                 np.linspace(45.98, 46.02, 4), np.linspace(7.98, 8.03, 4), indexing="ij"

@@ -11,7 +11,7 @@ import numpy as np
 class SleveConfig:
     nz: int = 80
     model_top_m: float = 12_000.0
-    lowest_layer_m: float = 15.0
+    lowest_layer_m: float = 26.0
     stretch_factor: float = 0.65
     decay_rate_large: float = 2.0
     decay_rate_small: float = 6.0
@@ -19,7 +19,7 @@ class SleveConfig:
     smooth_window_radius: int = 5
     smooth_cycles: int = 10
     minimum_jacobian: float = 0.0
-    minimum_layer_thickness_m: float = 0.0
+    minimum_layer_thickness_m: float = 20.0
 
 
 def auto_level_one(config: SleveConfig) -> np.ndarray:

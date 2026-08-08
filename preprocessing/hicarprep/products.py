@@ -211,8 +211,14 @@ def append_sleve_geometry(
             dataset.sleve_operator = "HICAR domain_obj.setup_sleve / auto_level=1"
             dataset.sleve_nz = config.nz
             dataset.sleve_model_top_m = config.model_top_m
+            dataset.sleve_lowest_layer_m = config.lowest_layer_m
+            dataset.sleve_stretch_factor = config.stretch_factor
             dataset.sleve_decay_rates = f"{config.decay_rate_large},{config.decay_rate_small}"
             dataset.sleve_exponent = config.exponent
+            dataset.required_minimum_sleve_jacobian = config.minimum_jacobian
+            dataset.required_minimum_sleve_layer_thickness_m = (
+                config.minimum_layer_thickness_m
+            )
             dataset.minimum_sleve_jacobian = float(np.min(geometry["SLEVE_JACOBIAN"]))
             dataset.minimum_sleve_layer_thickness_m = float(np.min(geometry["LAYER_THICKNESS"]))
         os.replace(temporary, static_path)
@@ -424,6 +430,29 @@ def validate_hicar_runtime_domain(path: Path) -> None:
         if not str(getattr(dataset, "land_state_valid_time", "")):
             raise ValueError("HICAR runtime domain lacks land_state_valid_time")
         target_shape = (len(dataset.dimensions["y"]), len(dataset.dimensions["x"]))
+        if "level" not in dataset.dimensions or "half_level" not in dataset.dimensions:
+            raise ValueError("HICAR runtime domain lacks atmospheric vertical dimensions")
+        levels = len(dataset.dimensions["level"])
+        expected_hhl_shape = (levels + 1, *target_shape)
+        expected_hfl_shape = (levels, *target_shape)
+        if "HHL" not in dataset.variables or dataset["HHL"].shape != expected_hhl_shape:
+            raise ValueError(f"HICAR runtime HHL must have shape {expected_hhl_shape}")
+        if "HFL" not in dataset.variables or dataset["HFL"].shape != expected_hfl_shape:
+            raise ValueError(f"HICAR runtime HFL must have shape {expected_hfl_shape}")
+        hhl = np.asarray(dataset["HHL"][:], dtype=np.float64)
+        hfl = np.asarray(dataset["HFL"][:], dtype=np.float64)
+        thickness = np.diff(hhl, axis=0)
+        required_thickness = float(
+            getattr(dataset, "required_minimum_sleve_layer_thickness_m", 20.0)
+        )
+        if not np.isfinite(hhl).all() or not np.isfinite(hfl).all():
+            raise ValueError("HICAR runtime vertical geometry contains non-finite values")
+        if np.any(thickness <= required_thickness):
+            raise ValueError(
+                "HICAR runtime vertical geometry violates its minimum layer thickness: "
+                f"minimum={float(np.min(thickness)):.9g} m, "
+                f"required_above={required_thickness:.9g} m"
+            )
         land = np.asarray(dataset["landmask"][:], dtype=np.float64) >= 0.5
         for name in required_2d:
             values = np.asarray(np.ma.asarray(dataset[name][:]).filled(np.nan))
