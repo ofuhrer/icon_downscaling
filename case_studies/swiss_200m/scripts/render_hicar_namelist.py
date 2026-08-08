@@ -9,11 +9,17 @@ from pathlib import Path
 import re
 
 import netCDF4
+import numpy as np
 
 
 CASE = Path(__file__).resolve().parents[1]
 TEMPLATE = CASE / "config" / "hicar_swiss_200m.nml.in"
 TOKEN = re.compile(r"@[A-Z_]+@")
+SELECTED_NZ = 80
+SELECTED_MODEL_TOP_M = 12_000.0
+SELECTED_LOWEST_LAYER_M = 26.0
+SELECTED_STRETCH_FACTOR = 0.65
+SELECTED_MINIMUM_LAYER_THICKNESS_M = 20.0
 
 
 def timestamp(value: str) -> datetime:
@@ -91,6 +97,31 @@ def main() -> int:
         horizontal = static["lat"].shape
         if static["HHL"].shape != (81, *horizontal) or static["HFL"].shape != (80, *horizontal):
             raise SystemExit("runtime domain HHL/HFL do not match the selected 80-level grid")
+        geometry_settings = {
+            "sleve_nz": SELECTED_NZ,
+            "sleve_model_top_m": SELECTED_MODEL_TOP_M,
+            "sleve_lowest_layer_m": SELECTED_LOWEST_LAYER_M,
+            "sleve_stretch_factor": SELECTED_STRETCH_FACTOR,
+            "required_minimum_sleve_layer_thickness_m": (
+                SELECTED_MINIMUM_LAYER_THICKNESS_M
+            ),
+        }
+        mismatches = {
+            name: {"actual": getattr(static, name, None), "expected": expected}
+            for name, expected in geometry_settings.items()
+            if getattr(static, name, None) != expected
+        }
+        if mismatches:
+            raise SystemExit(f"runtime domain SLEVE settings do not match the namelist: {mismatches}")
+        hhl = np.asarray(static["HHL"][:], dtype=np.float64)
+        thickness = np.diff(hhl, axis=0)
+        if (
+            not np.isfinite(hhl).all()
+            or np.any(thickness <= SELECTED_MINIMUM_LAYER_THICKNESS_M)
+            or not np.allclose(hhl[0], static["topo"][:], atol=1.0e-8, rtol=0.0)
+            or not np.allclose(hhl[-1], SELECTED_MODEL_TOP_M, atol=1.0e-8, rtol=0.0)
+        ):
+            raise SystemExit("runtime domain violates the selected SLEVE geometry bounds")
 
     forcing = listed_paths(args.forcing_file_list)
     boundaries = listed_paths(args.sparse_lbc_file_list)
@@ -130,7 +161,8 @@ def main() -> int:
     values = {
         "@START_DATE@": args.start_date,
         "@END_DATE@": args.end_date,
-        "@NZ@": "80",
+        "@NZ@": str(SELECTED_NZ),
+        "@LOWEST_LAYER_M@": str(SELECTED_LOWEST_LAYER_M),
         "@ADVECT_DENSITY@": ".True.",
         "@STATIC_FILE@": str(args.static_file.resolve()),
         "@FORCING_FILE_LIST@": str(args.forcing_file_list.resolve()),

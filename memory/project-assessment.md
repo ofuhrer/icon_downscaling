@@ -72,7 +72,10 @@ forcing/LBC records, exact segment bracketing, and explicit restart input.
   20 m and record both requested and achieved geometry limits. A nominal 26 m
   first level gives a measured 20.768 m minimum and 0.2473 minimum Jacobian on
   the 701x701 grid; the rejected artifact is retained separately and cannot be
-  accepted by runtime validation.
+  accepted by runtime validation. The HICAR namelist must use the same nominal
+  26 m setting because HICAR reconstructs SLEVE at runtime; the renderer now
+  checks the static geometry parameters, endpoints, and actual thickness before
+  writing the namelist.
 - Native ICON HHL is ordered correctly, but unconstrained RBF interpolation of
   each interface independently crossed one layer in four of 491,401 target
   columns (worst thickness -123.6 m). Hicarprep now remaps the column endpoints
@@ -139,7 +142,7 @@ intervals before a claim of added value is robust.
 
 ## Verification status
 
-- Coordinator focused tests: 79 passed.
+- Coordinator focused tests: 80 passed.
 - Repository syntax/policy checks: passed.
 - HICAR source is clean at `7ad54787`; reflected-shortwave compile and targeted
   GPU unit-test evidence passed. The clean campaign build from that exact

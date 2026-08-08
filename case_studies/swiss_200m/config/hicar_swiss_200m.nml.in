@@ -27,7 +27,7 @@
   snowh_var = 'snow_height'
   use_map_factors = .True.
   auto_level = 1
-  height_lowest_level = 15.0
+  height_lowest_level = @LOWEST_LAYER_M@
   model_top_height = 12000.0
   stretch_fac = 0.65
   terrain_smooth_windowsize = 5
