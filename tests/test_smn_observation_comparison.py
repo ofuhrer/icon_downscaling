@@ -310,6 +310,18 @@ def test_full_station_comparison_reports_exact_synthetic_match(tmp_path):
     assert result.returncode == 0, result.stderr + result.stdout
     payload = json.loads(report.read_text())
     assert len(payload["matched_model_times"]) == 2
+    assert sorted(payload["lead_time_metrics"]) == ["0", "3"]
+    assert (
+        payload["lead_time_metrics"]["3"]["hicar"]["all_sites"]
+        ["wind_speed_10m_m_s"]["count"]
+        == 1
+    )
+    assert set(payload["site_metrics"]) == {"ABC:1"}
+    assert (
+        payload["site_metrics"]["ABC:1"]["hicar"]
+        ["temperature_2m_height_adjusted_k"]["count"]
+        == 2
+    )
     assert (
         payload["seasonal_metrics"]["JJA"]["hicar"]["all_sites"][
             "temperature_2m_height_adjusted_k"

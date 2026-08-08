@@ -700,6 +700,11 @@ def main() -> int:
         season: create_accumulators(classes)
         for season in ("DJF", "MAM", "JJA", "SON")
     }
+    lead_time_accumulators: dict[int, dict] = {}
+    single_site_classes = {"selected_site": np.ones(1, dtype=bool)}
+    site_accumulators = {
+        site.key: create_accumulators(single_site_classes) for site in sites
+    }
 
     model_records: dict[datetime, tuple[netCDF4.Dataset, int]] = {}
     overlap_times: list[datetime] = []
@@ -760,6 +765,10 @@ def main() -> int:
                 continue
             model_dataset, model_index = model_records[valid]
             reference_dataset = reference_records[valid]
+            lead_hour = int(round((valid - ordered_times[0]).total_seconds() / 3600.0))
+            lead_accumulator = lead_time_accumulators.setdefault(
+                lead_hour, create_accumulators(classes)
+            )
 
             hicar_temperature = sample_hicar(
                 model_dataset, "taix", model_index, y_indices, x_indices
@@ -911,12 +920,20 @@ def main() -> int:
                         observed["precipitation_interval_kg_m2"] = float(
                             sum(precipitation_values)
                         )
+                hicar_site_fields = {
+                    name: float(values[site_index])
+                    for name, values in hicar_fields.items()
+                }
+                reference_site_fields = {
+                    name: float(values[site_index])
+                    for name, values in reference_fields.items()
+                }
                 add_site_values(
                     accumulators,
                     classes,
                     "hicar",
                     site_index,
-                    {name: float(values[site_index]) for name, values in hicar_fields.items()},
+                    hicar_site_fields,
                     observed,
                 )
                 add_site_values(
@@ -924,10 +941,7 @@ def main() -> int:
                     classes,
                     "hicar",
                     site_index,
-                    {
-                        name: float(values[site_index])
-                        for name, values in hicar_fields.items()
-                    },
+                    hicar_site_fields,
                     observed,
                 )
                 add_site_values(
@@ -935,10 +949,7 @@ def main() -> int:
                     classes,
                     "rea_l",
                     site_index,
-                    {
-                        name: float(values[site_index])
-                        for name, values in reference_fields.items()
-                    },
+                    reference_site_fields,
                     observed,
                 )
                 add_site_values(
@@ -946,12 +957,29 @@ def main() -> int:
                     classes,
                     "rea_l",
                     site_index,
-                    {
-                        name: float(values[site_index])
-                        for name, values in reference_fields.items()
-                    },
+                    reference_site_fields,
                     observed,
                 )
+                for source, model_values in (
+                    ("hicar", hicar_site_fields),
+                    ("rea_l", reference_site_fields),
+                ):
+                    add_site_values(
+                        lead_accumulator,
+                        classes,
+                        source,
+                        site_index,
+                        model_values,
+                        observed,
+                    )
+                    add_site_values(
+                        site_accumulators[site.key],
+                        single_site_classes,
+                        source,
+                        0,
+                        model_values,
+                        observed,
+                    )
             previous_model_precipitation = hicar_precipitation
             previous_model_time = valid
             matched_times.append(valid)
@@ -1049,6 +1077,21 @@ def main() -> int:
             ],
         },
         "metrics": metric_results,
+        "lead_time_definition": (
+            "Whole hours since the first HICAR output time in this event; "
+            "the restart occurs at lead hour 12."
+        ),
+        "lead_time_metrics": {
+            str(lead_hour): accumulator_results(values)
+            for lead_hour, values in sorted(lead_time_accumulators.items())
+        },
+        "site_metrics": {
+            site_key: {
+                source: source_values["selected_site"]
+                for source, source_values in accumulator_results(values).items()
+            }
+            for site_key, values in site_accumulators.items()
+        },
         "seasonal_metrics": {
             season: accumulator_results(values)
             for season, values in seasonal_accumulators.items()
