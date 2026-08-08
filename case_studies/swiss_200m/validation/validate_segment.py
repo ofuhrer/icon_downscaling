@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 
 import netCDF4
+import numpy as np
 
 
 def decode_times(path: Path) -> list[datetime]:
@@ -24,6 +25,54 @@ def decode_times(path: Path) -> list[datetime]:
             datetime(value.year, value.month, value.day, value.hour, value.minute, value.second)
             for value in values
         ]
+
+
+def core_values(variable: netCDF4.Variable) -> np.ndarray:
+    values = np.ma.asarray(variable[:]).filled(np.nan).astype(np.float64, copy=False)
+    if values.ndim >= 2 and values.shape[-1] > 6 and values.shape[-2] > 6:
+        values = values[(slice(None),) * (values.ndim - 2) + (slice(3, -3), slice(3, -3))]
+    return values
+
+
+def require_finite_outputs(paths: list[Path]) -> None:
+    failures: list[str] = []
+    for path in paths:
+        with netCDF4.Dataset(path) as dataset:
+            for name, variable in dataset.variables.items():
+                if "time" not in variable.dimensions or variable.dtype.kind != "f":
+                    continue
+                values = core_values(variable)
+                count = int(values.size - np.isfinite(values).sum())
+                if count:
+                    failures.append(f"{path.name}:{name}={count}")
+    if failures:
+        raise SystemExit("non-finite model output in domain core: " + ", ".join(failures[:20]))
+
+
+def require_restart_state(dataset: netCDF4.Dataset) -> None:
+    bounds = {
+        "potential_temperature": (150.0, 500.0),
+        "temperature": (150.0, 350.0),
+        "pressure": (5_000.0, 120_000.0),
+        "density": (0.05, 2.0),
+        "qv": (0.0, 0.1),
+        "u": (-200.0, 200.0),
+        "v": (-200.0, 200.0),
+        "w": (-200.0, 200.0),
+    }
+    failures: dict[str, str] = {}
+    for name, (lower, upper) in bounds.items():
+        if name not in dataset.variables:
+            failures[name] = "missing"
+            continue
+        values = core_values(dataset[name])
+        finite = np.isfinite(values)
+        if not finite.all():
+            failures[name] = f"{int(values.size - finite.sum())} non-finite values"
+        elif values.min() < lower or values.max() > upper:
+            failures[name] = f"range [{values.min():.6g}, {values.max():.6g}]"
+    if failures:
+        raise SystemExit("invalid terminal restart state: " + json.dumps(failures, sort_keys=True))
 
 
 def main() -> int:
@@ -56,11 +105,13 @@ def main() -> int:
             f"output times {output_times[0]}..{output_times[-1]} ({len(output_times)}) "
             f"do not equal expected {expected[0]}..{expected[-1]} ({len(expected)})"
         )
+    require_finite_outputs(output_files)
 
     restart_times = decode_times(args.restart)
     if restart_times != [end]:
         raise SystemExit(f"terminal restart time is {restart_times}, expected {[end]}")
     with netCDF4.Dataset(args.restart) as restart:
+        require_restart_state(restart)
         required_physics = {
             "physics.wind": "variational solver",
             "physics.mp": "morrison",
