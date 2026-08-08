@@ -1,0 +1,19 @@
+{
+  "root": "/scratch/mch/olifu/icon_hicar/rd/pilot/e89b3f0c/fullcatalog_segmented",
+  "repo_root": "/scratch/mch/olifu/icon_hicar/rd/source/coordinator-32b4d32",
+  "forcing_dir": "/scratch/mch/olifu/icon_hicar/rd/pilot/input/forcing_final",
+  "segment_hours": 1,
+  "max_attempts": 2,
+  "hicar_executable": "/scratch/mch/olifu/icon_hicar/rd/build/hicar-e89b3f0c-gpu-nccl/HICAR_gpu",
+  "hicar_support_dir": "/scratch/mch/olifu/icon_hicar/rd/source/coordinator-9b44c3d/HICAR/run",
+  "hicar_build_provenance": "/scratch/mch/olifu/icon_hicar/rd/build/hicar-e89b3f0c-gpu-nccl/hicar_build_provenance.txt",
+  "python": "/scratch/mch/olifu/icon_hicar/venv_static/bin/python",
+  "rbf_weights": "/scratch/mch/olifu/icon_hicar/rd/pilot/input/weights/rea_l_to_alpine_bridge_scalar_46b0c8b.nc",
+  "output_profile": "debug",
+  "seasons": [{
+    "name": "winter",
+    "start": "2020-02-10T00:00:00",
+    "end": "2020-02-10T02:00:00",
+    "static": "/scratch/mch/olifu/icon_hicar/rd/pilot/input/runtime/domain_runtime_alpine_bridge_20200210_0000.nc"
+  }]
+}

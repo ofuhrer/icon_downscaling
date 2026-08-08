@@ -286,7 +286,11 @@ class Campaign:
                 # A chain is intentionally serial; another season may proceed independently.
                 if index and previous_restart is None:
                     break
-                records = [self.paths(season, when) for when in hours(start, end)]
+                # Keep the forcing catalog invariant across restart segments.
+                # The HICAR reader selects the required bracket internally;
+                # changing the catalog origin at a restart can otherwise
+                # change initialization-derived interpolation state.
+                records = [self.paths(season, when) for when in hours(season.start, season.end)]
                 if not all(Path(f"{forcing}.ready").is_file() and Path(f"{boundary}.ready").is_file()
                            for forcing, boundary in records):
                     break
@@ -316,6 +320,7 @@ class Campaign:
                     "RESTART_INPUT": str(previous_restart or ""),
                     "OUTPUT_PROFILE": self.config.get("output_profile", "evaluation"),
                     "OUTPUT_INTERVAL": str(self.config.get("output_interval", 3600)),
+                    "HICAR_DISABLE_SX": "1" if self.config.get("disable_sx", False) else "0",
                 }
                 job = submit(
                     self.repo / "case_studies/swiss_200m/scripts/run_rea_l_stream_chunk_balfrin.sbatch",

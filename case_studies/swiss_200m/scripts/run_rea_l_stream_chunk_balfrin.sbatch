@@ -41,6 +41,7 @@ restart_input=${RESTART_INPUT:-}
 profile=${OUTPUT_PROFILE:-evaluation}
 output_interval=${OUTPUT_INTERVAL:-3600}
 model_debug=${HICAR_MODEL_DEBUG:-0}
+disable_sx=${HICAR_DISABLE_SX:-0}
 cfl_reduction=${HICAR_CFL_REDUCTION_FACTOR:-1.6}
 renderer="$repo_root/case_studies/swiss_200m/scripts/render_hicar_namelist.py"
 wrapper="$repo_root/case_studies/swiss_200m/scripts/gpu_rank_wrapper.sh"
@@ -84,6 +85,10 @@ debug_args=()
 if [[ "$model_debug" == 1 ]]; then
   debug_args=(--model-debug)
 fi
+sx_args=()
+if [[ "$disable_sx" == 1 ]]; then
+  sx_args=(--disable-sx)
+fi
 
 "$python" "$renderer" \
   --static-file "$static" \
@@ -94,6 +99,7 @@ fi
   --output-profile "$profile" \
   --cfl-reduction-factor "$cfl_reduction" \
   "${debug_args[@]}" \
+  "${sx_args[@]}" \
   --output-interval "$output_interval" \
   --restart-interval "$restart_records" \
   "${restart_args[@]}" \

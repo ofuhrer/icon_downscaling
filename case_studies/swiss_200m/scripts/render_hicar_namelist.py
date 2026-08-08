@@ -72,6 +72,7 @@ def main() -> int:
         "--output-profile", choices=("station", "evaluation", "debug"), default="evaluation"
     )
     parser.add_argument("--model-debug", action="store_true")
+    parser.add_argument("--disable-sx", action="store_true")
     parser.add_argument("--cfl-reduction-factor", type=float, default=1.6)
     parser.add_argument(
         "--require-land-climatology",
@@ -223,6 +224,7 @@ def main() -> int:
         "@LOWEST_LAYER_M@": str(SELECTED_LOWEST_LAYER_M),
         "@ADVECT_DENSITY@": ".True.",
         "@MODEL_DEBUG@": ".True." if args.model_debug else ".False.",
+        "@SX@": ".False." if args.disable_sx else ".True.",
         "@CFL_REDUCTION_FACTOR@": str(args.cfl_reduction_factor),
         "@SNOW_TEMPERATURE_LINE@": snow_temperature_line,
         "@LAND_CLIMATOLOGY_LINES@": "\n".join(land_climatology_lines),
