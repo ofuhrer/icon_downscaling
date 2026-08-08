@@ -269,6 +269,33 @@ def read_observations(
     }
 
 
+def read_native_reference(
+    path: Path,
+) -> dict[datetime, dict[str, dict[str, float]]]:
+    records: dict[datetime, dict[str, dict[str, float]]] = {}
+    with path.open(encoding="utf-8", newline="") as stream:
+        reader = csv.DictReader(stream)
+        required = {
+            "valid_time", "station_key", "source_terrain_m", "ta2m_ref",
+            "psfc_ref", "hus2m_ref", "u10m_ref", "v10m_ref",
+            "snow_height_ref", "precipitation_interval_ref",
+        }
+        missing = sorted(required - set(reader.fieldnames or ()))
+        if missing:
+            raise ValueError(f"native REA-L reference CSV is missing columns: {missing}")
+        for row in reader:
+            valid = canonical_time(
+                datetime.fromisoformat(row["valid_time"].replace("Z", "+00:00"))
+            )
+            site_key = row["station_key"]
+            if site_key in records.setdefault(valid, {}):
+                raise ValueError(f"duplicate native REA-L row for {valid}/{site_key}")
+            records[valid][site_key] = {
+                name: finite_float(row[name]) for name in required - {"valid_time", "station_key"}
+            }
+    return records
+
+
 def nearest_hicar_cells(
     latitude: np.ndarray,
     longitude: np.ndarray,
@@ -590,7 +617,9 @@ def main() -> int:
     parser.add_argument("--event-name", required=True)
     parser.add_argument("--static-file", type=Path, required=True)
     parser.add_argument("--output-file", type=Path, action="append", required=True)
-    parser.add_argument("--reference-list", type=Path, required=True)
+    reference = parser.add_mutually_exclusive_group(required=True)
+    reference.add_argument("--reference-list", type=Path)
+    reference.add_argument("--native-reference-csv", type=Path)
     parser.add_argument("--observations", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--boundary-width-m", type=float, default=10_000.0)
@@ -645,7 +674,11 @@ def main() -> int:
             failures.append("no HICAR output records")
             raise RuntimeError("no HICAR output records")
 
-        reference_paths = [
+        native_reference = (
+            read_native_reference(args.native_reference_csv)
+            if args.native_reference_csv is not None else None
+        )
+        reference_paths = [] if args.reference_list is None else [
             Path(line.strip().strip('"'))
             for line in args.reference_list.read_text().splitlines()
             if line.strip()
@@ -668,6 +701,8 @@ def main() -> int:
                     read_2d(dataset, "source_terrain", 0),
                     reference_setup,
                 )
+        if native_reference is not None:
+            reference_records = {valid: None for valid in native_reference}  # type: ignore[assignment]
 
         ordered_times = sorted(model_records)
         previous_model_precipitation = None
@@ -682,8 +717,6 @@ def main() -> int:
                 continue
             model_dataset, model_index = model_records[valid]
             reference_dataset = reference_records[valid]
-            assert reference_setup is not None
-            assert reference_terrain is not None
 
             hicar_temperature = sample_hicar(
                 model_dataset, "taix", model_index, y_indices, x_indices
@@ -736,21 +769,52 @@ def main() -> int:
                 "snow_height_m": hicar_snow,
             }
 
-            reference_temperature = regular_bilinear(
-                read_2d(reference_dataset, "ta2m_ref", 0), reference_setup
-            )
-            reference_pressure = regular_bilinear(
-                read_2d(reference_dataset, "psfc_ref", 0), reference_setup
-            )
-            reference_humidity = regular_bilinear(
-                read_2d(reference_dataset, "hus2m_ref", 0), reference_setup
-            )
-            reference_u = regular_bilinear(
-                read_2d(reference_dataset, "u10m_ref", 0), reference_setup
-            )
-            reference_v = regular_bilinear(
-                read_2d(reference_dataset, "v10m_ref", 0), reference_setup
-            )
+            if native_reference is None:
+                assert reference_setup is not None
+                assert reference_terrain is not None
+                reference_temperature = regular_bilinear(
+                    read_2d(reference_dataset, "ta2m_ref", 0), reference_setup
+                )
+                reference_pressure = regular_bilinear(
+                    read_2d(reference_dataset, "psfc_ref", 0), reference_setup
+                )
+                reference_humidity = regular_bilinear(
+                    read_2d(reference_dataset, "hus2m_ref", 0), reference_setup
+                )
+                reference_u = regular_bilinear(
+                    read_2d(reference_dataset, "u10m_ref", 0), reference_setup
+                )
+                reference_v = regular_bilinear(
+                    read_2d(reference_dataset, "v10m_ref", 0), reference_setup
+                )
+                reference_snow = regular_bilinear(
+                    read_2d(reference_dataset, "snow_height_ref", 0), reference_setup
+                )
+                reference_precipitation = regular_bilinear(
+                    read_2d(reference_dataset, "precipitation_interval_ref", 0),
+                    reference_setup,
+                )
+            else:
+                rows = native_reference[valid]
+                absent_sites = [site.key for site in sites if site.key not in rows]
+                if absent_sites:
+                    failures.append(
+                        f"native REA-L reference at {valid.isoformat()} lacks "
+                        f"{len(absent_sites)} sites"
+                    )
+                def native_values(name: str) -> np.ndarray:
+                    return np.asarray(
+                        [rows.get(site.key, {}).get(name, math.nan) for site in sites],
+                        dtype=np.float64,
+                    )
+                reference_temperature = native_values("ta2m_ref")
+                reference_pressure = native_values("psfc_ref")
+                reference_humidity = native_values("hus2m_ref")
+                reference_u = native_values("u10m_ref")
+                reference_v = native_values("v10m_ref")
+                reference_snow = native_values("snow_height_ref")
+                reference_precipitation = native_values("precipitation_interval_ref")
+                reference_terrain = native_values("source_terrain_m")
             reference_fields = {
                 "temperature_2m_raw_k": reference_temperature,
                 "temperature_2m_height_adjusted_k": height_adjust_temperature(
@@ -775,21 +839,15 @@ def main() -> int:
                 "wind_direction_degrees": wind_direction_from(
                     reference_u, reference_v
                 ),
-                "snow_height_m": regular_bilinear(
-                    read_2d(reference_dataset, "snow_height_ref", 0),
-                    reference_setup,
-                ),
+                "snow_height_m": reference_snow,
             }
 
             if previous_model_precipitation is not None:
                 hicar_fields["precipitation_interval_kg_m2"] = (
                     hicar_precipitation - previous_model_precipitation
                 )
-                reference_fields["precipitation_interval_kg_m2"] = regular_bilinear(
-                    read_2d(
-                        reference_dataset, "precipitation_interval_ref", 0
-                    ),
-                    reference_setup,
+                reference_fields["precipitation_interval_kg_m2"] = (
+                    reference_precipitation
                 )
             for site in sites:
                 site_index = site_position[site.key]
@@ -881,12 +939,16 @@ def main() -> int:
         "event_name": args.event_name,
         "interpretation": (
             "Independent station comparison. HICAR values are instantaneous at "
-            "three-hour output times, while station temperature, humidity, "
+            "hourly output times, while station temperature, humidity, "
             "wind, and radiation are hourly aggregates. Precipitation is "
             "compared over aligned ending-hour intervals."
         ),
         "sampling": {
-            "horizontal": "nearest HICAR cell; bilinear REA-L regular grid",
+            "horizontal": (
+                "nearest HICAR cell; nearest native REA-L cell"
+                if args.native_reference_csv is not None
+                else "nearest HICAR cell; bilinear REA-L regular grid"
+            ),
             "temperature_height_adjustment": (
                 "T_at_station=T_model+lapse_rate*(H_station-H_model)"
             ),
@@ -906,6 +968,9 @@ def main() -> int:
         },
         "observation_inventory": observation_inventory,
         "observation_file": str(args.observations.resolve()),
+        "rea_l_reference": str(
+            (args.native_reference_csv or args.reference_list).resolve()
+        ),
         "matched_model_times": [value.isoformat() for value in matched_times],
         "station_mapping": {
             "site_count": len(sites),
