@@ -58,7 +58,24 @@ def field_array(field) -> np.ndarray:
 
 
 def grid_spec(field) -> dict:
-    return dict(field.geography.grid_spec())
+    # EarthKit's current FDB environment returns ArrayField objects without
+    # the older ``field.geography`` facade. The GRIB grid identity and size are
+    # sufficient here because this adapter never interpolates the payload.
+    result = {}
+    for key in (
+        "uuidOfHGrid",
+        "gridType",
+        "gridDefinitionTemplateNumber",
+        "numberOfDataPoints",
+        "numberOfValues",
+        "md5GridSection",
+    ):
+        value = metadata(field, key)
+        if value is not None:
+            result[key] = value if isinstance(value, (str, int, float, bool)) else str(value)
+    if not result or not any(key in result for key in ("uuidOfHGrid", "md5GridSection")):
+        raise ValueError("GRIB field lacks a stable horizontal-grid identity")
+    return result
 
 
 def read_grib_fields(path: Path):
@@ -290,7 +307,7 @@ def main() -> int:
     w_so, w_grid = soil_stack(
         w_so_fields, REA_L_W_SO_BOUNDS_M[1:], "W_SO"
     )
-    surface_grid = dict(surface_by_name["SKT"].geography.grid_spec())
+    surface_grid = grid_spec(surface_by_name["SKT"])
     if surface_grid != t_grid or surface_grid != w_grid:
         raise ValueError("surface, T_SO and W_SO do not share one ICON native grid")
     grid_uid = normalized_uuid(str(surface_grid.get("uid", surface_grid.get("uuid", ""))))

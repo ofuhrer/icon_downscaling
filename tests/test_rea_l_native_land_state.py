@@ -68,3 +68,22 @@ def test_extpar_and_snow_ranges_are_checked() -> None:
         MODULE.validate_native_surface_values(
             np.full((2, 2), 278.0), np.full((2, 2), 10.0), surface, np.array([500.0, 600.0])
         )
+
+
+def test_grid_identity_does_not_require_earthkit_geography_facade() -> None:
+    value = FakeField({
+        "uuidOfHGrid": "grid-uuid",
+        "gridType": "unstructured_grid",
+        "gridDefinitionTemplateNumber": 101,
+        "numberOfDataPoints": 42,
+        "numberOfValues": 42,
+        "md5GridSection": "grid-md5",
+    })
+    assert MODULE.grid_spec(value) == {
+        "uuidOfHGrid": "grid-uuid",
+        "gridType": "unstructured_grid",
+        "gridDefinitionTemplateNumber": 101,
+        "numberOfDataPoints": 42,
+        "numberOfValues": 42,
+        "md5GridSection": "grid-md5",
+    }
