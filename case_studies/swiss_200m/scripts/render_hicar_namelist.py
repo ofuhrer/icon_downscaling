@@ -118,7 +118,7 @@ def main() -> int:
         choices=(
             "routine", "qualification", "mechanism_diagnosis",
             "causal_surface_30min", "terrain_radiation_gate",
-            "static_process_case", "wind_climatology", "engineering",
+            "static_process_case", "land_response_30min", "wind_climatology", "engineering",
         ),
         default="routine",
         help=(
@@ -194,8 +194,8 @@ def main() -> int:
         raise SystemExit("--forcing-interval must be positive")
     if args.radiation_update_interval <= 0:
         raise SystemExit("--radiation-update-interval must be positive")
-    if args.output_profile == "causal_surface_30min" and args.output_interval != 1800:
-        raise SystemExit("causal_surface_30min requires --output-interval 1800")
+    if args.output_profile in {"causal_surface_30min", "land_response_30min"} and args.output_interval != 1800:
+        raise SystemExit(f"{args.output_profile} requires --output-interval 1800")
     if args.restart_interval < 0:
         raise SystemExit("--restart-interval must be non-negative")
     if args.nz not in (60, 80):
@@ -206,7 +206,7 @@ def main() -> int:
         raise SystemExit("--alpha-const must be 0.01..1.0")
     if args.output_profile in {
         "qualification", "mechanism_diagnosis", "causal_surface_30min",
-        "static_process_case",
+        "static_process_case", "land_response_30min",
     } and not args.rea_l_land_initialization:
         raise SystemExit(
             "selected land/surface process profile requires --rea-l-land-initialization; "
@@ -444,6 +444,14 @@ def main() -> int:
             "'rsds', 'lwtr', 'rlus', 'hfgs', 'hfss', 'hfls', "
             "'tsfe', 'albedo', 'snow_height', 'soil_column_total_water', "
             "'soil_water_content', 'soil_temperature'"
+        ),
+        # Compact matched cold-start response profile.  Keep the liquid-water
+        # partition explicitly so total-minus-liquid soil ice can be audited.
+        "land_response_30min": (
+            "'precipitation', 'psfc', 'taix', 'hus2m', 'u10m', 'v10m', 'hpbl', "
+            "'hfss', 'hfls', 'tsfe', 'swet', 'snow_height', "
+            "'soil_column_total_water', 'soil_water_content', "
+            "'soil_water_content_liq', 'soil_temperature'"
         ),
         "wind_climatology": (
             "'u10m', 'v10m', 'u_agl', 'v_agl', 'rho_agl', "
