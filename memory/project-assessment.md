@@ -1,147 +1,137 @@
-# ICON-to-HICAR decision assessment
+# ICON-to-HICAR scientific assessment
 
-## Objective
+## Current conclusion
 
-Choose a scientifically defensible ICON REA-L-CH1 to HICAR setup for Alpine
-wind downscaling, then resolve remaining choices with small controlled
-experiments. This is R&D, not a production-qualification programme. Keep only
-enough provenance to reproduce a useful result.
+The repository is now oriented around one R&D path, but the complete setup is
+not yet scientifically ready for a long campaign. The input architecture and
+selected namelist are credible enough for a small-domain end-to-end pilot.
+Added value over REA-L-CH1 remains unproven and is the central empirical
+question.
 
-The immediate target is a 200 m Switzerland setup. A 100 m or 20-year campaign
-should wait until the setup survives contrasting regimes and shows added value.
+The active path is:
 
-## Converged experimental setup
+`native REA-L GRIB -> hicarprep target state + sparse LBC -> HICAR -> common
+station/REA-L comparison`
 
-These choices are the common baseline for the next experiments:
+The old fieldextra forcing path, pressure/wind certificates, publication
+states, release gates, recovery bundles, and generalized production campaign
+machinery have been removed. Runtime checks now protect only input identity,
+chronology, dimensions, finite values, water representation, safe Slurm use,
+and restart completeness.
 
-| Component | Selected setup | Status |
+## Selected experimental setup
+
+| Component | Current choice | Assessment |
 | --- | --- | --- |
-| Model | Fully coupled HICAR; wind is the primary score, not `wind_only` physics | Selected |
-| HICAR source | `feature/icon_downscaling` at `5d5574959f5c62feb183d184ab6ef99d2adfce80` until the radiation restart fix is integrated | Working baseline |
-| Horizontal grid | Switzerland at 200 m using the validated national static | Selected for R&D |
-| Vertical grid | 80 levels, 12 km top, 15 m lowest layer, stretch 0.65 | Selected starting point |
-| Terrain coordinate | SLEVE decay 2/6; split smoothing window 5 and 10 cycles | Selected starting point |
-| Wind adjustment | Discrete-adjoint variational projection, `Sx=true`, 500 m near-surface smoothing, RK3 | Selected |
-| Meteorological IC/LBC | Exact target-native `hicarprep` products with native mass/U/V staggering | Selected architecture |
-| Soil cold start | Native-grid TERRA SMI remapped by vertical overlap and reconstructed with target NoahMP hydraulics | Selected by project decision |
-| Static soil | Four depth-dependent target layers with `soiltexture_var='soil_type_layer'` and `nmp_opt_soil=2` | Selected; dominant-soil mode is a diagnostic fallback |
-| Lateral boundary | Sparse time-bracketing target-native LBC, initial 10 km shoulder, W diagnosed by HICAR | Usable provisional setup; width and W policy remain open |
-| Terrain radiation | Horizon-aware direct beam plus diffuse sky-view correction | Available for uninterrupted sensitivity runs; off in restartable campaigns |
+| Grid | 200 m | Use the 701x701 Alpine bridge for turnover/restart pilots; the 2271x1651 national grid needs separate resource evidence |
+| Vertical grid | 80 levels, 12 km top, 15 m first level, stretch 0.65 | Sound starting point; not uniquely established |
+| Terrain coordinate | SLEVE 2/6; smoothing window 5, 10 cycles | Previously stable; retain for controlled comparison |
+| Wind | Adjoint variational, `Sx=true`, 500 m smoothing, alpha 1, 2500 iterations | Best-supported current option |
+| Dynamics | RK3, density advection | Explicit and internally consistent |
+| Atmospheric input | Hourly native REA-L decoded and transformed by hicarprep | Selected; pilot still required for the simplified direct route |
+| Moisture | Dry-air mixing ratios; QI explicitly zero only because source is absent; W diagnosed by HICAR | Explicit and interpretable; W remains a sensitivity |
+| LBC | Hourly sparse hicarprep states, 10 km shoulder | Usable provisional choice; width is not closed |
+| Land initialization | Native TERRA state transferred by SMI to four NoahMP layers | Selected starting point; epoch extrapolation and transfer uncertainty remain |
+| Radiation | RRTMGP, 600 s update; terrain radiation off | Correct campaign baseline until focused terrain-radiation tests pass |
 
-Relative-saturation soil transfer remains available as a sensitivity. Direct
-absolute `W_SO` is a historical diagnostic only. The selected SMI method is
-not expected to reproduce a legacy absolute-water HICAR trajectory; its large
-water offset in that comparison remains a useful uncertainty to quantify.
+The forcing renderer now accepts only this configuration plus three output
+profiles. It requires one static domain, four soil layers, matching hourly
+forcing/LBC records, exact segment bracketing, and explicit restart input.
 
-Window length, overlap, warm-up, and retained-core ownership are deliberately
-not selected here. Existing overlapping 72-hour results test one policy; they
-do not fix production policy.
+## Critical input findings
 
-## What is established
+- The old sparse-LBC evidence was not a clean validation of the new hicarprep
+  atmospheric route: its initial state originated in the old fieldextra path.
+  Certificate labels hid this dependency. Those labels and that route are gone.
+- The direct hicarprep transform is conceptually sound: strict native P/T/U/V/
+  QV/QC/W/HHL/HSURF/FR_LAND decode, explicit missing-QI policy, scalar and
+  vector target weights, target-column vertical reconstruction, dry-water
+  conversion, and paired forcing/LBC output.
+- The active direct hourly producer decodes from the daily 00 UTC REA-L cycle,
+  transforms one valid time, validates the target record, and publishes only
+  the paired ready markers needed by concurrent readers.
+- The native land packager no longer imports the retired remapper. SMI is a
+  model choice, not a certification result. Static-epoch back extrapolation is
+  still an acknowledged approximation and should be quantified if land-state
+  errors dominate.
+- The independent preprocessing audit found real launch defects. The renderer
+  now resolves `NZ` and `ADVECT_DENSITY`; the forcing/LBC pair is validated
+  before either ready marker; forcing caches are season/domain-specific; and
+  runtime completion checks now require exact timestamps, selected physics,
+  all forcing brackets, and an exact terminal restart.
+- Sparse LBC U and V now always have distinct face-grid point sets, dimensions,
+  weights, and bounds checks. Their values are reconstructed by midpoint
+  interpolation from the mass-grid wind used by the regular forcing reader.
+  This matches the structured-grid staggering convention but still needs a
+  real two-hour turnover diagnostic because insertion occurs after the wind
+  projection and can temporarily perturb discrete continuity.
+- Static construction now partitions the public-source product and appends
+  HHL/HFL before publication. No existing cluster artifact is directly usable:
+  the national 2271x1651 static has four soil layers but lacks HHL/HFL, while
+  the 701x701 hicarprep runtime products lack HHL/HFL (and some older products
+  also lack `soil_type_layer`). A new runtime domain must therefore be built.
+- The national grid has 3.75 million horizontal cells. One hourly 80-level
+  forcing record is of order 10 GB before allowing for compression and working
+  arrays, so generating a week of cached hourly records as the first test would
+  be unreasonable. Pilot the 701x701 Alpine bridge, then measure preprocessing,
+  model throughput, memory, and output volume before selecting the campaign
+  extent.
 
-- The corrected HICAR wind tendency evolves native and fixed-height wind under
-  nonstationary forcing and passes multi-GPU halo and restart checks.
-- The 200 m national geometry and 80-level SLEVE 2/6 configuration have
-  representative engineering evidence.
-- `hicarprep` produces strict target-native atmospheric state, surface state,
-  and sparse LBC products. Three adjacent Storm Sabine states passed balance
-  and runtime checks. The two-hour bracket-turnover run completed at
-  `5d557495`.
-- SMI and relative-saturation summer land-response arms both ran stably for six
-  hours. Relative saturation crossed its predeclared dry threshold in only 14
-  top-layer cells by less than `2e-5 m3 m-3`; this is retained as sensitivity
-  evidence, not an open policy decision now that SMI is selected.
-- Independent summer windows reproduced the continuous-reference wind after a
-  48-hour warm-up in one bridge case, while soil and surface temperature did
-  not. That supports parallel wind experiments but not a universal window
-  policy or a general coupled-state product.
-- Terrain-radiation direct/diffuse component behavior passes synthetic flat,
-  horizon-blocked, and sky-view tests. Its remaining blocker is restart
-  continuity, not the topographic radiation calculation itself.
+## Reflected-shortwave cadence defect
 
-## Open decisions and closure experiments
+The reported defect was real. `ra_driver.F90` rebuilt total shortwave from
+direct plus diffuse every model step, while terrain-reflected shortwave was
+added only on full radiation updates. With a 600 s radiation interval, the
+reflected contribution disappeared between updates.
 
-| Decision | Current uncertainty | Smallest useful experiment | Closure rule |
-| --- | --- | --- | --- |
-| Terrain radiation promotion | A fresh NoahMP process still loses unidentified trajectory state | No active branch. Reopen only with a hidden-state checksum instrument or an upstream NoahMP restart solution | Keep off in restartable campaigns; direct+diffuse may be used in an uninterrupted bounded sensitivity |
-| LBC shoulder and W | Current 10 km/diagnosed-W run is stable but has large local W extrema | One strong-flow A/B over shoulder width and supplied versus diagnosed W | Select the least intrusive stable policy with no boundary-error penetration into the score region |
-| Window policy | Summer 72/48/24 works for wind only; contrasting regimes absent | Run a winter/stable and a strong-wind case with multiple model ages; reuse the preemptible controller | Choose window/overlap from error decay and cost; do not assume 72 hours |
-| Added value | HICAR versus REA-L skill is not established | Score both against the same observations, masks, elevations, and timestamps | Require robust wind benefit before 100 m or long campaigns |
-| 100 versus 200 m | 100 m adds cost and sharper terrain but no demonstrated skill | Matched 100/200 m case after the baseline survives contrasting regimes | Move to 100 m only for measurable added value |
+HICAR commit `7ad54787` caches and reuses the last reflected component between
+full radiation calls, while excluding the stale value during a refresh before
+computing the new component. The exact patch compiled with NVHPC/OpenACC on
+Balfrin (job 5042469), and its targeted GPU unit test passed (job 5042480).
+This proves the recurrence logic, not the full model energy budget. Terrain
+radiation therefore stays off in the campaign baseline pending a short cadence
+diagnostic.
 
-Surface-temperature lapse adjustment, alternate PBL/surface physics, layered
-soil controls, and V29-like warm/dry changes are secondary sensitivities. Do
-not revive them without a diagnosed error they can causally address.
+## Campaign and evaluation design
 
-## Terrain-radiation restart diagnosis
+`orchestration/rd_campaign.py` is the only campaign controller. It uses 24-hour
+segments by default, one serial restart chain per season, independent seasonal
+chains, bounded retries, at most two concurrent pp-short input jobs, and the
+preemptible partition for HICAR. Filesystem truth is limited to input ready
+markers, Slurm job IDs, terminal restarts, `segment.json`, and
+`segment.complete`. The campaign record includes source commits and working
+tree hashes.
 
-The uninterrupted and first-segment histories are bitwise identical at the
-08:00 checkpoint, and the checkpoint history/restart common fields are also
-bitwise identical. Divergence begins inside the first evolved NoahMP call
-after restart.
+The four-season experiment should use equal-duration, synoptically varied
+windows and score HICAR and REA-L against the same SwissMetNet sites, QC masks,
+and times. Current comparison code uses nearest HICAR cells and bilinear REA-L.
+Its main statistical limitation is that instantaneous HICAR values are compared
+with hourly station aggregates. Reports need paired differences and uncertainty
+intervals before a claim of added value is robust.
 
-The source audit located a concrete interface asymmetry. `EnergyVarOutTransfer`
-writes radiative temperature, emissivity, roughness, albedo, vegetated/bare
-ground temperatures, 2 m states, stomatal resistances, canopy gaps, and
-exchange coefficients back to `NoahmpIO`. HICAR stores these fields in its
-restart, but `NoahmpHICARmain` declares the latter group output-only and does
-not map checkpoint values back into a fresh `NoahmpIO`. `EnergyVarInTransfer`
-then also fails to restore them into the newly allocated NoahMP energy state.
-This is untidy but not the restart cause: a bounded candidate made those states
-`INOUT`, restored the complete mapping and specific-humidity conversion, and
-reproduced the original ten-variable restart failure without changing any gate
-metric. A prior QSFC-only intervention was also a clean negative result.
+## Decision sequence
 
-The working conclusion is that additional module-private NoahMP state or call
-ordering is missing. No speculative patch or active branch is retained.
-Terrain radiation is closed as an optional uninterrupted sensitivity and stays
-off in preemptible/restart-linked work. Reopen it only when its value justifies
-an instrumented hidden-state audit or an upstream NoahMP restart implementation.
+1. Build a new 701x701 runtime domain with HHL/HFL and four Noah-MP soil layers,
+   then generate three real direct hicarprep forcing/LBC pairs.
+2. Run a continuous two-hour case and a one-hour plus one-hour restart case;
+   require identical terminal model state and inspect the LBC turnover. Repeat
+   with an independent cold-cloud/autumn-storm case.
+3. Measure resource use, then select the scientifically useful campaign domain
+   and run equal windows in winter, spring, summer, and autumn as 24-hour
+   preemptible segments.
+4. Produce REA-L surface references without reintroducing fieldextra, retrieve
+   matching SwissMetNet observations, and calculate paired seasonal metrics.
+5. Decide whether HICAR adds wind skill, in which regimes/elevations, and
+   whether errors implicate input mapping, LBC width/W, land initialization,
+   or physics.
+6. Only then test 100 m or plan a 20-year run.
 
-## Branch and worktree closure
+## Verification status
 
-| Line of work | Disposition |
-| --- | --- |
-| Coordinator `codex/reorient-scientific-rd` | Keep as the integration line until reviewed into `main` |
-| Coordinator hicarprep/overlap/wind-fix topic branches | Integrated or patch-equivalent; local labels deleted, remote labels may be deleted after review |
-| HICAR `feature/icon_downscaling` | Keep as the sole active HICAR integration line |
-| HICAR production-wind and NoahMP-state topic labels | Ancestors or tree-identical experiments; local labels deleted |
-| `origin/codex/restart-noahmp-state-v26` and `origin/codex/v29-summer-warm-bias` | Superseded/patch-equivalent; remote deletion is safe after review |
-| `origin/codex/restart-at-start` | Do not merge into the selected setup; retain remotely only if time-zero restart is still desired as a separate feature |
-| Terrain-radiation scratch worktrees | Removed; the passing component and failing restart decision remain in the durable v4 artifact |
-| Retired solver-research branches | Keep retired; recovery bundles are sufficient |
-
-Remote branches are not part of the local cleanup action. Their disposition is
-an executive deletion decision after the integration branches are reviewed.
-
-## Evidence policy
-
-Keep the current synthesis here, concise case records under
-`case_studies/swiss_200m/validation`, and checksum-bound durable manifests for
-expensive results. Delete superseded ledgers, completed implementation plans,
-duplicate qualification reports, scratch-only source audits, generated build
-trees, and stale worktrees. A failed experiment is retained only when it
-changes a future decision.
-
-Canonical evidence:
-
-- Wind correction: `/store_new/mch/msopr/olifu/icon_downscaling/qualification/wind-tendency-fix-b514/v1/manifest.json`
-- Chronological summer overlap: `/store_new/mch/msopr/olifu/icon_downscaling/qualification/chronological-overlap-summer-202007/v3/manifest.json`
-- SMI land response: `case_studies/swiss_200m/validation/hicarprep_land_response_6h_20200702_v1.json`
-- Sparse LBC storm run: `case_studies/swiss_200m/validation/hicarprep_storm_sparse_lbc_20200210_v1.json`
-- Terrain radiation: `/store_new/mch/msopr/olifu/icon_downscaling/qualification/terrain_radiation_model_gate_v4`
-
-Results produced before the horizontal-wind fix can inform debugging but must
-not decide wind strategy.
-
-## Ranked next work
-
-1. Close the sparse-LBC shoulder/W choice with one strong-flow A/B.
-2. Run contrasting-regime window-policy experiments with SMI cold starts in
-   parallel on the preemptible queue.
-3. Score HICAR and REA-L against identical wind observations.
-4. Make the 100/200 m and long-campaign decisions from those results.
-
-Production packaging, immutable releases, generalized annual orchestration,
-exhaustive manifests, and archive ceremony remain deferred until they change
-one of these decisions.
+- Coordinator focused tests: 75 passed.
+- Repository syntax/policy checks: passed.
+- HICAR source is clean at `7ad54787`; reflected-shortwave compile and targeted
+  GPU unit-test evidence passed. A new clean campaign build is still required
+  because the compile proof used a disposable patch-based worktree.
+- Four-season campaign: not launched; no readiness claim should precede the
+  exact-staggering/direct-product and restart-equivalence pilots.

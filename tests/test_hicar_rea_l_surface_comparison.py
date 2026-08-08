@@ -119,8 +119,6 @@ def test_source_comparison_reports_exact_synthetic_match(tmp_path):
     )
     assert result.returncode == 0, result.stderr + result.stdout
     report = json.loads(report_path.read_text())
-    assert report["status"] == "PASS"
-    assert Path(f"{report_path}.ready").is_file()
     metrics = report["metrics"]["active_soil_all"]
     assert metrics["temperature_2m_height_adjusted_k"]["bias"] == 0.0
     assert metrics["wind_speed_10m_m_s"]["root_mean_squared_error"] == 0.0

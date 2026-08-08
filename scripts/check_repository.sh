@@ -56,10 +56,7 @@ if [ "$SYNTAX_ONLY" -eq 0 ]; then
   git diff --cached --check
   command -v ruff >/dev/null 2>&1 ||
     die "ruff is required; install requirements/dev.txt"
-  # Keep repository CI focused on correctness while historical experiment
-  # scripts are gradually brought under the broader style rules.
   ruff check --select E9,F63,F7,F82 scripts tests \
-    case_studies/swiss_100m \
     case_studies/swiss_200m
 fi
 

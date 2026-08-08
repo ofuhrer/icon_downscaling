@@ -19,7 +19,7 @@ REFERENCE = (
     / "references"
     / "build-and-performance.md"
 )
-def test_canonical_builder_uses_cpu_partition_and_frozen_clean_source() -> None:
+def test_canonical_builder_uses_cpu_partition_and_pinned_source_identity() -> None:
     text = BUILDER.read_text()
 
     assert "#SBATCH --partition=pp-short" in text
@@ -28,7 +28,9 @@ def test_canonical_builder_uses_cpu_partition_and_frozen_clean_source() -> None:
     assert "${HICAR_BUILD_ROOT:?" in text
     assert "${HICAR_EXPECTED_COMMIT:?" in text
     assert "test ! -e \"$build_root\"" in text
-    assert "git -C \"$source_root\" diff --quiet" in text
+    assert "HICAR_EXPECTED_DIFF_SHA256" in text
+    assert 'actual_diff=$(git -C "$source_root" diff --binary | sha256sum' in text
+    assert 'test "$actual_diff" = "$expected_diff"' in text
     assert "git -C \"$source_root\" diff --cached --quiet" in text
     assert 'lock_dir="${source_root}.hicar-build-active"' in text
     assert 'if ! mkdir "$lock_dir"; then' in text

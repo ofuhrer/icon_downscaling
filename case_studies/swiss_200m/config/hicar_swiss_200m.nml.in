@@ -18,14 +18,13 @@
   landvar = 'landmask'
   vegtype_var = 'landuse'
   soiltype_var = 'soil_type'
-@SOIL_TEXTURE_LINE@
+  soiltexture_var = 'soil_type_layer'
   surface_temp_var = 'surface_temperature'
   soil_deept_var = 'soil_deep_temperature'
   soil_t_var = 'soil_temperature'
   soil_vwc_var = 'soil_vwc'
-@VEGETATION_DOMAIN_LINES@
-@SNOW_INIT_LINES@
-@TERRAIN_RADIATION_DOMAIN_LINES@
+  swe_var = 'swe'
+  snowh_var = 'snow_height'
   use_map_factors = .True.
   auto_level = 1
   height_lowest_level = 15.0
@@ -38,24 +37,26 @@
 /
 &forcing
   forcing_file_list = '@FORCING_FILE_LIST@'
-@SPARSE_LBC_LINE@
+  sparse_lbc_file_list = '@SPARSE_LBC_FILE_LIST@'
   wait_for_ready_file = .True.
   ready_file_timeout = 1800
-  inputinterval = @FORCING_INTERVAL@
+  inputinterval = 3600
   time_var = 'time'
   pvar = 'P'
   tvar = 'T'
   qvvar = 'QV'
+  qcvar = 'QC'
+  qivar = 'QI'
   uvar = 'U'
   vvar = 'V'
-  wvar = 'W'
+  wvar = ''
   hgtvar = 'HSURF'
   zvar = 'HFL'
   latvar = 'lat_1'
   lonvar = 'lon_1'
-  qv_is_spec_humidity = .True.
+  qv_is_spec_humidity = .False.
   t_is_potential = .False.
-  relax_filters = .True.
+  relax_filters = .False.
 /
 &physics
   wind = 'variational solver'
@@ -89,30 +90,29 @@
   ! HICAR's generic USGS default leaves glaciers disabled. WorldCover snow/ice
   ! is mapped to USGS category 24, so select Noah-MP glacier physics explicitly.
   ice_category = 24
-  nmp_opt_soil = @NMP_OPT_SOIL@
-@VEGETATION_LSM_LINES@
+  nmp_opt_soil = 2
 /
 &cu_parameters
 /
 &rad_parameters
   ! Explicitly freeze the previously effective RRTMGP defaults. Terrain
   ! radiation remains off unless a causal profile is selected explicitly.
-  update_interval_rad = @RADIATION_UPDATE_INTERVAL@.0
+  update_interval_rad = 600.0
   ! Simulation and forcing timestamps are UTC.
   tzone = 0.0
   icloud = 3
   cldovrlp = 2
-@TERRAIN_RADIATION_LINES@
+  terrain_shading = .False.
 /
 &pbl_parameters
 /
 &sfc_parameters
 /
 &wind
-  Sx = @SX_ENABLED@
+  Sx = .True.
   smooth_wind_distance = 500.0
-@ALPHA_CONST_LINE@
-  wind_solver_iterations = @WIND_SOLVER_ITERATIONS@
+  alpha_const = 1.0
+  wind_solver_iterations = 2500
 /
 &output
   output_folder = '@OUTPUT_DIR@'

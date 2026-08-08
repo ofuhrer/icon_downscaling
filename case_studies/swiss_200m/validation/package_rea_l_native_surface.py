@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -13,17 +14,77 @@ import re
 import netCDF4
 import numpy as np
 
-from remap_rea_l_native_land_state import (
-    metadata,
-    normalized_uuid,
-    read_grib_fields,
-    sha256,
-    soil_stack,
-)
-
-
 REA_L_T_SO_DEPTHS_M = np.array((0.0, 0.005, 0.02, 0.06, 0.18, 0.54, 1.62, 4.86))
 REA_L_W_SO_BOUNDS_M = np.array((0.0, 0.01, 0.03, 0.09, 0.27, 0.81, 2.43, 7.29, 21.87))
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(8 * 1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def normalized_uuid(value: str) -> str:
+    return value.lower().replace("-", "")
+
+
+def metadata(field, key: str):
+    try:
+        return field.metadata(key)
+    except Exception:
+        return None
+
+
+def fixed_surface_depth(field) -> float:
+    candidates: list[float] = []
+    for suffix in ("FirstFixedSurface", "SecondFixedSurface"):
+        scaled = metadata(field, f"scaledValueOf{suffix}")
+        factor = metadata(field, f"scaleFactorOf{suffix}")
+        if scaled is None or factor is None or int(scaled) == 2**32 - 1:
+            continue
+        candidates.append(float(scaled) * 10.0 ** (-int(factor)))
+    if candidates:
+        return max(candidates)
+    level = metadata(field, "level")
+    if level is None:
+        raise ValueError("soil field has no decodable fixed-surface depth")
+    return float(level)
+
+
+def field_array(field) -> np.ndarray:
+    return np.asarray(field.to_numpy(flatten=True), dtype=np.float64)
+
+
+def grid_spec(field) -> dict:
+    return dict(field.geography.grid_spec())
+
+
+def read_grib_fields(path: Path):
+    # fdb/5.21:v1 currently aborts from duplicate eckit factories unless MIR
+    # is imported before EarthKit.
+    import mir  # noqa: F401
+    import earthkit.data as ekd
+
+    return list(ekd.from_source("file", str(path)).to_fieldlist())
+
+
+def soil_stack(fields: list, expected_depths: np.ndarray, name: str) -> tuple[np.ndarray, dict]:
+    if len(fields) != expected_depths.size:
+        raise ValueError(f"{name} has {len(fields)} fields instead of {expected_depths.size}")
+    ordered = sorted(fields, key=fixed_surface_depth)
+    decoded = np.array([fixed_surface_depth(field) for field in ordered])
+    if not np.allclose(decoded, expected_depths, atol=5.0e-7):
+        raise ValueError(
+            f"{name} depths {decoded.tolist()} disagree with expected {expected_depths.tolist()}"
+        )
+    reference_grid = grid_spec(ordered[0])
+    values = np.stack([field_array(field) for field in ordered])
+    for field in ordered[1:]:
+        if grid_spec(field) != reference_grid:
+            raise ValueError(f"{name} fields do not share one native grid")
+    return values, reference_grid
 
 
 def _cell_variable(dataset: netCDF4.Dataset, name: str) -> np.ndarray:

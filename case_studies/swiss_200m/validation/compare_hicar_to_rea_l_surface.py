@@ -371,7 +371,6 @@ def main() -> int:
                 )
     report = {
         "schema_version": 1,
-        "status": "FAIL" if failures else "PASS",
         "event_name": args.event_name,
         "interpretation": (
             "Source-consistency comparison against the 1 km REA-L driver; "
@@ -381,7 +380,7 @@ def main() -> int:
             "formula": "T_ref_adjusted=T_ref+lapse_rate*(H_HICAR-H_REA-L)",
             "lapse_rate_k_m": args.temperature_lapse_rate_k_m,
         },
-        "mask_contract": {
+        "sampling_masks": {
             "boundary_width_m": args.boundary_width_m,
             "grid_spacing_m": dx,
             "cells": {
@@ -406,13 +405,12 @@ def main() -> int:
             for class_name, class_statistics in statistics.items()
         },
         "nonfinite_pairs": nonfinite,
-        "failures": failures,
+        "issues": failures,
     }
     write_json_atomic(args.report, report)
     if failures:
         return 1
-    Path(f"{args.report}.ready").touch()
-    print(f"PASS: compared {len(references)} REA-L reference records")
+    print(f"Compared {len(references)} REA-L reference records")
     return 0
 
 

@@ -33,8 +33,7 @@ def test_retrieval_script_uses_smn_group_and_cluster_configuration():
     ).read_text()
     assert "export OPR_HOME=${JRETRIEVE_CONFIG_HOME:-/oprusers/osm}" in script
     assert "--groups SMN" in script
-    assert 'name == "termin"' in script
-    assert '("station", "meas_site")' in script
+    assert "--data-quality-cat-nr-limit 4" in script
 
 
 def test_observation_reader_keeps_distinct_measurement_sites(tmp_path):
@@ -135,7 +134,6 @@ def test_full_station_comparison_reports_exact_synthetic_match(tmp_path):
     output = tmp_path / "output.nc"
     reference_list = tmp_path / "reference_list.txt"
     observations = tmp_path / "observations.csv"
-    observation_manifest = tmp_path / "observations.manifest.json"
     report = tmp_path / "report.json"
 
     with netCDF4.Dataset(static, "w") as dataset:
@@ -262,16 +260,6 @@ def test_full_station_comparison_reports_exact_synthetic_match(tmp_path):
         + "\n".join(";".join(row) for row in rows)
         + "\n"
     )
-    observation_manifest.write_text(
-        json.dumps(
-            {
-                "status": "PASS",
-                "start": "2020-07-01T00:00:00",
-                "end": "2020-07-01T03:00:00",
-            }
-        )
-    )
-
     result = subprocess.run(
         [
             sys.executable,
@@ -286,8 +274,6 @@ def test_full_station_comparison_reports_exact_synthetic_match(tmp_path):
             str(reference_list),
             "--observations",
             str(observations),
-            "--observation-manifest",
-            str(observation_manifest),
             "--minimum-core-pairs",
             "1",
             "--report",
@@ -299,9 +285,7 @@ def test_full_station_comparison_reports_exact_synthetic_match(tmp_path):
 
     assert result.returncode == 0, result.stderr + result.stdout
     payload = json.loads(report.read_text())
-    assert payload["status"] == "PASS"
     assert len(payload["matched_model_times"]) == 2
-    assert Path(f"{report}.ready").is_file()
     assert (
         payload["seasonal_metrics"]["JJA"]["hicar"]["all_sites"][
             "temperature_2m_height_adjusted_k"

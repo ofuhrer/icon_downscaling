@@ -18,7 +18,7 @@ test -f "$_balfrin_site_config" || {
 while IFS='=' read -r _balfrin_key _balfrin_value; do
   case "$_balfrin_key" in
     ''|\#*) continue ;;
-    USER_ENV_ROOT|REA_FDB_IMAGE|FIELD_EXTRA_BIN|FIELD_EXTRA_RESOURCES|FIELD_EXTRA_SAMPLE|ICON_GRID|ICON_DOWNSCALING_DURABLE_ROOT|HICAR_PRODUCTION_BRANCH|HICAR_PRODUCTION_COMMIT|HICAR_PRIMARY_WORKFLOW)
+    USER_ENV_ROOT|REA_FDB_IMAGE|ICON_GRID|ICON_DOWNSCALING_DURABLE_ROOT|HICAR_BRANCH|HICAR_COMMIT)
       if test -z "${!_balfrin_key+x}"; then
         printf -v "$_balfrin_key" '%s' "$_balfrin_value"
         export "$_balfrin_key"

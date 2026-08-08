@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+"""Verify that one HICAR segment is complete and uses the selected R&D physics."""
+
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timedelta
+import json
+from pathlib import Path
+
+import netCDF4
+
+
+def decode_times(path: Path) -> list[datetime]:
+    with netCDF4.Dataset(path) as dataset:
+        if "time" not in dataset.variables or dataset["time"].size == 0:
+            raise ValueError(f"{path}: missing time coordinate")
+        variable = dataset["time"]
+        values = netCDF4.num2date(
+            variable[:], variable.units,
+            calendar=getattr(variable, "calendar", "standard"),
+        )
+        return [
+            datetime(value.year, value.month, value.day, value.hour, value.minute, value.second)
+            for value in values
+        ]
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--restart", type=Path, required=True)
+    parser.add_argument("--start", required=True)
+    parser.add_argument("--end", required=True)
+    parser.add_argument("--output-interval", type=int, required=True)
+    parser.add_argument("--forcing-list", type=Path, required=True)
+    parser.add_argument("--boundary-list", type=Path, required=True)
+    args = parser.parse_args()
+
+    start = datetime.fromisoformat(args.start.replace("T", " ").replace("Z", ""))
+    end = datetime.fromisoformat(args.end.replace("T", " ").replace("Z", ""))
+    if end <= start or args.output_interval <= 0:
+        raise SystemExit("invalid segment interval")
+
+    output_files = sorted(args.output_dir.glob("*.nc"))
+    if not output_files:
+        raise SystemExit("segment has no NetCDF output")
+    output_times = sorted({value for path in output_files for value in decode_times(path)})
+    expected = []
+    value = start + timedelta(seconds=args.output_interval)
+    while value <= end:
+        expected.append(value)
+        value += timedelta(seconds=args.output_interval)
+    if output_times != expected:
+        raise SystemExit(
+            f"output times {output_times[0]}..{output_times[-1]} ({len(output_times)}) "
+            f"do not equal expected {expected[0]}..{expected[-1]} ({len(expected)})"
+        )
+
+    restart_times = decode_times(args.restart)
+    if restart_times != [end]:
+        raise SystemExit(f"terminal restart time is {restart_times}, expected {[end]}")
+    with netCDF4.Dataset(args.restart) as restart:
+        required_physics = {
+            "physics.wind": "variational solver",
+            "physics.mp": "morrison",
+            "physics.pbl": "ysu",
+            "physics.lsm": "noahmp",
+            "physics.rad": "RRTMGP",
+            "wind.Sx": "T",
+            "wind.wind_solver_iterations": "2500",
+            "adv.advect_density": "T",
+            "domain.nz": "80",
+        }
+        mismatches = {
+            name: {"actual": str(getattr(restart, name, "")), "expected": expected_value}
+            for name, expected_value in required_physics.items()
+            if str(getattr(restart, name, "")) != expected_value
+        }
+    if mismatches:
+        raise SystemExit("restart physics mismatch: " + json.dumps(mismatches, sort_keys=True))
+    with netCDF4.Dataset(args.restart) as restart:
+        numeric_physics = {
+            "wind.alpha_const": 1.0,
+            "rad.update_interval_rad": 600.0,
+        }
+        numeric_mismatches = {
+            name: str(getattr(restart, name, ""))
+            for name, expected_value in numeric_physics.items()
+            if abs(float(getattr(restart, name, "nan")) - expected_value) > 1.0e-8
+        }
+    if numeric_mismatches:
+        raise SystemExit(
+            "restart numeric physics mismatch: " + json.dumps(numeric_mismatches, sort_keys=True)
+        )
+
+    forcing = [line.strip().strip('"') for line in args.forcing_list.read_text().splitlines() if line.strip()]
+    boundaries = [line.strip().strip('"') for line in args.boundary_list.read_text().splitlines() if line.strip()]
+    expected_inputs = int((end - start).total_seconds() // 3600) + 1
+    if len(forcing) != expected_inputs or len(boundaries) != expected_inputs:
+        raise SystemExit("forcing/LBC lists do not contain every hourly bracket endpoint")
+
+    print(json.dumps({
+        "start": args.start,
+        "end": args.end,
+        "output_files": len(output_files),
+        "output_times": len(output_times),
+        "restart": str(args.restart),
+        "forcing_records": len(forcing),
+        "boundary_records": len(boundaries),
+    }, indent=2, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

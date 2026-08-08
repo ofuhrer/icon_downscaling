@@ -59,19 +59,11 @@ shared or exact identity matters. Do not present DEM filtering as a solver
 cure: existing Swiss one- and two-pass sensitivities worsened the legacy
 nonnormal wind operator's convergence.
 
-## Create the forcing subdomain
+## Atmospheric target
 
-Derive a fieldextra target grid from the final static file:
-
-```bash
-python3 scripts/hicar_domain_to_fieldextra_grid.py \
-  --domain-file "$DOMAIN_NC" \
-  --border-km 10 \
-  --dlon-deg 0.01 \
-  --dlat-deg 0.01
-```
-
-Or let `scripts/prepare_icon_inputs.sh --domain-file ...` call the helper. Treat 10 km as a starting border, not a universal constant; it must cover HICAR interpolation and lateral relaxation needs.
+`hicarprep` writes atmospheric forcing directly on the exact HICAR grid. The
+sparse boundary width is a physical-distance setting, currently 10 km; no
+separate regular forcing subdomain or target-grid text file is maintained.
 
 ## Scientific trust checks
 

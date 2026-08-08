@@ -1,4 +1,0 @@
-# Sourced by scripts/bootstrap_externals.sh. Keep values shell-safe.
-fieldextra_url=git@github.com:COSMO-ORG/fieldextra.git
-fieldextra_commit=fab9e26403139ba701f2fc06213c92eb1561dc95
-fieldextra_branch=develop

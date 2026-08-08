@@ -1,6 +1,6 @@
 ---
 name: balfrin-user-environment
-description: Initialize the MeteoSwiss user environment and choose safe Slurm execution settings on Balfrin or related CSCS nodes. Use for modules, compilers, Python, ecCodes, NetCDF, fieldextra dependencies, partitions, SSH access, scratch paths, or deciding where cluster work may run.
+description: Initialize the MeteoSwiss user environment and choose safe Slurm execution settings on Balfrin or related CSCS nodes. Use for modules, compilers, Python, ecCodes, NetCDF, partitions, SSH access, scratch paths, or deciding where cluster work may run.
 ---
 
 # Balfrin user environment

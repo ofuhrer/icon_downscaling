@@ -592,7 +592,6 @@ def main() -> int:
     parser.add_argument("--output-file", type=Path, action="append", required=True)
     parser.add_argument("--reference-list", type=Path, required=True)
     parser.add_argument("--observations", type=Path, required=True)
-    parser.add_argument("--observation-manifest", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--boundary-width-m", type=float, default=10_000.0)
     parser.add_argument("--temperature-lapse-rate-k-m", type=float, default=-0.0065)
@@ -600,9 +599,6 @@ def main() -> int:
     args = parser.parse_args()
 
     failures: list[str] = []
-    manifest = json.loads(args.observation_manifest.read_text())
-    if manifest.get("status") != "PASS":
-        failures.append("observation manifest is not PASS")
     sites_by_key, observations, observation_inventory = read_observations(
         args.observations
     )
@@ -882,17 +878,14 @@ def main() -> int:
 
     report = {
         "schema_version": 1,
-        "status": "FAIL" if failures else "PASS",
         "event_name": args.event_name,
         "interpretation": (
-            "Independent station comparison. PASS means the access, sampling, "
-            "quality-control, and metric pipeline completed; it is not a "
-            "scientific skill verdict. HICAR values are instantaneous at "
+            "Independent station comparison. HICAR values are instantaneous at "
             "three-hour output times, while station temperature, humidity, "
             "wind, and radiation are hourly aggregates. Precipitation is "
             "compared over aligned ending-hour intervals."
         ),
-        "sampling_contract": {
+        "sampling": {
             "horizontal": "nearest HICAR cell; bilinear REA-L regular grid",
             "temperature_height_adjustment": (
                 "T_at_station=T_model+lapse_rate*(H_station-H_model)"
@@ -912,7 +905,6 @@ def main() -> int:
             "calm_direction_mask_threshold_m_s": CALM_WIND_THRESHOLD_M_S,
         },
         "observation_inventory": observation_inventory,
-        "observation_manifest": str(args.observation_manifest.resolve()),
         "observation_file": str(args.observations.resolve()),
         "matched_model_times": [value.isoformat() for value in matched_times],
         "station_mapping": {
@@ -947,7 +939,7 @@ def main() -> int:
             season: accumulator_results(values)
             for season, values in seasonal_accumulators.items()
         },
-        "failures": failures,
+        "issues": failures,
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
     with NamedTemporaryFile(
@@ -959,9 +951,8 @@ def main() -> int:
     os.replace(temporary, args.report)
     if failures:
         return 1
-    Path(f"{args.report}.ready").touch()
     print(
-        f"PASS: compared HICAR and REA-L with {len(sites)} SwissMetNet sites "
+        f"Compared HICAR and REA-L with {len(sites)} SwissMetNet sites "
         f"at {len(matched_times)} model times"
     )
     return 0

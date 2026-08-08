@@ -25,5 +25,5 @@ python3 scripts/filter_static_topography.py \
   --output <new-static.nc> --order 8 --passes 1 --report <manifest.json>
 ```
 
-Do not publish HICAR physical output from a sensitivity until the wind solver
-passes its true-residual acceptance gate.
+Interpret a sensitivity only after checking that the wind solve reached a
+small true residual; otherwise solver error is confounded with terrain effects.

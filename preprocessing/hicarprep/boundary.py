@@ -27,11 +27,15 @@ def validate_boundary_sequence(
     paths: list[Path],
     *,
     maximum_interval_seconds: float | None = None,
-    allow_unbalanced_research: bool = False,
+    minimum_states: int = 2,
 ) -> dict[str, object]:
     """Require a strictly ordered, schema-identical sequence suitable for bracketing."""
-    if len(paths) < 2:
-        raise ValueError("a bracketable lateral-boundary sequence requires at least two states")
+    if minimum_states < 1:
+        raise ValueError("minimum_states must be positive")
+    if len(paths) < minimum_states:
+        raise ValueError(
+            f"lateral-boundary validation requires at least {minimum_states} state(s)"
+        )
     records: list[dict[str, object]] = []
     reference: dict[str, tuple[tuple[str, ...], tuple[int, ...]]] | None = None
     reference_points: dict[str, np.ndarray] | None = None
@@ -102,8 +106,6 @@ def validate_boundary_sequence(
                 reference_contract = tuple(
                     str(getattr(dataset, name, ""))
                     for name in (
-                        "hicar_pressure_adjustment",
-                        "wind_balance",
                         "hicar_water_conversion",
                         "lateral_w_policy",
                         "target_grid_fingerprint",
@@ -128,8 +130,6 @@ def validate_boundary_sequence(
                 contract = tuple(
                     str(getattr(dataset, name, ""))
                     for name in (
-                        "hicar_pressure_adjustment",
-                        "wind_balance",
                         "hicar_water_conversion",
                         "lateral_w_policy",
                         "target_grid_fingerprint",
@@ -174,12 +174,6 @@ def validate_boundary_sequence(
                 "NOT_APPLIED_RESEARCH_PRODUCT",
             }:
                 raise ValueError(f"{path}: unknown water-representation contract")
-            if not allow_unbalanced_research and (
-                str(getattr(dataset, "hicar_pressure_adjustment", "")) != "APPLIED_HICAR_NATIVE"
-                or str(getattr(dataset, "wind_balance", ""))
-                != "APPLIED_HICAR_ADJOINT_VARIATIONAL_PROJECTION"
-            ):
-                raise ValueError(f"{path}: boundary state lacks a HICAR balance certificate")
             records.append(
                 {
                     "path": str(path),
@@ -192,8 +186,8 @@ def validate_boundary_sequence(
         "state_count": len(records),
         "first_valid_time": records[0]["valid_time"],
         "last_valid_time": records[-1]["valid_time"],
-        "minimum_interval_seconds": min(intervals),
-        "maximum_interval_seconds": max(intervals),
+        "minimum_interval_seconds": min(intervals) if intervals else None,
+        "maximum_interval_seconds": max(intervals) if intervals else None,
         "sequence_identity": manifest_identity(*paths),
         "states": records,
         "runtime_semantics": "bracket consecutive target-native states; no extrapolation",
@@ -205,12 +199,10 @@ def write_boundary_sequence_manifest(
     output_path: Path,
     *,
     maximum_interval_seconds: float | None = None,
-    allow_unbalanced_research: bool = False,
 ) -> dict[str, object]:
     payload = validate_boundary_sequence(
         paths,
         maximum_interval_seconds=maximum_interval_seconds,
-        allow_unbalanced_research=allow_unbalanced_research,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(

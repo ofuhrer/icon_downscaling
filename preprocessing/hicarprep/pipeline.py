@@ -12,7 +12,6 @@ import tempfile
 import netCDF4
 import numpy as np
 
-from .balance import BalanceCertificate
 from .products import PRODUCT_VERSION, sha256
 from .external import evaluate_external_fields
 from .remap import (
@@ -76,6 +75,182 @@ def convert_water_to_hicar_mixing_ratios(
             / (287.05 * result["T"] * (1.0 + 1.608 * result["QV"]))
         )
     return result
+
+
+def _mass_grid_wind(value: np.ndarray, *, component: str, target_shape: tuple[int, int]) -> np.ndarray:
+    """Return a mass-grid wind field from a mass- or native-face field."""
+    levels, ny, nx = value.shape
+    target_ny, target_nx = target_shape
+    if (ny, nx) == target_shape:
+        return np.asarray(value, dtype=np.float64)
+    if component == "U" and (ny, nx) == (target_ny, target_nx + 1):
+        return 0.5 * (value[:, :, :-1] + value[:, :, 1:])
+    if component == "V" and (ny, nx) == (target_ny + 1, target_nx):
+        return 0.5 * (value[:, :-1, :] + value[:, 1:, :])
+    raise ValueError(
+        f"{component} shape {value.shape} is neither mass-grid nor native-face "
+        f"for target {target_shape}"
+    )
+
+
+def _face_grid_wind(value: np.ndarray, *, component: str, target_shape: tuple[int, int]) -> np.ndarray:
+    """Place a target mass-grid wind on HICAR's native Arakawa-C face grid.
+
+    HICAR performs the same geometric operation when a regular forcing file
+    supplies mass-grid U/V: interior faces are midway between adjacent mass
+    points and the two exterior faces use the nearest available target value.
+    Sparse LBCs bypass that forcing interpolation, so they must carry these
+    face values and their own support indices explicitly.
+    """
+    values = np.asarray(value, dtype=np.float64)
+    levels, ny, nx = values.shape
+    target_ny, target_nx = target_shape
+    if component == "U":
+        if (ny, nx) == (target_ny, target_nx + 1):
+            return values
+        if (ny, nx) != target_shape:
+            raise ValueError(f"U shape {values.shape} is incompatible with target {target_shape}")
+        result = np.empty((levels, target_ny, target_nx + 1), dtype=np.float64)
+        result[:, :, 1:-1] = 0.5 * (values[:, :, :-1] + values[:, :, 1:])
+        result[:, :, 0] = values[:, :, 0]
+        result[:, :, -1] = values[:, :, -1]
+        return result
+    if component == "V":
+        if (ny, nx) == (target_ny + 1, target_nx):
+            return values
+        if (ny, nx) != target_shape:
+            raise ValueError(f"V shape {values.shape} is incompatible with target {target_shape}")
+        result = np.empty((levels, target_ny + 1, target_nx), dtype=np.float64)
+        result[:, 1:-1, :] = 0.5 * (values[:, :-1, :] + values[:, 1:, :])
+        result[:, 0, :] = values[:, 0, :]
+        result[:, -1, :] = values[:, -1, :]
+        return result
+    raise ValueError(f"unknown wind component {component!r}")
+
+
+def write_hicar_forcing_record(
+    path: Path,
+    state: dict[str, np.ndarray],
+    diagnostics: dict[str, float | int | str],
+    *,
+    static_path: Path,
+    source_path: Path,
+) -> None:
+    """Write one target-grid HICAR forcing/clock record from a hicarprep state.
+
+    The regular HICAR forcing reader is still required to initialize the root
+    atmospheric state and advance forcing-event time.  This record prevents
+    that interface from silently falling back to a separately regridded
+    atmosphere. Lateral relaxation remains authoritative in the
+    sparse-LBC sequence produced from the same transformed state.
+    """
+    required = {"T", "P", "QV", "QC", "QI", "U", "V", "HHL", "HFL", "lat", "lon"}
+    missing = sorted(required - set(state))
+    if missing:
+        raise ValueError(f"HICAR forcing record lacks target fields: {missing}")
+    valid_time = str(diagnostics.get("valid_time", ""))
+    if not valid_time or valid_time == "unknown":
+        raise ValueError("HICAR forcing record requires an unambiguous valid_time")
+    when = _normalized_time(valid_time)
+    lat = np.asarray(state["lat"], dtype=np.float64)
+    lon = np.asarray(state["lon"], dtype=np.float64)
+    if lat.ndim != 2 or lon.shape != lat.shape:
+        raise ValueError("target latitude/longitude must share one two-dimensional shape")
+    ny, nx = lat.shape
+    temperature = np.asarray(state["T"], dtype=np.float64)
+    if temperature.ndim != 3 or temperature.shape[1:] != (ny, nx):
+        raise ValueError("target T must have shape (level, y, x)")
+    levels = temperature.shape[0]
+    hhl = np.asarray(state["HHL"], dtype=np.float64)
+    hfl = np.asarray(state["HFL"], dtype=np.float64)
+    if hhl.shape != (levels + 1, ny, nx) or hfl.shape != temperature.shape:
+        raise ValueError("target HHL/HFL shapes do not match the atmospheric state")
+    payloads = {
+        "P": np.asarray(state["P"], dtype=np.float64),
+        "T": temperature,
+        "QV": np.asarray(state["QV"], dtype=np.float64),
+        "QC": np.asarray(state["QC"], dtype=np.float64),
+        "QI": np.asarray(state["QI"], dtype=np.float64),
+        "U": _mass_grid_wind(np.asarray(state["U"], dtype=np.float64), component="U", target_shape=(ny, nx)),
+        "V": _mass_grid_wind(np.asarray(state["V"], dtype=np.float64), component="V", target_shape=(ny, nx)),
+    }
+    for name in OPTIONAL_HYDROMETEORS:
+        if name in state:
+            payloads[name] = np.asarray(state[name], dtype=np.float64)
+    for name, values in payloads.items():
+        if values.shape != temperature.shape:
+            raise ValueError(f"target {name} must have shape {temperature.shape}")
+        if not np.all(np.isfinite(values)):
+            raise ValueError(f"target {name} contains non-finite values")
+    if not np.all(np.isfinite(hhl)) or not np.all(np.diff(hhl, axis=0) > 0.0):
+        raise ValueError("target HHL must be finite and strictly bottom-to-top")
+
+    with netCDF4.Dataset(static_path) as static:
+        static_lat = np.asarray(static["lat"][:], dtype=np.float64)
+        static_lon = np.asarray(static["lon"][:], dtype=np.float64)
+        terrain = np.asarray(static["topo"][:], dtype=np.float64)
+        land_fraction = np.asarray(
+            static["land_fraction"][:] if "land_fraction" in static.variables else static["landmask"][:],
+            dtype=np.float64,
+        )
+    if not np.array_equal(lat, static_lat) or not np.array_equal(lon, static_lon):
+        raise ValueError("forcing state and static horizontal grids do not match exactly")
+    if terrain.shape != (ny, nx) or land_fraction.shape != (ny, nx):
+        raise ValueError("static terrain/land fraction shape does not match forcing grid")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".partial", dir=path.parent
+    )
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    try:
+        with netCDF4.Dataset(temporary, "w") as dataset:
+            dataset.createDimension("y_1", ny)
+            dataset.createDimension("x_1", nx)
+            dataset.createDimension("z", levels)
+            dataset.createDimension("z_hl", levels + 1)
+            dataset.createDimension("time", None)
+            dataset.createVariable("lat_1", "f8", ("y_1", "x_1"), zlib=True)[:] = lat
+            dataset.createVariable("lon_1", "f8", ("y_1", "x_1"), zlib=True)[:] = lon
+            dataset["lat_1"].units = "degrees_north"
+            dataset["lon_1"].units = "degrees_east"
+            dataset.createVariable("HHL", "f4", ("z_hl", "y_1", "x_1"), zlib=True)[:] = hhl
+            dataset.createVariable("HFL", "f4", ("z", "y_1", "x_1"), zlib=True)[:] = hfl
+            dataset.createVariable("HSURF", "f4", ("y_1", "x_1"), zlib=True)[:] = terrain
+            dataset.createVariable("FR_LAND", "f4", ("y_1", "x_1"), zlib=True)[:] = land_fraction
+            for name, values in payloads.items():
+                variable = dataset.createVariable(
+                    name, "f4", ("time", "z", "y_1", "x_1"), zlib=True
+                )
+                variable[0] = values
+            time = dataset.createVariable("time", "f8", ("time",))
+            time.units = "seconds since 1970-01-01 00:00:00 UTC"
+            time.calendar = "gregorian"
+            time[0] = when.timestamp()
+            for name in ("HHL", "HFL", "HSURF"):
+                dataset[name].units = "m"
+            for name in ("P",):
+                dataset[name].units = "Pa"
+            dataset["T"].units = "K"
+            for name in ("QV", "QC", "QI", *OPTIONAL_HYDROMETEORS):
+                if name in dataset.variables:
+                    dataset[name].units = "kg kg-1 dry air"
+            for name in ("U", "V"):
+                dataset[name].units = "m s-1"
+            dataset.product_type = "hicarprep_target_forcing_record"
+            dataset.hicarprep_product_version = PRODUCT_VERSION
+            dataset.valid_time = when.isoformat().replace("+00:00", "Z")
+            dataset.water_representation = "dry-air mixing ratio"
+            dataset.wind_representation = "mass-grid average of exact target U/V faces"
+            dataset.lateral_relaxation_authority = "hicarprep sparse_lbc_file_list"
+            dataset.source_path = str(source_path)
+            dataset.source_sha256 = sha256(source_path)
+            dataset.static_sha256 = sha256(static_path)
+            dataset.target_grid_fingerprint = grid_fingerprint(lat, lon)
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def load_valid_time_inputs(
@@ -279,6 +454,9 @@ def transform_icon_state(
         )
         valid_time = str(getattr(source, "valid_time", "unknown"))
         source_uuid = str(getattr(source, "horizontal_grid_uuid", weights.source_fingerprint))
+        reference_time = str(getattr(source, "reference_time", "unknown"))
+        forecast_step_hours = int(getattr(source, "forecast_step_hours", -1))
+        missing_qi_policy = str(getattr(source, "missing_qi_policy", "unknown"))
         declared_order = (
             str(getattr(source["HHL"], "level_order", getattr(source, "vertical_order", "infer")))
             .strip()
@@ -369,6 +547,9 @@ def transform_icon_state(
     diagnostics = {
         "valid_time": valid_time,
         "source_grid_uuid": source_uuid,
+        "source_reference_time": reference_time,
+        "source_forecast_step_hours": forecast_step_hours,
+        "missing_qi_policy": missing_qi_policy,
         "source_vertical_order": source_order,
         "terrain_difference_min_m": float(np.min(terrain_differences)),
         "terrain_difference_max_m": float(np.max(terrain_differences)),
@@ -402,20 +583,10 @@ def write_initial_condition(
     *,
     static_path: Path,
     weights: RBFWeights,
-    allow_unprojected_wind: bool = False,
     supplemental_fields: dict[str, SupplementalField] | None = None,
     water_representation: str = "ICON tracer mass fraction (specific humidity for QV)",
-    balance_certificate: BalanceCertificate | None = None,
 ) -> None:
-    """Write a certified target IC or an explicitly marked research product."""
-    if balance_certificate is not None:
-        balance_certificate.validate(state, valid_time=str(diagnostics["valid_time"]))
-    elif not allow_unprojected_wind:
-        raise RuntimeError(
-            "HICAR pressure adjustment and variational wind projection have not been applied; "
-            "model-ready publication is blocked. "
-            "Use allow_unprojected_wind only for preprocessing research tests."
-        )
+    """Write a target-grid state for diagnostics and preprocessing experiments."""
     path.parent.mkdir(parents=True, exist_ok=True)
     ny, nx = state["lat"].shape
     descriptor, temporary_name = tempfile.mkstemp(
@@ -473,14 +644,8 @@ def write_initial_condition(
             dataset.hydrostatic_balance = (
                 "continuous target-column trapezoidal log-pressure integration; research only"
             )
-            dataset.hicar_pressure_adjustment = (
-                "APPLIED_HICAR_NATIVE" if balance_certificate else "NOT_APPLIED_RESEARCH_PRODUCT"
-            )
-            dataset.wind_balance = (
-                "APPLIED_HICAR_ADJOINT_VARIATIONAL_PROJECTION"
-                if balance_certificate
-                else "NOT_APPLIED_RESEARCH_PRODUCT"
-            )
+            dataset.hicar_pressure_adjustment = "HICARPREP_HYDROSTATIC_RECONSTRUCTION"
+            dataset.wind_balance = "SOURCE_NATIVE_REMAPPED"
             dataset.water_representation = water_representation
             dataset.hicar_water_conversion = (
                 "APPLIED_JOINT_ALL_WATER_SPECIES"
@@ -493,23 +658,6 @@ def write_initial_condition(
             dataset.authoritative_atmospheric_basis = (
                 "T,P,U,V,W,QV,QC,QI and present QR,QS,QG; THETA and RHO are diagnostics"
             )
-            if balance_certificate:
-                dataset.balance_certificate_state_fingerprint = (
-                    balance_certificate.state_fingerprint
-                )
-                dataset.balance_producer_commit = balance_certificate.producer_commit
-                dataset.maximum_discrete_hydrostatic_residual = (
-                    balance_certificate.maximum_discrete_hydrostatic_residual
-                )
-                dataset.hydrostatic_residual_tolerance = (
-                    balance_certificate.hydrostatic_residual_tolerance
-                )
-                dataset.maximum_wind_matrix_relative_residual = (
-                    balance_certificate.maximum_wind_matrix_relative_residual
-                )
-                dataset.maximum_mass_continuity_residual = (
-                    balance_certificate.maximum_mass_continuity_residual
-                )
             for name, value in diagnostics.items():
                 if name not in {"valid_time"}:
                     dataset.setncattr(name, value)
@@ -569,30 +717,19 @@ def write_boundary_condition(
     initial_condition_path: Path,
     valid_time: str,
     water_representation: str = "ICON tracer mass fraction (specific humidity for QV)",
-    allow_unbalanced_state: bool = False,
     include_lateral_w: bool = False,
-    balance_certificate: BalanceCertificate | None = None,
 ) -> None:
     """Extract a sparse physical-distance frame from the identically transformed state."""
-    if balance_certificate is not None:
-        balance_certificate.validate(state, valid_time=str(valid_time))
-    elif not allow_unbalanced_state:
-        raise RuntimeError(
-            "HICAR pressure adjustment and variational wind projection have not been applied; "
-            "lateral-boundary publication is blocked"
-        )
     rows, cols, relaxation_weight = boundary_relaxation_weights(x, y, boundary_width_m)
     levels, ny, nx = state["T"].shape
-    native_u = state.get("U", np.empty(0)).shape == (levels, ny, nx + 1)
-    native_v = state.get("V", np.empty(0)).shape == (levels, ny + 1, nx)
-    if native_u:
-        u_rows, u_cols, u_relaxation_weight = boundary_relaxation_weights(
-            _face_coordinates(np.asarray(x)), np.asarray(y), boundary_width_m
-        )
-    if native_v:
-        v_rows, v_cols, v_relaxation_weight = boundary_relaxation_weights(
-            np.asarray(x), _face_coordinates(np.asarray(y)), boundary_width_m
-        )
+    u_face = _face_grid_wind(state["U"], component="U", target_shape=(ny, nx))
+    v_face = _face_grid_wind(state["V"], component="V", target_shape=(ny, nx))
+    u_rows, u_cols, u_relaxation_weight = boundary_relaxation_weights(
+        _face_coordinates(np.asarray(x)), np.asarray(y), boundary_width_m
+    )
+    v_rows, v_cols, v_relaxation_weight = boundary_relaxation_weights(
+        np.asarray(x), _face_coordinates(np.asarray(y)), boundary_width_m
+    )
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=f".{path.name}.", suffix=".partial", dir=path.parent
@@ -611,32 +748,30 @@ def write_boundary_condition(
             )
             mass_weight[:] = relaxation_weight
             mass_weight.long_name = "lateral relaxation coefficient on the mass grid"
-            if native_u:
-                dataset.createDimension("u_boundary_point", u_rows.size)
-                dataset.createVariable("u_row", "i4", ("u_boundary_point",))[:] = u_rows
-                dataset.createVariable("u_column", "i4", ("u_boundary_point",))[:] = u_cols
-                dataset.createVariable(
-                    "u_relaxation_weight", "f8", ("u_boundary_point",)
-                )[:] = u_relaxation_weight
-            if native_v:
-                dataset.createDimension("v_boundary_point", v_rows.size)
-                dataset.createVariable("v_row", "i4", ("v_boundary_point",))[:] = v_rows
-                dataset.createVariable("v_column", "i4", ("v_boundary_point",))[:] = v_cols
-                dataset.createVariable(
-                    "v_relaxation_weight", "f8", ("v_boundary_point",)
-                )[:] = v_relaxation_weight
+            dataset.createDimension("u_boundary_point", u_rows.size)
+            dataset.createVariable("u_row", "i4", ("u_boundary_point",))[:] = u_rows
+            dataset.createVariable("u_column", "i4", ("u_boundary_point",))[:] = u_cols
+            dataset.createVariable(
+                "u_relaxation_weight", "f8", ("u_boundary_point",)
+            )[:] = u_relaxation_weight
+            dataset.createDimension("v_boundary_point", v_rows.size)
+            dataset.createVariable("v_row", "i4", ("v_boundary_point",))[:] = v_rows
+            dataset.createVariable("v_column", "i4", ("v_boundary_point",))[:] = v_cols
+            dataset.createVariable(
+                "v_relaxation_weight", "f8", ("v_boundary_point",)
+            )[:] = v_relaxation_weight
             for name, value in state.items():
                 if name == "W" and not include_lateral_w:
                     continue
                 if name in {"lat", "lon", "terrain_difference"}:
                     dimensions = ("boundary_point",)
                     payload = value[rows, cols]
-                elif name == "U" and native_u:
+                elif name == "U":
                     dimensions = ("level", "u_boundary_point")
-                    payload = value[:, u_rows, u_cols]
-                elif name == "V" and native_v:
+                    payload = u_face[:, u_rows, u_cols]
+                elif name == "V":
                     dimensions = ("level", "v_boundary_point")
-                    payload = value[:, v_rows, v_cols]
+                    payload = v_face[:, v_rows, v_cols]
                 elif name == "HHL" or (
                     name == "W" and value.shape[0] != levels
                 ):
@@ -677,14 +812,8 @@ def write_boundary_condition(
             dataset.temporal_semantics = (
                 "instantaneous target-native state; runtime brackets consecutive valid times"
             )
-            dataset.hicar_pressure_adjustment = (
-                "APPLIED_HICAR_NATIVE" if balance_certificate else "NOT_APPLIED_RESEARCH_PRODUCT"
-            )
-            dataset.wind_balance = (
-                "APPLIED_HICAR_ADJOINT_VARIATIONAL_PROJECTION"
-                if balance_certificate
-                else "NOT_APPLIED_RESEARCH_PRODUCT"
-            )
+            dataset.hicar_pressure_adjustment = "HICARPREP_HYDROSTATIC_RECONSTRUCTION"
+            dataset.wind_balance = "SOURCE_NATIVE_REMAPPED"
             dataset.water_representation = water_representation
             dataset.hicar_water_conversion = (
                 "APPLIED_JOINT_ALL_WATER_SPECIES"
@@ -695,23 +824,6 @@ def write_boundary_condition(
             dataset.lateral_w_policy = (
                 "relax_projected_native_w" if include_lateral_w else "diagnose_in_hicar"
             )
-            if balance_certificate:
-                dataset.balance_certificate_state_fingerprint = (
-                    balance_certificate.state_fingerprint
-                )
-                dataset.balance_producer_commit = balance_certificate.producer_commit
-                dataset.maximum_discrete_hydrostatic_residual = (
-                    balance_certificate.maximum_discrete_hydrostatic_residual
-                )
-                dataset.hydrostatic_residual_tolerance = (
-                    balance_certificate.hydrostatic_residual_tolerance
-                )
-                dataset.maximum_wind_matrix_relative_residual = (
-                    balance_certificate.maximum_wind_matrix_relative_residual
-                )
-                dataset.maximum_mass_continuity_residual = (
-                    balance_certificate.maximum_mass_continuity_residual
-                )
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)

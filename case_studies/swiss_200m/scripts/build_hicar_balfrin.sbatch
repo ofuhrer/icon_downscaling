@@ -2,9 +2,10 @@
 # Canonical clean HICAR build entry point for Balfrin.
 #
 # Required submission variables:
-#   HICAR_SOURCE_ROOT    clean HICAR worktree
+#   HICAR_SOURCE_ROOT    HICAR worktree
 #   HICAR_BUILD_ROOT     new, non-existent build directory
 #   HICAR_EXPECTED_COMMIT exact source commit
+#   HICAR_EXPECTED_DIFF_SHA256 optional expected tracked source diff
 #   HICAR_BUILD_VARIANT  cpu, gpu-mpi, or gpu-nccl
 #
 # Do not build two variants concurrently from one source clone. HICAR's
@@ -34,6 +35,7 @@ module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
 source_root=${HICAR_SOURCE_ROOT:?Set HICAR_SOURCE_ROOT}
 build_root=${HICAR_BUILD_ROOT:?Set HICAR_BUILD_ROOT to a new directory}
 expected_commit=${HICAR_EXPECTED_COMMIT:?Set HICAR_EXPECTED_COMMIT}
+expected_diff=${HICAR_EXPECTED_DIFF_SHA256:-}
 variant=${HICAR_BUILD_VARIANT:?Choose cpu, gpu-mpi, or gpu-nccl}
 mode=${HICAR_BUILD_MODE:-release}
 
@@ -73,8 +75,14 @@ esac
 
 test -d "$source_root"
 test "$(git -C "$source_root" rev-parse HEAD)" = "$expected_commit"
-git -C "$source_root" diff --quiet
 git -C "$source_root" diff --cached --quiet
+actual_diff=$(git -C "$source_root" diff --binary | sha256sum | awk '{print $1}')
+empty_diff=$(printf '' | sha256sum | awk '{print $1}')
+if test -n "$expected_diff"; then
+  test "$actual_diff" = "$expected_diff"
+else
+  test "$actual_diff" = "$empty_diff"
+fi
 test ! -e "$build_root"
 
 nc_prefix=$(nc-config --prefix)
@@ -171,6 +179,7 @@ provenance_partial="$provenance.partial.${SLURM_JOB_ID:-$$}"
 rm -f "$provenance.ready"
 {
   printf 'source_commit=%s\n' "$expected_commit"
+  printf 'source_diff_sha256=%s\n' "$actual_diff"
   printf 'variant=%s\n' "$variant"
   printf 'mode=%s\n' "$mode"
   printf 'build_script=%s\n' "$(realpath "$0")"

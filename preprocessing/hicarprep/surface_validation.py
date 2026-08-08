@@ -386,7 +386,7 @@ def validate_surface_case(
         "schema": "hicarprep-surface-validation-v1",
         "status": "PASS_INPUT_PLAUSIBILITY" if not hard_failures else "FAIL_INPUT_PLAUSIBILITY",
         "policy_decision": "NOT_DETERMINED_BY_PLAUSIBILITY_TESTS",
-        "qualification": "NUMERICAL_AND_RANGE_PLAUSIBILITY_ONLY",
+        "assessment_scope": "NUMERICAL_AND_RANGE_PLAUSIBILITY_ONLY",
         "valid_time": next(iter(valid_times)) if len(valid_times) == 1 else None,
         "source": str(source_path.resolve()),
         "source_sha256": source_digest,
