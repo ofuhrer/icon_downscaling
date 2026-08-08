@@ -25,18 +25,28 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("continuous", type=Path)
     parser.add_argument("segmented", type=Path)
+    parser.add_argument(
+        "--common-variables",
+        action="store_true",
+        help="Compare only shared variables (diagnostic use for restart versus initial output).",
+    )
     args = parser.parse_args()
 
     mismatches: dict[str, object] = {}
     compared = 0
     with netCDF4.Dataset(args.continuous) as left, netCDF4.Dataset(args.segmented) as right:
-        if set(left.variables) != set(right.variables):
+        if set(left.variables) != set(right.variables) and not args.common_variables:
             missing_left = sorted(set(right.variables) - set(left.variables))
             missing_right = sorted(set(left.variables) - set(right.variables))
             raise SystemExit(
                 f"restart schemas differ: missing_left={missing_left}, missing_right={missing_right}"
             )
-        for name in sorted(left.variables):
+        variable_names = (
+            set(left.variables) & set(right.variables)
+            if args.common_variables
+            else set(left.variables)
+        )
+        for name in sorted(variable_names):
             a = core_values(left[name])
             b = core_values(right[name])
             if a.shape != b.shape:

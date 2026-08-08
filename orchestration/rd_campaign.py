@@ -26,13 +26,16 @@ def stamp(value: datetime) -> str:
 
 
 def hours(start: datetime, end: datetime):
-    value = start
-    while value <= end:
+    value = start.replace(minute=0, second=0, microsecond=0)
+    final = end.replace(minute=0, second=0, microsecond=0)
+    if final < end:
+        final += timedelta(hours=1)
+    while value <= final:
         yield value
         value += timedelta(hours=1)
 
 
-def segments(start: datetime, end: datetime, length_hours: int):
+def segments(start: datetime, end: datetime, length_hours: float):
     value = start
     while value < end:
         following = min(value + timedelta(hours=length_hours), end)
@@ -138,7 +141,7 @@ class Campaign:
         self.root = Path(self.config["root"])
         self.repo = Path(self.config["repo_root"])
         self.forcing = Path(self.config["forcing_dir"])
-        self.segment_hours = int(self.config.get("segment_hours", 24))
+        self.segment_hours = float(self.config.get("segment_hours", 24))
         self.max_attempts = int(self.config.get("max_attempts", 4))
         self.seasons = [
             Season(item["name"], parse_time(item["start"]), parse_time(item["end"]), Path(item["static"]))
@@ -285,6 +288,7 @@ class Campaign:
                     "SEGMENT_RUN_DIR": str(run_dir),
                     "RESTART_INPUT": str(previous_restart or ""),
                     "OUTPUT_PROFILE": self.config.get("output_profile", "evaluation"),
+                    "OUTPUT_INTERVAL": str(self.config.get("output_interval", 3600)),
                 }
                 job = submit(
                     self.repo / "case_studies/swiss_200m/scripts/run_rea_l_stream_chunk_balfrin.sbatch",
