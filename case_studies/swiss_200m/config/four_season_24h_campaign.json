@@ -4,6 +4,8 @@
   "forcing_dir": "/scratch/mch/olifu/icon_hicar/rd/four_season_24h_e89b3f0c/input/forcing",
   "segment_hours": 12,
   "max_attempts": 4,
+  "input_partitions": ["pp-short", "pp-long"],
+  "max_active_inputs": 4,
   "hicar_executable": "/scratch/mch/olifu/icon_hicar/rd/build/hicar-e89b3f0c-gpu-nccl/HICAR_gpu",
   "hicar_support_dir": "/scratch/mch/olifu/icon_hicar/rd/source/coordinator-9b44c3d/HICAR/run",
   "hicar_build_provenance": "/scratch/mch/olifu/icon_hicar/rd/build/hicar-e89b3f0c-gpu-nccl/hicar_build_provenance.txt",

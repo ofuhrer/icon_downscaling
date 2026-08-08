@@ -89,6 +89,20 @@ def slurm_state(job_file: Path) -> str:
     return result.split()[0].split("+")[0] if result else "UNKNOWN"
 
 
+def slurm_partition(job_file: Path) -> str:
+    job = job_file.read_text().strip()
+    active = subprocess.run(
+        ["squeue", "-h", "-j", job, "-o", "%P"], text=True, stdout=subprocess.PIPE
+    ).stdout.strip()
+    if active:
+        return active.splitlines()[0]
+    result = subprocess.run(
+        ["sacct", "-n", "-X", "-j", job, "-o", "Partition", "--starttime", "now-7days"],
+        text=True, stdout=subprocess.PIPE,
+    ).stdout.strip()
+    return result.split()[0] if result else "unknown"
+
+
 def submitted_attempt(directory: Path, maximum: int) -> tuple[int, str] | None:
     for attempt in range(maximum, 0, -1):
         job_file = directory / f"attempt-{attempt}.job"
@@ -143,12 +157,16 @@ class Campaign:
         self.forcing = Path(self.config["forcing_dir"])
         self.segment_hours = float(self.config.get("segment_hours", 24))
         self.max_attempts = int(self.config.get("max_attempts", 4))
+        self.input_partitions = self.config.get("input_partitions", ["pp-short"])
+        self.max_active_inputs = int(self.config.get("max_active_inputs", 2))
         self.seasons = [
             Season(item["name"], parse_time(item["start"]), parse_time(item["end"]), Path(item["static"]))
             for item in self.config["seasons"]
         ]
-        if self.segment_hours <= 0 or self.max_attempts <= 0:
-            raise ValueError("segment_hours and max_attempts must be positive")
+        if self.segment_hours <= 0 or self.max_attempts <= 0 or self.max_active_inputs <= 0:
+            raise ValueError("segment length, attempts, and active inputs must be positive")
+        if not self.input_partitions:
+            raise ValueError("input_partitions must not be empty")
 
     def initialize(self) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
@@ -189,7 +207,8 @@ class Campaign:
     def prepare_inputs(self) -> int:
         input_jobs = self.root / "input_jobs"
         input_jobs.mkdir(exist_ok=True)
-        active = 0
+        active_by_partition = {partition: 0 for partition in self.input_partitions}
+        per_partition = max(1, self.max_active_inputs // len(self.input_partitions))
         submitted = 0
         unique: dict[tuple[str, datetime], Path] = {}
         for season in self.seasons:
@@ -204,12 +223,19 @@ class Campaign:
             directory.mkdir(exist_ok=True)
             previous = submitted_attempt(directory, self.max_attempts)
             if previous and previous[1] in {"PENDING", "RUNNING", "CONFIGURING", "COMPLETING"}:
-                active += 1
+                partition = slurm_partition(directory / f"attempt-{previous[0]}.job")
+                active_by_partition[partition] = active_by_partition.get(partition, 0) + 1
                 continue
             attempt = 1 if previous is None else previous[0] + 1
             if attempt > self.max_attempts:
                 raise RuntimeError(f"input {when.strftime(TIME)} failed {self.max_attempts} times")
-            if active + submitted >= 2:  # live pp-short per-user limit
+            if sum(active_by_partition.values()) >= self.max_active_inputs:
+                continue
+            partition = next(
+                (item for item in self.input_partitions if active_by_partition[item] < per_partition),
+                None,
+            )
+            if partition is None:
                 continue
             job = submit(
                 self.repo / "case_studies/swiss_200m/scripts/produce_hicarprep_target_record_balfrin.sbatch",
@@ -223,9 +249,10 @@ class Campaign:
                     "HICAR_PYTHON": self.config["python"],
                 },
                 "hp-" + when.strftime("%m%d%H"),
-                partition="pp-short",
+                partition=partition,
             )
             (directory / f"attempt-{attempt}.job").write_text(job + "\n")
+            active_by_partition[partition] += 1
             submitted += 1
         return submitted
 
