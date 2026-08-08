@@ -1,6 +1,6 @@
 {
   "root": "/scratch/mch/olifu/icon_hicar/rd/pilot/3ae7618c/segmented",
-  "repo_root": "/scratch/mch/olifu/icon_hicar/rd/source/coordinator-de6264d",
+  "repo_root": "/scratch/mch/olifu/icon_hicar/rd/source/coordinator-restartfix",
   "forcing_dir": "/scratch/mch/olifu/icon_hicar/rd/pilot/input/forcing_final",
   "segment_hours": 1,
   "max_attempts": 2,
