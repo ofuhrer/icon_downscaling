@@ -62,9 +62,9 @@ def grid_spec(field) -> dict:
 
 
 def read_grib_fields(path: Path):
-    # fdb/5.21:v1 currently aborts from duplicate eckit factories unless MIR
-    # is imported before EarthKit.
-    import mir  # noqa: F401
+    # Decode the native grid through ecCodes/earthkit. MIR is an interpolation
+    # library and its Python bindings are not present in the operational FDB
+    # uenv; no interpolation is performed in this adapter.
     import earthkit.data as ekd
 
     return list(ekd.from_source("file", str(path)).to_fieldlist())
