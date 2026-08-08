@@ -18,7 +18,7 @@ python_bin=$SCRATCH/icon_hicar/qualification/wind-spinup-morrison-b514/python-v2
 compare=$repo_root/case_studies/swiss_200m/validation/compare_hicar_to_rea_l_surface.py
 assessor=$repo_root/case_studies/swiss_200m/validation/assess_hicarprep_land_response.py
 definition=$repo_root/case_studies/swiss_200m/config/hicarprep_land_response_6h_v1.json
-noahmp=$SCRATCH/icon_hicar/qualification/hicarprep_hicar_soiltexture_v2/HICAR/run/NoahmpTable.TBL
+noahmp=$SCRATCH/icon_hicar/qualification/hicarprep_hicar_soiltexture_v1/source/run/NoahmpTable.TBL
 
 for method in smi relative_saturation; do
   run=$run_root/$method

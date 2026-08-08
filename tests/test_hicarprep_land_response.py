@@ -40,6 +40,7 @@ def test_runner_uses_private_non_overwriting_matched_inputs() -> None:
     assert "--expected-hours 6" in script
     assert '"$exe" -v soiltexture_var' in script
     assert '"$exe" -v soil_water_content_liq' not in script
+    assert "hicarprep_hicar_soiltexture_v1/source" in script
 
 
 def test_stats_and_source_gate_are_method_neutral(tmp_path: Path) -> None:
