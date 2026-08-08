@@ -129,13 +129,15 @@ def submit(
     job_name: str,
     *,
     partition: str,
+    sbatch_options: tuple[str, ...] = (),
 ) -> str:
     validate_partition(partition)
     exports = ["ALL", *(f"{key}={value}" for key, value in environment.items())]
     return run(
         [
             "sbatch", "--parsable", "--partition", partition,
-            "--job-name", job_name, "--export=" + ",".join(exports), str(script),
+            "--job-name", job_name, *sbatch_options,
+            "--export=" + ",".join(exports), str(script),
         ]
     ).split(";")[0]
 
@@ -159,11 +161,21 @@ class Campaign:
         self.max_attempts = int(self.config.get("max_attempts", 4))
         self.input_partitions = self.config.get("input_partitions", ["pp-short"])
         self.max_active_inputs = int(self.config.get("max_active_inputs", 2))
+        self.input_cpus = int(self.config.get("input_cpus", 4))
+        self.input_time = str(self.config.get("input_time", "01:00:00"))
+        self.model_nodes = int(self.config.get("model_nodes", 2))
+        self.model_time = str(self.config.get("model_time", "06:00:00"))
         self.seasons = [
             Season(item["name"], parse_time(item["start"]), parse_time(item["end"]), Path(item["static"]))
             for item in self.config["seasons"]
         ]
-        if self.segment_hours <= 0 or self.max_attempts <= 0 or self.max_active_inputs <= 0:
+        if (
+            self.segment_hours <= 0
+            or self.max_attempts <= 0
+            or self.max_active_inputs <= 0
+            or self.input_cpus <= 0
+            or self.model_nodes <= 0
+        ):
             raise ValueError("segment length, attempts, and active inputs must be positive")
         if not self.input_partitions:
             raise ValueError("input_partitions must not be empty")
@@ -250,6 +262,10 @@ class Campaign:
                 },
                 "hp-" + when.strftime("%m%d%H"),
                 partition=partition,
+                sbatch_options=(
+                    f"--cpus-per-task={self.input_cpus}",
+                    f"--time={self.input_time}",
+                ),
             )
             (directory / f"attempt-{attempt}.job").write_text(job + "\n")
             active_by_partition[partition] += 1
@@ -322,6 +338,10 @@ class Campaign:
                     self.repo / "case_studies/swiss_200m/scripts/run_rea_l_stream_chunk_balfrin.sbatch",
                     environment, f"hc-{season.name[:3]}-{index:03d}-a{attempt}",
                     partition="preemptible",
+                    sbatch_options=(
+                        f"--nodes={self.model_nodes}",
+                        f"--time={self.model_time}",
+                    ),
                 )
                 (segment_root / f"attempt-{attempt}.job").write_text(job + "\n")
                 submitted += 1
