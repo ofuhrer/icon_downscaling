@@ -16,8 +16,14 @@ geometry with an algebraically equivalent but differently ordered
 single-precision expression. Matching the cold-path operation order
 (`16de4b84`) makes both 60-second and one-hour segmented controls bit-for-bit
 equal to uninterrupted runs across all 196 model-core restart variables.
-Added value over REA-L-CH1 remains unproven and is the central empirical
-question.
+The completed four-season campaign shows that the corrected setup is
+numerically campaign-capable but does not provide general added value over
+REA-L-CH1. Across the four 24-hour events, pooled HICAR RMSE is worse by 38%
+for height-adjusted 2 m temperature, 15% for relative humidity, 30% for 10 m
+wind speed, 15% for the wind vector, and 10% for precipitation. The largest
+wind degradation is over ridges and above 3000 m. This is ready for focused
+R&D interventions, not for a 20-year production choice or a claim of
+scientifically sound added value.
 
 The active path is:
 
@@ -252,20 +258,64 @@ Its main statistical limitation is that instantaneous HICAR values are compared
 with hourly station aggregates. Reports need paired differences and uncertainty
 intervals before a claim of added value is robust.
 
+## Four-season campaign result
+
+All eight 12-hour model segments completed on the `preemptible` partition on
+their first attempts, using two nodes each. Every segment used 13 forcing and
+13 sparse-LBC records and produced an exact terminal restart; first segments
+stored 13 hourly times and continuations correctly stored 12 new times without
+duplicating the restart timestamp. Wall times were 22--43 minutes per segment.
+No NaN/fatal diagnostics occurred, and all segment validators passed.
+
+The first comparison run exposed and rejected an evaluation error: the
+SwissMetNet query included stations outside the 701x701 bridge, which had been
+mapped to edge cells as far as 108 km away. Evaluator `a863cf4` now excludes
+sites farther than max(1 km, three grid spacings). Each accepted seasonal
+report has 25 matched hourly times, 65 in-domain stations, maximum nearest-cell
+distance 0.703 km, and no reported issues. RMSE values below are HICAR / native
+REA-L-CH1 against the same quality-controlled observations:
+
+| Event | T2m adjusted K | RH %-point | Wind speed m s-1 | Wind vector m s-1 | Precip kg m-2 | Pressure Pa |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Winter | 4.05 / 3.12 | 19.90 / 15.93 | 2.39 / 2.12 | 2.87 / 2.81 | 0.003 / 0.003 | 128 / 163 |
+| Spring | 1.91 / 1.24 | 15.64 / 13.05 | 1.84 / 1.66 | 2.70 / 2.60 | 0.403 / 0.363 | 124 / 163 |
+| Summer | 2.99 / 1.43 | 15.32 / 11.22 | 1.64 / 1.52 | 2.44 / 2.54 | 1.782 / 1.266 | 120 / 152 |
+| Autumn | 2.46 / 2.27 | 16.70 / 18.08 | 5.51 / 3.92 | 7.15 / 5.84 | 3.973 / 3.734 | 275 / 200 |
+| Pooled | 2.96 / 2.15 | 16.99 / 14.81 | 3.25 / 2.50 | 4.26 / 3.72 | 2.186 / 1.980 | 174 / 171 |
+
+The winter event was essentially dry, so its precipitation score is not
+informative. HICAR did improve pressure in three events, autumn RH, summer
+vector wind, and some wind subclasses, but these are not a general added-value
+signal. Pooled boundary-zone vector RMSE was marginally better (3.57 versus
+3.61 m s-1), as were wind speed below 500 m (2.02 versus 2.10 m s-1) and vector
+wind below 500 m (2.85 versus 3.15 m s-1). In contrast, interior wind speed was
+3.48 versus 2.55 m s-1 and interior vector RMSE was 4.47 versus 3.75 m s-1.
+Above 3000 m, HICAR wind-speed/vector RMSE reached 9.67/11.85 m s-1 versus
+3.90/6.93 for REA-L; ridge values were 5.96/7.65 versus 3.71/5.42 m s-1.
+The next wind experiments should therefore target high-terrain/ridge behavior,
+not increase horizontal resolution or campaign duration blindly.
+
+These are exploratory scores, not confidence bounds: four single-day cases
+do not estimate seasonal climate skill, observations are hourly aggregates
+while HICAR surface fields are instantaneous, and station/time errors are
+correlated. The campaign nevertheless rejects the current broad hypothesis
+that 200 m HICAR already adds wind skill over REA-L-CH1.
+
 ## Decision sequence
 
-1. Complete the equal 24-hour winter, spring, summer, and autumn 12-hour
-   restart chains on preemptible resources.
-2. Produce REA-L surface references without reintroducing fieldextra, retrieve
-   matching SwissMetNet observations, and calculate paired seasonal metrics.
-3. Decide whether HICAR adds wind skill, in which regimes/elevations, and
-   whether errors implicate input mapping, LBC width/W, land initialization,
-   or physics.
-4. Only then test 100 m or plan a 20-year run.
+1. Diagnose the high-ridge and above-3000 m wind degradation using the existing
+   autumn trajectory and station mappings: separate representativeness,
+   surface/PBL response, terrain-coordinate wind balancing, and LBC/W effects.
+2. Run the smallest controlled A/B intervention selected by that diagnosis;
+   keep the 200 m bridge and the same events/sites so skill changes are paired.
+3. Add paired score differences and dependence-aware uncertainty only once an
+   intervention shows a practically meaningful improvement.
+4. Do not test 100 m or plan a 20-year run until the ridge-wind failure is
+   reduced and added value repeats in more than one independent event.
 
 ## Verification status
 
-- Coordinator tests: 91 passed.
+- Coordinator tests: 92 passed.
 - Repository syntax/policy checks: passed.
 - HICAR source is clean at `16de4b84`; its tree equals `e89b3f0c` plus the
   endpoint-step fix, focused control-flow regression, and Noah-MP restart
@@ -275,5 +325,11 @@ intervals before a claim of added value is robust.
   The generic GPU unit-test executable still has an unrelated
   multi-device PRESENT failure and the CPU build exposes a pre-existing
   SNOWPACK real-constant overflow; neither occurs in the production topology.
-- Four-season forcing/reference/observation preparation is active. Model
-  submission begins only from a clean coordinator commit pinned to `16de4b84`.
+- Four-season forcing/reference/observation preparation and all eight model
+  segments are complete. The campaign ran from clean coordinator `cba8be6`
+  and clean HICAR `16de4b84`; corrected evaluation used clean coordinator
+  `a863cf4`. Minimal durable evidence is under
+  `/store_new/mch/msopr/olifu/icon_downscaling/rd/four_season_24h_16de4b84_a863cf4`:
+  four reports, campaign/build provenance, eight segment manifests, the
+  bitwise restart comparison, and verified source bundles. Large trajectory
+  data remains in scratch.
