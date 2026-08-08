@@ -11,6 +11,16 @@ import netCDF4
 import numpy as np
 
 
+def core_values(variable: netCDF4.Variable) -> np.ndarray:
+    """Read a restart variable without the three-cell MPI guard region."""
+    values = np.ma.asarray(variable[:]).filled(np.nan)
+    if values.ndim >= 2 and values.shape[-1] > 6 and values.shape[-2] > 6:
+        values = values[
+            (slice(None),) * (values.ndim - 2) + (slice(3, -3), slice(3, -3))
+        ]
+    return values
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("continuous", type=Path)
@@ -27,8 +37,8 @@ def main() -> int:
                 f"restart schemas differ: missing_left={missing_left}, missing_right={missing_right}"
             )
         for name in sorted(left.variables):
-            a = np.ma.asarray(left[name][:]).filled(np.nan)
-            b = np.ma.asarray(right[name][:]).filled(np.nan)
+            a = core_values(left[name])
+            b = core_values(right[name])
             if a.shape != b.shape:
                 mismatches[name] = {"left_shape": a.shape, "right_shape": b.shape}
                 continue
@@ -53,7 +63,7 @@ def main() -> int:
         "continuous": str(args.continuous),
         "segmented": str(args.segmented),
         "compared_variables": compared,
-        "bitwise_equal_model_state": True,
+        "bitwise_equal_model_core_state": True,
     }, indent=2, sort_keys=True))
     return 0
 
