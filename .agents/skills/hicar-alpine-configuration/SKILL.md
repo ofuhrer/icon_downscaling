@@ -11,7 +11,8 @@ termination.
 
 ## Selected Swiss 200 m baseline
 
-- 80 levels, 12 km model top, 15 m lowest layer, stretch 0.65;
+- 80 levels, 12 km model top, 20 m lowest layer, stretch 0.65, with a 12 m
+  hard minimum after terrain compression;
 - SLEVE decay 2/6, terrain smoothing radius 5 for 10 cycles;
 - RK3, third-order horizontal and vertical advection, flux correction;
 - discretely adjoint variational wind, `alpha_const=1`, 2500 iterations;

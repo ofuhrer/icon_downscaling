@@ -159,7 +159,7 @@ def main() -> int:
         numeric_physics = {
             "wind.alpha_const": 1.0,
             "rad.update_interval_rad": 600.0,
-            "domain.height_lowest_level": 26.0,
+            "domain.height_lowest_level": 20.0,
         }
         numeric_mismatches = {
             name: str(getattr(restart, name, ""))

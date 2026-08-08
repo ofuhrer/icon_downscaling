@@ -328,7 +328,7 @@ def parser() -> argparse.ArgumentParser:
     domain.add_argument("--registry", type=Path)
     domain.add_argument("--nz", type=int, default=80)
     domain.add_argument("--model-top-m", type=float, default=12_000.0)
-    domain.add_argument("--lowest-layer-m", type=float, default=26.0)
+    domain.add_argument("--lowest-layer-m", type=float, default=20.0)
     domain.add_argument("--stretch-factor", type=float, default=0.65)
     domain.add_argument("--decay-rate-large", type=float, default=2.0)
     domain.add_argument("--decay-rate-small", type=float, default=6.0)
@@ -336,7 +336,7 @@ def parser() -> argparse.ArgumentParser:
     domain.add_argument("--smooth-window-radius", type=int, default=5)
     domain.add_argument("--smooth-cycles", type=int, default=10)
     domain.add_argument("--minimum-jacobian", type=float, default=0.0)
-    domain.add_argument("--minimum-layer-thickness-m", type=float, default=20.0)
+    domain.add_argument("--minimum-layer-thickness-m", type=float, default=12.0)
     domain.set_defaults(func=_build_domain)
 
     weights = commands.add_parser("build-weights", help="cache direct native ICON RBF weights")

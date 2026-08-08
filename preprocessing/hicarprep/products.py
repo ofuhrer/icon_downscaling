@@ -477,15 +477,15 @@ def validate_hicar_runtime_domain(path: Path) -> None:
         hfl = np.asarray(dataset["HFL"][:], dtype=np.float64)
         thickness = np.diff(hhl, axis=0)
         required_thickness = float(
-            getattr(dataset, "required_minimum_sleve_layer_thickness_m", 20.0)
+            getattr(dataset, "required_minimum_sleve_layer_thickness_m", 12.0)
         )
         if not np.isfinite(hhl).all() or not np.isfinite(hfl).all():
             raise ValueError("HICAR runtime vertical geometry contains non-finite values")
-        if np.any(thickness <= required_thickness):
+        if np.any(thickness < required_thickness):
             raise ValueError(
                 "HICAR runtime vertical geometry violates its minimum layer thickness: "
                 f"minimum={float(np.min(thickness)):.9g} m, "
-                f"required_above={required_thickness:.9g} m"
+                f"required_at_least={required_thickness:.9g} m"
             )
         land = np.asarray(dataset["landmask"][:], dtype=np.float64) >= 0.5
         for name in required_2d:

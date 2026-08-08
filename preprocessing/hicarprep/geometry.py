@@ -11,7 +11,7 @@ import numpy as np
 class SleveConfig:
     nz: int = 80
     model_top_m: float = 12_000.0
-    lowest_layer_m: float = 26.0
+    lowest_layer_m: float = 20.0
     stretch_factor: float = 0.65
     decay_rate_large: float = 2.0
     decay_rate_small: float = 6.0
@@ -19,7 +19,7 @@ class SleveConfig:
     smooth_window_radius: int = 5
     smooth_cycles: int = 10
     minimum_jacobian: float = 0.0
-    minimum_layer_thickness_m: float = 20.0
+    minimum_layer_thickness_m: float = 12.0
 
 
 def auto_level_one(config: SleveConfig) -> np.ndarray:
@@ -121,9 +121,9 @@ def build_sleve_geometry(
         raise ValueError(
             f"SLEVE minimum Jacobian {min_jacobian:.6g} is not above {config.minimum_jacobian:.6g}"
         )
-    if min_thickness <= config.minimum_layer_thickness_m:
+    if min_thickness < config.minimum_layer_thickness_m:
         raise ValueError(
-            f"SLEVE minimum layer thickness {min_thickness:.6g} m is not above "
+            f"SLEVE minimum layer thickness {min_thickness:.6g} m is below "
             f"{config.minimum_layer_thickness_m:.6g} m"
         )
     return {

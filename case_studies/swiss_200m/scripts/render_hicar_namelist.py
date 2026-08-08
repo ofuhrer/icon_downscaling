@@ -17,9 +17,9 @@ TEMPLATE = CASE / "config" / "hicar_swiss_200m.nml.in"
 TOKEN = re.compile(r"@[A-Z_]+@")
 SELECTED_NZ = 80
 SELECTED_MODEL_TOP_M = 12_000.0
-SELECTED_LOWEST_LAYER_M = 26.0
+SELECTED_LOWEST_LAYER_M = 20.0
 SELECTED_STRETCH_FACTOR = 0.65
-SELECTED_MINIMUM_LAYER_THICKNESS_M = 20.0
+SELECTED_MINIMUM_LAYER_THICKNESS_M = 12.0
 
 
 def timestamp(value: str) -> datetime:
@@ -176,7 +176,7 @@ def main() -> int:
         thickness = np.diff(hhl, axis=0)
         if (
             not np.isfinite(hhl).all()
-            or np.any(thickness <= SELECTED_MINIMUM_LAYER_THICKNESS_M)
+            or np.any(thickness < SELECTED_MINIMUM_LAYER_THICKNESS_M)
             or not np.allclose(hhl[0], static["topo"][:], atol=1.0e-8, rtol=0.0)
             or not np.allclose(hhl[-1], SELECTED_MODEL_TOP_M, atol=1.0e-8, rtol=0.0)
         ):

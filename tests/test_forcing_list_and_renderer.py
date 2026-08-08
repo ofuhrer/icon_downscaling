@@ -36,9 +36,9 @@ def static_file(path: Path, *, land_climatology: bool = False) -> None:
         )[:, None, None]
         dataset.sleve_nz = 80
         dataset.sleve_model_top_m = 12_000.0
-        dataset.sleve_lowest_layer_m = 26.0
+        dataset.sleve_lowest_layer_m = 20.0
         dataset.sleve_stretch_factor = 0.65
-        dataset.required_minimum_sleve_layer_thickness_m = 20.0
+        dataset.required_minimum_sleve_layer_thickness_m = 12.0
 
 
 def input_pair(root: Path, hour: int) -> tuple[Path, Path]:
@@ -86,7 +86,7 @@ def test_renderer_has_one_explicit_hicarprep_configuration(tmp_path: Path) -> No
         "qv_is_spec_humidity = .False.", "relax_filters = .False.",
         "soiltexture_var = 'soil_type_layer'", "nmp_opt_soil = 2",
         "Sx = .True.", "advect_density = .True.", "alpha_const = 1.0",
-        "terrain_shading = .False.", "height_lowest_level = 26.0",
+        "terrain_shading = .False.", "height_lowest_level = 20.0",
         "cfl_reduction_factor = 1.6",
     ):
         assert setting in text
@@ -99,7 +99,7 @@ def test_renderer_rejects_static_geometry_that_does_not_match_the_namelist(
     static = tmp_path / "static.nc"
     static_file(static)
     with netCDF4.Dataset(static, "a") as dataset:
-        dataset.sleve_lowest_layer_m = 15.0
+        dataset.sleve_lowest_layer_m = 26.0
     pairs = [input_pair(tmp_path, hour) for hour in range(2)]
     forcing_list = tmp_path / "forcing.txt"
     boundary_list = tmp_path / "lbc.txt"

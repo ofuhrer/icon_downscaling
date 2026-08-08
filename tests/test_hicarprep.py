@@ -133,7 +133,7 @@ class RegistryAndStaticTests(unittest.TestCase):
                 self.assertNotIn("landuse", dataset.variables)
                 self.assertEqual(dataset["HHL"].shape, (9, 2, 3))
                 self.assertEqual(dataset.sleve_lowest_layer_m, 40.0)
-                self.assertEqual(dataset.required_minimum_sleve_layer_thickness_m, 20.0)
+                self.assertEqual(dataset.required_minimum_sleve_layer_thickness_m, 12.0)
             with netCDF4.Dataset(external) as dataset:
                 self.assertIn("landuse", dataset.variables)
                 self.assertNotIn("soil_vwc", dataset.variables)
@@ -179,10 +179,18 @@ class RegistryAndStaticTests(unittest.TestCase):
         self.assertGreater(float(np.min(geometry["LAYER_THICKNESS"])), 0.0)
         self.assertGreater(float(np.min(geometry["SLEVE_JACOBIAN"])), 0.0)
 
-    def test_default_sleve_configuration_enforces_twenty_metre_floor(self) -> None:
+    def test_default_sleve_configuration_uses_twenty_metre_base_and_twelve_metre_floor(
+        self,
+    ) -> None:
         terrain = np.array([[400.0, 600.0], [900.0, 1200.0]])
         geometry = build_sleve_geometry(terrain)
-        self.assertGreater(float(np.min(geometry["LAYER_THICKNESS"])), 20.0)
+        self.assertEqual(float(geometry["reference_layer_thickness"][0]), 20.0)
+        self.assertGreaterEqual(float(np.min(geometry["LAYER_THICKNESS"])), 12.0)
+
+        steep_terrain = np.zeros((21, 21), dtype=np.float64)
+        steep_terrain[10, 10] = 2375.0
+        with self.assertRaisesRegex(ValueError, "below 12 m"):
+            build_sleve_geometry(steep_terrain)
 
     def test_climatology_and_continuous_external_fields_vary_with_time(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
