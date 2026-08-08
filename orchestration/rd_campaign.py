@@ -43,11 +43,6 @@ def segments(start: datetime, end: datetime, length_hours: float):
         value = following
 
 
-def segment_model_end(end: datetime, season_end: datetime) -> datetime:
-    """Keep a continuation checkpoint one hour away from process shutdown."""
-    return min(end + timedelta(hours=1), season_end)
-
-
 def run(command: list[str]) -> str:
     return subprocess.run(
         command, check=True, text=True, stdout=subprocess.PIPE
@@ -291,12 +286,7 @@ class Campaign:
                 # A chain is intentionally serial; another season may proceed independently.
                 if index and previous_restart is None:
                     break
-                # A checkpoint written at HICAR's process end is not trajectory
-                # equivalent to the same time in a continuing run.  Integrate
-                # one disposable overlap hour after non-final checkpoints so
-                # every continuation restart comes from an interior event.
-                model_end = segment_model_end(end, season.end)
-                records = [self.paths(season, when) for when in hours(start, model_end)]
+                records = [self.paths(season, when) for when in hours(start, end)]
                 if not all(Path(f"{forcing}.ready").is_file() and Path(f"{boundary}.ready").is_file()
                            for forcing, boundary in records):
                     break
@@ -322,7 +312,6 @@ class Campaign:
                     "SPARSE_LBC_FILE_LIST": str(boundary_list),
                     "SEGMENT_START": start.strftime(TIME),
                     "SEGMENT_END": end.strftime(TIME),
-                    "SEGMENT_MODEL_END": model_end.strftime(TIME),
                     "SEGMENT_RUN_DIR": str(run_dir),
                     "RESTART_INPUT": str(previous_restart or ""),
                     "OUTPUT_PROFILE": self.config.get("output_profile", "evaluation"),

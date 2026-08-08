@@ -5,15 +5,19 @@
 The repository is now oriented around one R&D path. The first direct-input
 pilot found an unstable cached RBF stencil that created isolated 320 m s-1
 winds; the remap is corrected and two-hour direct-input runs are finite across
-the hourly turnover. Restart testing separated two effects. A checkpoint at a
-process end is not the same state as the corresponding interior time, but an
-interior checkpoint produced by integrating one disposable overlap hour is
-bit-for-bit equal to the continuous control in all 19 tested output fields.
-Restart initialization then introduces a much smaller numerical perturbation
-(one-hour RMS 0.00122 K for surface temperature and below 0.0001 m s-1 for each
-10 m wind component). This is an acceptable quantified R&D floor, not bitwise
-restart equivalence. Added value over REA-L-CH1 remains unproven and is the
-central empirical question.
+the hourly turnover. Restart testing separated two effects. HICAR's tolerant
+end check skipped the final roughly 0.77 s physics step of a terminal hour; it
+did not take an extra step. Restricting that tolerance to exact flow events
+(`def9723d`) makes terminal and continuing states at 01 UTC bit-for-bit equal.
+Reverting the terminal-forcing reader change while supplying an extra forcing
+record reproduced the skipped step, so LBC endpoint interpolation was not the
+cause. The remaining restart perturbation came from rebuilding Noah-MP soil
+geometry with an algebraically equivalent but differently ordered
+single-precision expression. Matching the cold-path operation order
+(`16de4b84`) makes both 60-second and one-hour segmented controls bit-for-bit
+equal to uninterrupted runs across all 196 model-core restart variables.
+Added value over REA-L-CH1 remains unproven and is the central empirical
+question.
 
 The active path is:
 
@@ -151,20 +155,30 @@ forcing/LBC records, exact segment bracketing, and explicit restart input.
   returned to `5fc3c71b`. The failure is not resolved by simply skipping the
   projection. At that stage, initialization/cadence state around the forcing
   boundary remained unresolved; the following experiments quantified it.
-- Subsequent controlled tests at `e89b3f0c` localized that mismatch. Cold-start
-  replicates were bitwise identical. Changing `Sx`, the forcing-list origin,
-  the restart interval, forcing-reader look-ahead, and canonicalizing the
-  probed wind operator did not repair the split. The first one-hour run already
-  differed before restart read solely because its configured process end was
-  01 UTC. Running through 02 UTC while writing a 01 UTC checkpoint made all 19
-  stored fields at 01 UTC bitwise identical to the continuous control. A
-  restart from that exact interior checkpoint remained non-bitwise after the
-  second hour, but the surface impact was small: taix max/RMS 0.150/0.00122 K,
-  u10 max/RMS 0.0144/0.000071 m s-1, v10 0.0148/0.000048 m s-1, and
-  precipitation 0.00548/0.0000153 in the stored accumulation units. The
-  campaign therefore writes each continuation checkpoint one hour before
-  process shutdown and retains the duplicated overlap time as a per-season
-  restart-uncertainty diagnostic.
+- Subsequent controlled tests at `e89b3f0c` localized that mismatch. Changing
+  `Sx`, forcing-list origin, restart interval, forcing-reader look-ahead, and
+  the probed wind operator did not repair it. Instrumenting the old reader
+  with the formerly required extra forcing record showed 3599.233 s of physics
+  in a terminal hour versus 3600.001 s in a continuing hour: the tolerant end
+  check snapped away the last fractional step. `def9723d` removes that check
+  only from ordinary timestep increments while retaining it at exact flow
+  events. Independent one- and two-hour runs are then bitwise identical at
+  01 UTC. Sparse-LBC brackets and timestep sequences are identical, disproving
+  the LBC-interpolation hypothesis.
+- The remaining restart perturbation was localized after 60 s to nine Noah-MP
+  soil, runoff, and groundwater fields; all atmospheric variables were exact.
+  Two independent cold controls remained bitwise equal across all 196 fields,
+  proving this was restart initialization rather than GPU non-determinism.
+  Noah-MP's restart initializer rebuilt cumulative soil-layer depths with
+  direct `DZS` subtraction, while the cold snow initializer formed the same
+  depths through differences of cumulative `ZSOIL`. Their single-precision
+  results can differ by one ULP. HICAR `16de4b84` patches the fetched, pinned
+  Noah-MP source to use the cold-path operation order. A 60-second restart and
+  the full 00--02 UTC continuous versus 00--01 + 01--02 UTC chain are then
+  bit-for-bit equal across all 196 model-core restart variables. This is direct
+  bit-reproducibility evidence for the tested two-node GPU topology, physics,
+  forcing, and hourly checkpoint; it is not a universal compiler/topology
+  proof.
 
 ## Reflected-shortwave cadence defect
 
@@ -224,15 +238,12 @@ the selected grid.
 ## Campaign and evaluation design
 
 `orchestration/rd_campaign.py` is the only campaign controller. The current
-four-season case uses two logical 12-hour segments per season, one serial
-restart chain per season, independent seasonal chains, bounded retries, and
-the preemptible partition for HICAR. A non-final attempt integrates a thirteenth
-overlap hour but exposes its 12-hour interior checkpoint to the successor. The
-overlap is discarded for scoring in favor of the restarted segment and is
-compared separately to quantify restart perturbation. Filesystem truth is
-limited to input ready markers, Slurm job IDs, restarts, `segment.json`, and
-`segment.complete`. The campaign record includes source commits and working
-tree hashes.
+four-season case uses two exact 12-hour segments per season, one serial restart
+chain per season, independent seasonal chains, bounded retries, and the
+preemptible partition for HICAR. The endpoint fix removes the former need for a
+disposable overlap hour. Filesystem truth is limited to input ready markers,
+Slurm job IDs, restarts, `segment.json`, and `segment.complete`. The campaign
+record includes source commits and working-tree hashes.
 
 The four-season experiment should use equal-duration, synoptically varied
 windows and score HICAR and REA-L against the same SwissMetNet sites, QC masks,
@@ -243,9 +254,8 @@ intervals before a claim of added value is robust.
 
 ## Decision sequence
 
-1. Complete the equal 24-hour winter, spring, summer, and autumn overlap-
-   checkpoint chains on preemptible resources; compare each duplicated overlap
-   hour as a restart uncertainty check.
+1. Complete the equal 24-hour winter, spring, summer, and autumn 12-hour
+   restart chains on preemptible resources.
 2. Produce REA-L surface references without reintroducing fieldextra, retrieve
    matching SwissMetNet observations, and calculate paired seasonal metrics.
 3. Decide whether HICAR adds wind skill, in which regimes/elevations, and
@@ -255,14 +265,15 @@ intervals before a claim of added value is robust.
 
 ## Verification status
 
-- Coordinator tests: 92 passed.
+- Coordinator tests: 91 passed.
 - Repository syntax/policy checks: passed.
-- HICAR source is clean at `e89b3f0c`; its tree equals the selected restart-safe
-  `5fc3c71b` simulation baseline plus the land/snow initialization changes.
-  The rejected reader and restart-wind interventions remain absent. The clean
-  topology-matched NVHPC/NCCL build and overlap/restart pilots completed on two
-  nodes. The generic GPU unit-test executable still has an unrelated
+- HICAR source is clean at `16de4b84`; its tree equals `e89b3f0c` plus the
+  endpoint-step fix, focused control-flow regression, and Noah-MP restart
+  geometry arithmetic fix. The rejected reader, broad end-check, and
+  restart-wind interventions remain absent. The clean topology-matched
+  NVHPC/NCCL build and bitwise endpoint/restart pilots completed on two nodes.
+  The generic GPU unit-test executable still has an unrelated
   multi-device PRESENT failure and the CPU build exposes a pre-existing
   SNOWPACK real-constant overflow; neither occurs in the production topology.
 - Four-season forcing/reference/observation preparation is active. Model
-  submission begins only from the clean overlap-capable coordinator commit.
+  submission begins only from a clean coordinator commit pinned to `16de4b84`.

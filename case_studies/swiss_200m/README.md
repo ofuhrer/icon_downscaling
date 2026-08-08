@@ -2,7 +2,9 @@
 
 The selected baseline is explicit in `config/hicar_swiss_200m.nml.in`:
 
-- 80 levels, 15 m lowest layer, 12 km top, SLEVE 2/6;
+- 80 levels, nominal 26 m lowest layer, 12 km top, SLEVE 2/6; the
+  Alpine-bridge grid has a measured 20.768 m minimum layer thickness and the
+  renderer rejects any layer below 20 m;
 - native hicarprep P/T/U/V/QV/QC/QI forcing in dry-air mixing ratios;
 - W diagnosed by HICAR and sparse target-grid lateral relaxation;
 - variational wind, Sx on, density advection, `alpha_const=1`;
