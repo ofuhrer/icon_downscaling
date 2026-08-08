@@ -1140,6 +1140,13 @@ class SurfaceStateTests(unittest.TestCase):
                     dataset["soil_vwc"][:],
                     expected_smi_grid,
                 )
+            # Separately rounded float32 skin and snow temperatures can place
+            # the serialized snow value one ULP below the recomputed lower
+            # bound.  This is not a physical bound violation.
+            with netCDF4.Dataset(runtime, "r+") as dataset:
+                dataset["surface_temperature"][0, 0] = np.float32(260.1234)
+                dataset["snow_temperature_initial"][0, 0] = np.float32(250.1234)
+            validate_hicar_runtime_domain(runtime)
 
             with netCDF4.Dataset(external, "w") as dataset:
                 dataset.createDimension("epoch", None)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Require two HICAR terminal restarts to contain identical model-state arrays."""
+"""Compare two HICAR terminal restart states over the physical model core."""
 
 from __future__ import annotations
 
@@ -52,8 +52,23 @@ def main() -> int:
                 continue
             if a.dtype.kind in "fc" and b.dtype.kind in "fc":
                 finite = np.isfinite(a) & np.isfinite(b)
-                maximum = float(np.max(np.abs(a[finite] - b[finite]))) if np.any(finite) else None
-                mismatches[name] = {"maximum_absolute_difference": maximum}
+                if np.any(finite):
+                    delta = np.asarray(a[finite] - b[finite], dtype=np.float64)
+                    absolute = np.abs(delta)
+                    mismatches[name] = {
+                        "maximum_absolute_difference": float(np.max(absolute)),
+                        "mean_absolute_difference": float(np.mean(absolute)),
+                        "root_mean_square_difference": float(
+                            np.sqrt(np.mean(delta * delta))
+                        ),
+                        "different_fraction": float(np.count_nonzero(delta) / delta.size),
+                        "finite_elements": int(delta.size),
+                    }
+                else:
+                    mismatches[name] = {
+                        "maximum_absolute_difference": None,
+                        "finite_elements": 0,
+                    }
             else:
                 mismatches[name] = {"different_elements": int(np.count_nonzero(a != b))}
     if mismatches:

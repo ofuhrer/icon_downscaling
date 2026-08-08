@@ -1,8 +1,8 @@
 {
-  "root": "/scratch/mch/olifu/icon_hicar/rd/pilot/e89b3f0c/segmented",
+  "root": "/scratch/mch/olifu/icon_hicar/rd/pilot/e89b3f0c/replicate_b",
   "repo_root": "/scratch/mch/olifu/icon_hicar/rd/source/coordinator-32b4d32",
   "forcing_dir": "/scratch/mch/olifu/icon_hicar/rd/pilot/input/forcing_final",
-  "segment_hours": 1,
+  "segment_hours": 2,
   "max_attempts": 2,
   "hicar_executable": "/scratch/mch/olifu/icon_hicar/rd/build/hicar-e89b3f0c-gpu-nccl/HICAR_gpu",
   "hicar_support_dir": "/scratch/mch/olifu/icon_hicar/rd/source/coordinator-9b44c3d/HICAR/run",

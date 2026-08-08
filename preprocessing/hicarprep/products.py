@@ -536,11 +536,16 @@ def validate_hicar_runtime_domain(path: Path) -> None:
             snow = swe > 1.0e-9
             upper = np.minimum(surface_temperature, 273.15)
             lower = np.minimum(np.maximum(surface_temperature - 10.0, 180.0), upper)
+            # Runtime fields are float32.  Recomputing a bound after the skin
+            # temperature and snow temperature have been rounded separately
+            # can differ by one float32 ULP (about 3e-5 K here).  Do not reject
+            # a value that was clipped to the bound before serialization.
+            serialization_tolerance_k = 1.0e-4
             if np.any(
                 snow
                 & (
-                    (snow_temperature < lower)
-                    | (snow_temperature > upper)
+                    (snow_temperature < lower - serialization_tolerance_k)
+                    | (snow_temperature > upper + serialization_tolerance_k)
                 )
             ):
                 raise ValueError("HICAR runtime initial snow temperature violates bounds")
