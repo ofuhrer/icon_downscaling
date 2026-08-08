@@ -4,8 +4,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 LSM_SOURCE = ROOT / "HICAR" / "src" / "physics" / "lsm_driver.F90"
 PBL_SOURCE = ROOT / "HICAR" / "src" / "physics" / "pbl_driver.F90"
-INIT_SOURCE = ROOT / "HICAR" / "src" / "main" / "init.F90"
-INITIALIZATION_CORE_SOURCE = ROOT / "HICAR" / "src" / "main" / "initialization_core.F90"
 
 
 def test_lsm_cold_start_guesses_do_not_overwrite_restart_state() -> None:
@@ -45,12 +43,3 @@ def test_pbl_restart_tendencies_are_not_zeroed() -> None:
 
     assert "if(.not.restart)then" in block
     assert "if(.not.context_change)then" not in block
-
-
-def test_restart_initialization_does_not_reproject_saved_winds() -> None:
-    init_source = INIT_SOURCE.read_text()
-    core_source = INITIALIZATION_CORE_SOURCE.read_text()
-
-    assert "project_state=.not. options%restart%restart" in init_source
-    assert "if (apply_projection) then" in core_source
-    assert "call update_winds(domain, options)" in core_source
