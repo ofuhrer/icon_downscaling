@@ -15,11 +15,15 @@ RENDERER = ROOT / "case_studies/swiss_200m/scripts/render_hicar_namelist.py"
 def static_file(path: Path) -> None:
     with netCDF4.Dataset(path, "w") as dataset:
         dataset.createDimension("soil_layer", 4)
+        dataset.createDimension("level", 80)
+        dataset.createDimension("half_level", 81)
         dataset.createDimension("y", 1)
         dataset.createDimension("x", 1)
         for name in ("lat", "lon", "topo", "landmask", "landuse", "swe", "snow_height"):
             dataset.createVariable(name, "f4", ("y", "x"))[:] = 0.0
         dataset.createVariable("soil_type_layer", "i2", ("soil_layer", "y", "x"))[:] = 6
+        dataset.createVariable("HHL", "f4", ("half_level", "y", "x"))[:] = np.arange(81)[:, None, None]
+        dataset.createVariable("HFL", "f4", ("level", "y", "x"))[:] = (np.arange(80) + 0.5)[:, None, None]
 
 
 def input_pair(root: Path, hour: int) -> tuple[Path, Path]:

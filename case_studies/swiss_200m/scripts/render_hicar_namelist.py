@@ -77,7 +77,10 @@ def main() -> int:
         raise SystemExit(f"missing runtime domain: {args.static_file}")
     with netCDF4.Dataset(args.static_file) as static:
         missing = sorted(
-            {"lat", "lon", "topo", "landmask", "landuse", "soil_type_layer", "swe", "snow_height"}
+            {
+                "lat", "lon", "topo", "HHL", "HFL", "landmask", "landuse",
+                "soil_type_layer", "swe", "snow_height",
+            }
             - set(static.variables)
         )
         if missing:
@@ -85,6 +88,9 @@ def main() -> int:
         soil = static["soil_type_layer"]
         if soil.ndim != 3 or soil.shape[0] != 4:
             raise SystemExit("soil_type_layer must contain four Noah-MP layers")
+        horizontal = static["lat"].shape
+        if static["HHL"].shape != (81, *horizontal) or static["HFL"].shape != (80, *horizontal):
+            raise SystemExit("runtime domain HHL/HFL do not match the selected 80-level grid")
 
     forcing = listed_paths(args.forcing_file_list)
     boundaries = listed_paths(args.sparse_lbc_file_list)
