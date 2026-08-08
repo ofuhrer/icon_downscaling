@@ -187,7 +187,7 @@ def main() -> int:
     boundary_times = [boundary_time(path) for path in boundaries]
     if len(forcing_times) < 2 or forcing_times != boundary_times:
         raise SystemExit("forcing and sparse LBC lists must contain the same two or more times")
-    if forcing_times[0] != start or forcing_times[-1] < end:
+    if forcing_times[0] > start or forcing_times[-1] < end:
         raise SystemExit("input sequence must bracket the complete simulation segment")
     if any(right - left != timedelta(hours=1) for left, right in zip(forcing_times, forcing_times[1:])):
         raise SystemExit("input sequence must be continuous at one-hour cadence")
