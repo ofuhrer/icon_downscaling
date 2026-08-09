@@ -84,7 +84,8 @@ def test_renderer_has_one_explicit_hicarprep_configuration(tmp_path: Path) -> No
     for setting in (
         "debug = .False.", "qcvar = 'QC'", "qivar = 'QI'", "wvar = ''",
         "qv_is_spec_humidity = .False.", "relax_filters = .False.",
-        "soiltexture_var = 'soil_type_layer'", "nmp_opt_soil = 2",
+        "soiltexture_var = 'soil_type_layer'", "nmp_opt_sfc = 1",
+        "nmp_opt_soil = 2",
         "Sx = .True.", "advect_density = .True.", "alpha_const = 1.0",
         "terrain_shading = .False.", "height_lowest_level = 20.0",
         "cfl_reduction_factor = 1.6",
