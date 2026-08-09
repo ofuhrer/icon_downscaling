@@ -16,14 +16,27 @@ geometry with an algebraically equivalent but differently ordered
 single-precision expression. Matching the cold-path operation order
 (`16de4b84`) makes both 60-second and one-hour segmented controls bit-for-bit
 equal to uninterrupted runs across all 196 model-core restart variables.
-The completed four-season campaign shows that the corrected setup is
-numerically campaign-capable but does not provide general added value over
-REA-L-CH1. Across the four 24-hour events, pooled HICAR RMSE is worse by 38%
+The completed 65-site Alpine-bridge four-season campaign shows that the
+corrected setup is numerically campaign-capable but does not provide general
+added value over REA-L-CH1. Across the four 24-hour events, pooled HICAR RMSE is
+worse by 38%
 for height-adjusted 2 m temperature, 15% for relative humidity, 30% for 10 m
 wind speed, 15% for the wind vector, and 10% for precipitation. The largest
 wind degradation is over ridges and above 3000 m. This is ready for focused
 R&D interventions, not for a 20-year production choice or a claim of
 scientifically sound added value.
+
+The active national follow-up is deliberately broader and uses every available
+SwissMetNet measurement site rather than treating the 65-site bridge subset as
+representative of Switzerland. Its four observation files contain 157 station
+abbreviations and 170 distinct abbreviation/measurement-site keys; 166 keys are
+present in all four events. The 2061x1431 grid has a nominal 20 m lowest layer,
+an achieved 15.956 m minimum interface thickness, and a hard 12 m acceptance
+floor. Continuous and hourly-segmented two-hour pilots both passed their runtime
+validators. Exact all-variable comparison of their terminal restart states is
+still running, and the national seasonal forcing cache is still being built;
+therefore no national added-value result or national restart-equivalence claim
+is yet established.
 
 The active path is:
 
@@ -40,13 +53,13 @@ and restart completeness.
 
 | Component | Current choice | Assessment |
 | --- | --- | --- |
-| Grid | 200 m | Use the 701x701 Alpine bridge for turnover/restart pilots; the 2271x1651 national grid needs separate resource evidence |
-| Vertical grid | 80 levels, 12 km top, nominal 26 m first level, stretch 0.65; hard 20 m thickness floor | Sound starting point; Alpine-bridge minimum is 20.768 m, but the choice is not uniquely established |
-| Boundary terrain | 20 km cosine blend from REA-L-CH1 HSURF at the edge to the high-resolution DEM inward | Verified in the runtime static; deliberately broader than the separate 10 km atmospheric LBC shoulder |
+| Grid | 200 m, 2061x1431 national domain | Covers all 170 available SwissMetNet measurement-site keys with a 40 km outer margin; the two-hour pilot establishes workable 12-node GPU resource use |
+| Vertical grid | 80 levels, 12 km top, nominal 20 m first layer, stretch 0.65; hard 12 m thickness floor | National minimum interface thickness is 15.956 m, minimum mass-level spacing 16.642 m, and minimum mass Jacobian 0.17183; no layer is below the requested 12 m lower bound |
+| Boundary terrain | 30 km cosine blend from REA-L-CH1 HSURF at the edge to the high-resolution DEM inward | Verified in the static artifact; deliberately broader than the separate 10 km atmospheric LBC shoulder, and all evaluated stations are inward of both zones |
 | Terrain coordinate | SLEVE 2/6; smoothing window 5, 10 cycles | Previously stable; retain for controlled comparison |
 | Wind | Adjoint variational, `Sx=true`, 500 m smoothing, alpha 1, 2500 iterations | Best-supported current option |
 | Dynamics | RK3, density advection | Explicit and internally consistent |
-| Atmospheric input | Hourly native REA-L decoded and transformed by hicarprep | Corrected 00/01/02 UTC products and a two-hour turnover run pass; seasonal generality is untested |
+| Atmospheric input | Hourly native REA-L decoded and transformed by hicarprep | Corrected national 00/01/02 UTC products and both two-hour pilot trajectories pass; four complete seasonal forcing sets remain in progress |
 | Moisture | Dry-air mixing ratios; QI explicitly zero only because source is absent; W diagnosed by HICAR | Explicit and interpretable; W remains a sensitivity |
 | LBC | Hourly sparse hicarprep states, 10 km shoulder | Usable provisional choice; width is not closed |
 | Land initialization | Native TERRA soil state plus ICON SWE/depth/density and bulk `T_SNOW` transferred to NoahMP | Integrated starting point; glacier snow is preserved and sourced vegetation climatologies are wired, but the winter response and any supplied climatology still need controlled tests |
@@ -107,14 +120,14 @@ forcing/LBC records, exact segment bracketing, and explicit restart input.
 - Static construction now partitions the public-source product and appends
   HHL/HFL before publication. The first rebuilt Alpine-bridge grid exposed an
   important weakness in the nominal-level setting: its true SLEVE minimum was
-  only 12.509 m. The active defaults now require every model layer to exceed
-  20 m and record both requested and achieved geometry limits. A nominal 26 m
-  first level gives a measured 20.768 m minimum and 0.2473 minimum Jacobian on
-  the 701x701 grid; the rejected artifact is retained separately and cannot be
-  accepted by runtime validation. The HICAR namelist must use the same nominal
-  26 m setting because HICAR reconstructs SLEVE at runtime; the renderer now
-  checks the static geometry parameters, endpoints, and actual thickness before
-  writing the namelist.
+  only 12.509 m. A later conservative bridge used a nominal 26 m first layer
+  and achieved a 20.768 m minimum, but that is historical evidence rather than
+  the selected setting. The active national grid uses the requested nominal
+  20 m first layer with a 12 m hard floor and achieves 15.956 m minimum
+  interface thickness, 16.642 m minimum mass-level spacing, and 0.17183
+  minimum mass Jacobian. The HICAR namelist must use the same nominal setting
+  because HICAR reconstructs SLEVE at runtime; the renderer checks the static
+  geometry parameters, endpoints, and actual thickness before writing it.
 - Native ICON HHL is ordered correctly, but unconstrained RBF interpolation of
   each interface independently crossed one layer in four of 491,401 target
   columns (worst thickness -123.6 m). Hicarprep now remaps the column endpoints
@@ -135,12 +148,12 @@ forcing/LBC records, exact segment bracketing, and explicit restart input.
   rebuilt real operator needed a maximum 1e-8 nugget and reduced the maximum
   weight and L1 amplification to 1.65 and 6.49 (job 5042789). The seasonal
   cache must use the rebuilt operator; the old cache is invalid.
-- The national grid has 3.75 million horizontal cells. One hourly 80-level
-  forcing record is of order 10 GB before allowing for compression and working
-  arrays, so generating a week of cached hourly records as the first test would
-  be unreasonable. Pilot the 701x701 Alpine bridge, then measure preprocessing,
-  model throughput, memory, and output volume before selecting the campaign
-  extent.
+- The active national grid has 2,949,291 horizontal cells. A validated hourly
+  80-level forcing record is about 3.5--3.6 GB and its sparse LBC about 1.4 GB;
+  preprocessing peaks near 46--59 GB per record. The bounded controller runs at
+  most six such jobs concurrently because pp-long does not account requested
+  memory when packing jobs. The two-hour national pilot measured model
+  throughput before the four-season campaign was permitted to proceed.
 - Corrected 00, 01, and 02 UTC forcing/LBC pairs all passed the paired real-data
   validator with the conditioned operator (jobs 5042798, 5042799, and 5042810).
   A continuous two-hour full-physics run at HICAR `5fc3c71b` then completed
