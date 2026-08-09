@@ -22,9 +22,10 @@ The required inputs are:
   `compare_restart_states_exact.py`.
 - `national_summary.json` and `station_season_metrics.csv`: outputs from
   `scripts/national_campaign_postprocess.py`. They must cover 2 m temperature,
-  2 m relative humidity, interval precipitation, 10 m wind speed, and wind
-  vector RMSE. Temperature, humidity, and precipitation summaries must also
-  provide HICAR/REA-L bias, model mean, and observation mean.
+  2 m relative humidity, elevation-adjusted surface pressure, interval
+  precipitation, 10 m wind speed, and wind-vector RMSE. Temperature, humidity,
+  pressure, and precipitation summaries must also provide HICAR/REA-L bias,
+  model mean, and observation mean.
 - one footprint diagnostic JSON for each climatological season, produced by
   `scripts/diagnose_station_wind_footprints.py`.
 - `reviewed_assessment.json`: the analyst-authored conclusion and prose,

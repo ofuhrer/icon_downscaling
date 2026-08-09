@@ -17,11 +17,17 @@ SEASONS = ("DJF", "MAM", "JJA", "SON")
 METRICS = {
     "temperature_2m_height_adjusted_k": ("2 m temperature", "K"),
     "relative_humidity_2m_percent": ("2 m relative humidity", "%"),
+    "surface_pressure_height_adjusted_pa": ("Surface pressure, elevation adjusted", "Pa"),
     "precipitation_interval_kg_m2": ("Interval precipitation", "kg m^-2"),
     "wind_speed_10m_m_s": ("10 m wind speed", "m s^-1"),
     "wind_vector": ("10 m wind vector", "m s^-1"),
 }
-SCALAR_STATS = set(list(METRICS)[:3])
+SCALAR_STATS = {
+    "temperature_2m_height_adjusted_k",
+    "relative_humidity_2m_percent",
+    "surface_pressure_height_adjusted_pa",
+    "precipitation_interval_kg_m2",
+}
 WIND_METRICS = {"wind_speed_10m_m_s", "wind_vector"}
 FINDINGS = ("seasonal_skill", "lead_time", "elevation_wind",
             "footprint_sensitivity", "inputs_and_grid", "restart")

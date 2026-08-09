@@ -27,6 +27,7 @@ SEASON_LABELS = {
 METRICS = (
     "temperature_2m_height_adjusted_k",
     "relative_humidity_2m_percent",
+    "surface_pressure_height_adjusted_pa",
     "precipitation_interval_kg_m2",
     "wind_speed_10m_m_s",
     "wind_vector",

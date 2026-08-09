@@ -113,7 +113,7 @@ def test_dry_run_builds_complete_command_plan_without_netcdf(tmp_path, monkeypat
     assert all(
         command[command.index("--overlap-policy") + 1] == "error" for command in commands[:4]
     )
-    assert commands[4].count("--metric") == 5
+    assert commands[4].count("--metric") == 6
     assert set(commands[4][commands[4].index("--metric") + 1 :: 2]) >= set(MODULE.METRICS)
     assert all("--include-optimistic-best-cell" not in command for command in commands[5:])
     assert all(
