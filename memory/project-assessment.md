@@ -9,8 +9,16 @@ execution all failed normal-cadence one-hour A/A repeatability. The final
 candidate still differed at 60 minutes in 19 evaluation fields, with `lwtr`
 again directly affected. The launch was therefore withheld: no daylight
 restart proof, four-season integration, or new all-station skill claim was
-made. This stopping conclusion supersedes the historical investigation detail
-below.
+made. A final call-level discriminator changed the fault classification without
+changing that stopping decision. At the first differing LW call, raw HICAR
+inputs were bit-identical while RRTMGP outputs differed on exactly one
+32-column GPU-lane block per affected rank. A 32-column snapshot replayed 100
+times in a standalone one-GPU RRTMGP driver was bit-stable both compactly and
+after reconstructing the original rank width; CUDA memcheck and racecheck found
+no errors or hazards. The defect is therefore most likely in HICAR's OpenACC
+data ownership/lifetime or caller--RRTMGP handoff, not standalone RRTMGP
+numerics. This stopping conclusion supersedes the historical investigation
+detail below.
 
 The repository is now oriented around one R&D path. The first direct-input
 pilot found an unstable cached RBF stencil that created isolated 320 m s-1
@@ -171,7 +179,7 @@ and restart completeness.
 | Moisture | Dry-air mixing ratios; QI explicitly zero only because source is absent; W diagnosed by HICAR | Explicit and interpretable; W remains a sensitivity |
 | LBC | Hourly sparse hicarprep states, 10 km shoulder | Usable provisional choice; width is not closed |
 | Land initialization | Native TERRA soil state plus ICON SWE/depth/density and bulk `T_SNOW` transferred to NoahMP | Integrated starting point; glacier snow is preserved and sourced vegetation climatologies are wired, but the winter response and any supplied climatology still need controlled tests |
-| Radiation | RRTMGP, 600 s update; terrain radiation off | Blocked: the 12-node NVHPC/OpenACC path is not A/A repeatable even after the bounded mapping interventions; no campaign baseline is selected |
+| Radiation | RRTMGP, 600 s update; terrain radiation off | Blocked: the 12-node NVHPC/OpenACC path is not A/A repeatable; snapshot replay points to HICAR-side data lifetime/handoff rather than standalone RRTMGP numerics, and no campaign baseline is selected |
 
 The forcing renderer now accepts only this configuration plus three output
 profiles. It requires one static domain, four soil layers, matching hourly
@@ -518,8 +526,9 @@ that 200 m HICAR already adds wind skill over REA-L-CH1.
    the national seasonal integrations with the tested NVHPC/OpenACC RRTMGP
    runtime.
 2. Resume only after an explicit new decision to investigate the remaining
-   RRTMGP source/kernel defect or to qualify a scientifically acceptable
-   alternative radiation/runtime path. Any replacement must first pass the
+   HICAR/OpenACC caller--RRTMGP data-lifetime defect or to qualify a
+   scientifically acceptable alternative radiation/runtime path. Any
+   replacement must first pass the
    same normal-cadence one-hour A/A test and then the 00--08 UTC daylight
    continuous/segmented restart proof.
 3. Only after those proofs should the already-defined all-station seasonal,
@@ -530,8 +539,26 @@ that 200 m HICAR already adds wind skill over REA-L-CH1.
 
 - Coordinator tests: 136 passed.
 - Repository syntax/policy checks: passed.
-- The remaining 12-node GPU nondeterminism is isolated to repeated RRTMGP
-  execution, not restart I/O or the LBC endpoint. With normal 600-second
+- The remaining 12-node GPU nondeterminism is isolated to the HICAR/OpenACC
+  context around repeated RRTMGP execution, not restart I/O, the LBC endpoint,
+  or the standalone RRTMGP calculation. Diagnostic HICAR `44d434da` hashed all
+  raw LW inputs and broadband outputs per rank and call. In a clean replica
+  pair, the first difference was call 3 at 10 minutes on global ranks 1, 17,
+  and 36; inputs matched exactly, while each affected rank differed in exactly
+  one contiguous 32-column block (rank 1 columns 15937--15968; ranks 17 and 36
+  columns 97--128). A targeted rank-17/columns-97--128 snapshot
+  (`4c8a5c54...0462d47f`) was replayed against the same patched RRTMGP libraries
+  on one GPU. All 100 compact repetitions shared one output hash, and all 100
+  original-width reconstructions shared one output hash. CUDA memcheck reported
+  zero errors in both geometries and racecheck reported zero hazards in the
+  compact case. Evidence is under
+  `$SCRATCH/icon_hicar/rd/swiss_all_stations_20m/diagnostics/rrtmgp_trace_7ed54cd9_phase3`,
+  `rrtmgp_snapshot_44d434da_rank17_c3_cols97_128`, and the two
+  `rrtmgp_replay_44d434da_rank17_c3_cols97_128_*` directories. This is strong
+  evidence for HICAR-side mapping/alias lifetime or handoff sensitivity; it is
+  not evidence for a self-contained RRTMGP/NVHPC reproducer. Experiments stop
+  here.
+  With normal 600-second
   radiation, replicas first differ after two to four radiation updates in
   exactly 32 contiguous `lwtr` cells corresponding to one flattened GPU warp;
   surface/PBL and later dynamical fields then amplify the seed. Four replicas
