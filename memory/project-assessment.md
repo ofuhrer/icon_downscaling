@@ -26,11 +26,17 @@ wind degradation is over ridges and above 3000 m. This is ready for focused
 R&D interventions, not for a 20-year production choice or a claim of
 scientifically sound added value.
 
-The active national follow-up is deliberately broader and uses every available
-SwissMetNet measurement site rather than treating the 65-site bridge subset as
-representative of Switzerland. Its four observation files contain 157 station
-abbreviations and 170 distinct abbreviation/measurement-site keys; 166 keys are
-present in all four events. The 2061x1431 grid has a nominal 20 m lowest layer,
+The active national follow-up is deliberately broader than the 65-site bridge
+subset. Its staged observations contain every measurement-site key returned by
+the broad Switzerland-covering SMN DWH query: 157 station abbreviations in each
+event, 170 distinct abbreviation/measurement-site keys in the union, and 166
+keys in the four-event intersection. This is query-relative completeness, not
+an independent comparison with an official historical station inventory. No
+queried site is excluded by the HICAR domain. Metric availability is narrower:
+the complete four-event intersections are 145 keys for temperature and
+humidity, 147 for wind speed/vector, and 132 for precipitation, and final
+statistics must retain these metric-specific counts. The 2061x1431 grid has a
+nominal 20 m lowest layer,
 an achieved 15.956 m minimum interface thickness, and a hard 12 m acceptance
 floor. Continuous and hourly-segmented two-hour pilots both passed their runtime
 validators, but exact comparison of their terminal restart states failed: 108
