@@ -13,9 +13,25 @@ assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
 
 
-def metric(rmse, count=24, vector=False):
+def metric(
+    rmse,
+    count=24,
+    vector=False,
+    model_mean=None,
+    observation_mean=None,
+    bias=None,
+):
     field = "vector_root_mean_squared_error_m_s" if vector else "root_mean_squared_error"
-    return {"count": count, field: rmse}
+    result = {"count": count, field: rmse}
+    if model_mean is not None:
+        result.update(
+            {
+                "model_mean": model_mean,
+                "observation_mean": observation_mean,
+                "bias": bias,
+            }
+        )
+    return result
 
 
 def make_report(path, season, site_count=67, common_count=65, mismatch=False):
@@ -43,11 +59,23 @@ def make_report(path, season, site_count=67, common_count=65, mismatch=False):
         h_count = 23 if mismatch and index == 66 else 24
         site_metrics[key] = {
             "hicar": {
-                "temperature_2m_height_adjusted_k": metric(1.0 + index / 100.0, h_count),
+                "temperature_2m_height_adjusted_k": metric(
+                    1.0 + index / 100.0,
+                    h_count,
+                    model_mean=281.0 + index / 100.0,
+                    observation_mean=280.0,
+                    bias=1.0 + index / 100.0,
+                ),
                 "wind_vector": metric(3.0 + index / 100.0, vector=True),
             },
             "rea_l": {
-                "temperature_2m_height_adjusted_k": metric(1.5, 24),
+                "temperature_2m_height_adjusted_k": metric(
+                    1.5,
+                    24,
+                    model_mean=281.5,
+                    observation_mean=280.0,
+                    bias=1.5,
+                ),
                 "wind_vector": metric(2.5, vector=True),
             },
         }
@@ -55,13 +83,25 @@ def make_report(path, season, site_count=67, common_count=65, mismatch=False):
         "0": {
             "hicar": {
                 "all_sites": {
-                    "temperature_2m_height_adjusted_k": metric(1.0, site_count),
+                    "temperature_2m_height_adjusted_k": metric(
+                        1.0,
+                        site_count,
+                        model_mean=281.0,
+                        observation_mean=280.0,
+                        bias=1.0,
+                    ),
                     "wind_vector": metric(3.0, site_count, vector=True),
                 }
             },
             "rea_l": {
                 "all_sites": {
-                    "temperature_2m_height_adjusted_k": metric(1.5, site_count),
+                    "temperature_2m_height_adjusted_k": metric(
+                        1.5,
+                        site_count,
+                        model_mean=281.5,
+                        observation_mean=280.0,
+                        bias=1.5,
+                    ),
                     "wind_vector": metric(2.5, site_count, vector=True),
                 }
             },
@@ -123,6 +163,18 @@ def test_national_summary_and_exact_common_65(tmp_path):
     assert national_temperature["improved_station_count"] == 50
     assert national_temperature["degraded_station_count"] == 16
     assert national_temperature["tied_station_count"] == 1
+    assert national_temperature["mean_bias_paired_station_count"] == 67
+    assert national_temperature["equal_station_mean_hicar_bias"] == pytest.approx(1.33)
+    assert national_temperature["equal_station_mean_rea_l_bias"] == pytest.approx(1.5)
+    assert national_temperature["equal_station_mean_hicar_model_mean"] == pytest.approx(
+        281.33
+    )
+    assert national_temperature["equal_station_mean_rea_l_model_mean"] == pytest.approx(
+        281.5
+    )
+    assert national_temperature["equal_station_mean_observation"] == pytest.approx(
+        280.0
+    )
     national_intersection_temperature = next(
         item
         for item in summary["equal_station_summaries"]
@@ -132,6 +184,16 @@ def test_national_summary_and_exact_common_65(tmp_path):
         and item["metric"] == "temperature_2m_height_adjusted_k"
     )
     assert national_intersection_temperature["paired_station_count"] == 67
+    lead_temperature = next(
+        item
+        for item in summary["lead_hour_tables"]["DJF"]
+        if item["metric"] == "temperature_2m_height_adjusted_k"
+    )
+    assert lead_temperature["hicar_bias"] == pytest.approx(1.0)
+    assert lead_temperature["rea_l_bias"] == pytest.approx(1.5)
+    assert lead_temperature["hicar_model_mean"] == pytest.approx(281.0)
+    assert lead_temperature["rea_l_model_mean"] == pytest.approx(281.5)
+    assert lead_temperature["observation_mean"] == pytest.approx(280.0)
     assert len(summary["lead_hour_tables"]["JJA"]) == 2
     assert len(summary["selected_site_listings"]["station_elevation_ge_3000m"]) == 1
     assert len(summary["selected_site_listings"]["terrain_ridge_relative_gt_150m"]) == 2
@@ -193,6 +255,35 @@ def test_common_definition_must_have_exactly_65_keys(tmp_path):
     paths = [make_report(tmp_path / f"bridge-{index}.json", "DJF", 64) for index in range(4)]
     with pytest.raises(ValueError, match="64 keys, expected 65"):
         MODULE.load_common_keys(paths, None)
+
+
+def test_mean_and_bias_require_matching_observation_aggregate():
+    hicar = metric(
+        1.0,
+        model_mean=281.0,
+        observation_mean=280.0,
+        bias=1.0,
+    )
+    rea_l = metric(
+        1.5,
+        model_mean=281.5,
+        observation_mean=280.1,
+        bias=1.4,
+    )
+
+    comparison, reason = MODULE.comparison_row(
+        hicar,
+        rea_l,
+        "temperature_2m_height_adjusted_k",
+    )
+
+    assert reason is None
+    assert comparison is not None
+    assert comparison["hicar_rmse"] == pytest.approx(1.0)
+    assert comparison["rea_l_rmse"] == pytest.approx(1.5)
+    assert comparison["observation_mean"] is None
+    assert comparison["hicar_bias"] is None
+    assert comparison["rea_l_bias"] is None
 
 
 def test_rejects_nonempty_evaluator_issues(tmp_path):

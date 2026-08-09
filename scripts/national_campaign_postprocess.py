@@ -164,12 +164,53 @@ def comparison_row(
         if delta > TIE_TOLERANCE
         else "tied"
     )
+    moments: dict[str, float | None] = {
+        "hicar_bias": None,
+        "rea_l_bias": None,
+        "hicar_model_mean": None,
+        "rea_l_model_mean": None,
+        "observation_mean": None,
+    }
+    try:
+        hicar_model_mean = float(hicar["model_mean"])
+        rea_l_model_mean = float(rea_l["model_mean"])
+        hicar_observation_mean = float(hicar["observation_mean"])
+        rea_l_observation_mean = float(rea_l["observation_mean"])
+        hicar_bias = float(hicar["bias"])
+        rea_l_bias = float(rea_l["bias"])
+    except (KeyError, TypeError, ValueError):
+        pass
+    else:
+        values = (
+            hicar_model_mean,
+            rea_l_model_mean,
+            hicar_observation_mean,
+            rea_l_observation_mean,
+            hicar_bias,
+            rea_l_bias,
+        )
+        if all(math.isfinite(value) for value in values) and math.isclose(
+            hicar_observation_mean,
+            rea_l_observation_mean,
+            rel_tol=0.0,
+            abs_tol=TIE_TOLERANCE,
+        ):
+            moments = {
+                "hicar_bias": hicar_bias,
+                "rea_l_bias": rea_l_bias,
+                "hicar_model_mean": hicar_model_mean,
+                "rea_l_model_mean": rea_l_model_mean,
+                "observation_mean": (
+                    hicar_observation_mean + rea_l_observation_mean
+                ) / 2.0,
+            }
     return {
         "pair_count": h_count,
         "hicar_rmse": h_rmse,
         "rea_l_rmse": r_rmse,
         "rmse_delta_hicar_minus_rea_l": delta,
         "outcome": outcome,
+        **moments,
     }, None
 
 
@@ -318,7 +359,7 @@ def station_season_rows(
 
 def summarize_group(rows: list[dict]) -> dict:
     deltas = [row["rmse_delta_hicar_minus_rea_l"] for row in rows]
-    return {
+    result = {
         "paired_station_count": len(rows),
         "pair_count_total": sum(row["pair_count"] for row in rows),
         "equal_station_mean_hicar_rmse": mean(row["hicar_rmse"] for row in rows),
@@ -329,6 +370,32 @@ def summarize_group(rows: list[dict]) -> dict:
         "degraded_station_count": sum(row["outcome"] == "degraded" for row in rows),
         "tied_station_count": sum(row["outcome"] == "tied" for row in rows),
     }
+    moment_fields = (
+        "hicar_bias",
+        "rea_l_bias",
+        "hicar_model_mean",
+        "rea_l_model_mean",
+        "observation_mean",
+    )
+    moment_rows = [
+        row
+        for row in rows
+        if all(row.get(field) is not None for field in moment_fields)
+    ]
+    if moment_rows:
+        result["mean_bias_paired_station_count"] = len(moment_rows)
+        summary_fields = {
+            "hicar_bias": "equal_station_mean_hicar_bias",
+            "rea_l_bias": "equal_station_mean_rea_l_bias",
+            "hicar_model_mean": "equal_station_mean_hicar_model_mean",
+            "rea_l_model_mean": "equal_station_mean_rea_l_model_mean",
+            "observation_mean": "equal_station_mean_observation",
+        }
+        result.update({
+            output_field: mean(row[input_field] for row in moment_rows)
+            for input_field, output_field in summary_fields.items()
+        })
+    return result
 
 
 def equal_station_summaries(
@@ -546,6 +613,12 @@ def run(args: argparse.Namespace) -> dict:
             "pairing_limitation": (
                 "Equal aggregate counts do not independently prove identical valid-time "
                 "sets; exact timestamps remain owned by the upstream evaluator."
+            ),
+            "mean_and_bias_aggregation": (
+                "Model means, observation means, and biases use the same eligible "
+                "station rows as RMSE and are averaged with equal station weight. "
+                "They are retained only when HICAR and REA-L report the same finite "
+                "observation mean for that station aggregate."
             ),
             "aggregation": (
                 "Arithmetic means of station RMSEs: each station has equal weight; "
