@@ -69,23 +69,32 @@ forcing state are exact. This A/A failure proves that neither an extra timestep
 nor the unused endpoint forcing/LBC record initiates the remaining mismatch;
 the active national NVHPC/OpenACC path contains a timing- or ordering-sensitive
 land-state calculation. Making Noah-MP's canopy `IndexShade` selector private
-to each OpenACC gang (`7d84a960`) made a same-input A/A pair exact across all
-196 model-core restart variables, but the 2-record versus 3-record control
-still differed in 21 of 30 evaluation fields. Compiler-wide synchronous
-OpenACC execution alone retained a smaller A/A failure, and combining it with
-the `IndexShade` fix did not remove the 21-field endpoint-list response. A
+to each OpenACC gang (`7d84a960`) made a same-input two-record A/A pair exact
+across all 196 model-core restart variables, but the 2-record versus 3-record
+control still differed in 21 of 30 evaluation fields. Giving both cold starts
+the same three-record lists does not close the problem: two sequential runs on
+the same ordered 12-node allocation are exact at initialization but differ
+after one hour in 18 of 30 evaluation fields. Their restart-resident land state
+also differs directly: canopy temperature at 2,229 cells (maximum 0.08456 K),
+ground-surface temperature at 1,850 cells (0.03882 K), soil temperature at 85
+cells (0.001892 K), and soil water at 47 cells (8.94e-7), while the Noah-MP
+timestep counter and phase offset are exact. This proves that the remaining
+failure is genuine localized Noah-MP/OpenACC non-repeatability before restart,
+not an extra timestep, LBC interpolation, output-only recomputation, or cadence
+state. Compiler-wide synchronous OpenACC execution alone previously retained a
+smaller two-record A/A failure, and combining it with the `IndexShade` fix did
+not remove the 2-record-versus-3-record response; a same-three-record synchronous
+A/A control is now the smallest active discriminating experiment. A
 broader standards-motivated loop-private Noah-MP patch (`e5d01a16`) also failed
 its same-input A/A test and was rejected. Source tracing shows that no future
 regular-forcing payload is read and that sparse LBC only validates metadata for
 unused future frames; those frames alter I/O/allocation timing, not the intended
 physical state. The endpoint response therefore exposes residual ordering
-sensitivity rather than an LBC-interpolation side effect. The selected R&D
-workaround is to give every segment the same complete, validated seasonal
-forcing/LBC lists and prove same-list A/A plus continuous-versus-segmented
-equality. That decisive all-196-variable national test is pending. The seasonal
-forcing cache may continue to build, but no national seasonal model chain may
-launch until it passes. No national added-value result or national
-restart-equivalence claim is yet established.
+sensitivity rather than an LBC-interpolation side effect. The seasonal forcing
+cache may continue to build, but no national seasonal model chain may launch
+until a replacement runtime/source intervention passes same-input A/A and
+continuous-versus-segmented equality. No national added-value result or
+national restart-equivalence claim is yet established.
 
 The active path is:
 
@@ -398,11 +407,13 @@ that 200 m HICAR already adds wind skill over REA-L-CH1.
 
 ## Verification status
 
-- Coordinator tests: 127 passed.
+- Coordinator tests: 131 passed.
 - Repository syntax/policy checks: passed.
 - The active national candidate is clean HICAR `7d84a960`, which adds the
   targeted Noah-MP `IndexShade` OpenACC fix to `eff54862`. The clean 12-node
-  NVHPC/NCCL build exists and the invariant-list release comparison is pending.
+  NVHPC/NCCL build exists, but the identical-three-record invariant A/A test
+  fails in both output and restart-resident land state; the candidate is not a
+  reproducible campaign runtime.
   The rejected broad loop-private patch, reader change, broad end-check, and
   restart-wind interventions remain absent. The earlier two-node
   `16de4b84` endpoint/restart proof remains valid only for its smaller topology
