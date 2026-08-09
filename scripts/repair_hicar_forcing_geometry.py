@@ -83,8 +83,10 @@ def repair_pair(
             == "static_sleve_with_one_ulp_top_cover"
         )
     if migrated:
-        forcing_ready.unlink(missing_ok=True)
-        boundary_ready.unlink(missing_ok=True)
+        if forcing_ready.exists() != boundary_ready.exists():
+            raise FileNotFoundError(
+                "forcing and boundary publication markers are inconsistent"
+            )
         subprocess.run(
             [
                 sys.executable,
@@ -100,8 +102,12 @@ def repair_pair(
         )
         forcing_sha = sha256(forcing_path)
         boundary_sha = sha256(boundary_path)
-        forcing_ready.touch(exist_ok=False)
-        boundary_ready.touch(exist_ok=False)
+        # A published migrated pair is immutable.  Revalidation must not make
+        # a valid concurrent reader observe a transiently incomplete product.
+        # Restore markers only for a previously unpublished pair.
+        if not forcing_ready.exists():
+            forcing_ready.touch(exist_ok=False)
+            boundary_ready.touch(exist_ok=False)
         return forcing_sha, boundary_sha
     if forcing_ready.exists() != boundary_ready.exists():
         raise FileNotFoundError("forcing and boundary publication markers are inconsistent")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -115,6 +116,9 @@ def test_repair_replaces_only_geometry_and_rebinds_boundary(tmp_path: Path) -> N
     assert Path(f"{forcing}.ready").exists()
     assert Path(f"{boundary}.ready").exists()
 
+    marker_time_ns = 1_600_000_000_000_000_000
+    os.utime(Path(f"{forcing}.ready"), ns=(marker_time_ns, marker_time_ns))
+    os.utime(Path(f"{boundary}.ready"), ns=(marker_time_ns, marker_time_ns))
     repeated = subprocess.run(
         [
             sys.executable, str(REPAIR), "--forcing-file", str(forcing),
@@ -126,3 +130,5 @@ def test_repair_replaces_only_geometry_and_rebinds_boundary(tmp_path: Path) -> N
     assert repeated.returncode == 0, repeated.stderr
     assert Path(f"{forcing}.ready").exists()
     assert Path(f"{boundary}.ready").exists()
+    assert Path(f"{forcing}.ready").stat().st_mtime_ns == marker_time_ns
+    assert Path(f"{boundary}.ready").stat().st_mtime_ns == marker_time_ns
