@@ -21,7 +21,7 @@ import numpy as np
 EPSILON = 0.622
 GRAVITY = 9.80665
 DRY_AIR_GAS_CONSTANT = 287.05
-CALM_WIND_THRESHOLD_M_S = 0.5
+WIND_DIRECTION_OBSERVATION_THRESHOLD_M_S = 2.5
 OBSERVATION_PARAMETERS = (
     "tre200h0",
     "ure200h0",
@@ -634,10 +634,11 @@ def select_common_site_values(
             reason = "hicar_missing_or_nonfinite"
         elif rea_l_values is None:
             reason = "rea_l_missing_or_nonfinite"
-        elif require_noncalm and min(
-            observed[1], hicar_values[1], rea_l_values[1]
-        ) < CALM_WIND_THRESHOLD_M_S:
-            reason = "calm_wind_direction_mask"
+        elif (
+            require_noncalm
+            and observed[1] < WIND_DIRECTION_OBSERVATION_THRESHOLD_M_S
+        ):
+            reason = "observation_calm_wind_direction_mask"
         else:
             counts["accepted_common_triplet_count"] += 1
             return hicar_values, rea_l_values, observed
@@ -1129,7 +1130,9 @@ def main() -> int:
                 "half-width square; valley/ridge thresholds are -/+150 m"
             ),
             "minimum_core_pairs": args.minimum_core_pairs,
-            "calm_direction_mask_threshold_m_s": CALM_WIND_THRESHOLD_M_S,
+            "wind_direction_observation_threshold_m_s": (
+                WIND_DIRECTION_OBSERVATION_THRESHOLD_M_S
+            ),
         },
         "observation_inventory": observation_inventory,
         "common_triplet_accounting": {

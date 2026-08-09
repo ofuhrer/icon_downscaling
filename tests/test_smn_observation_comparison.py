@@ -286,6 +286,27 @@ def test_common_triplets_exclude_both_models_when_either_is_nonfinite():
         }
 
 
+def test_wind_direction_mask_depends_only_on_observed_speed():
+    accounting = {}
+    base = {
+        "wind_direction_degrees": 90.0,
+        "wind_speed_10m_m_s": 5.0,
+    }
+    hicar = dict(base, wind_speed_10m_m_s=0.1)
+    rea_l = dict(base, wind_speed_10m_m_s=0.2)
+    accepted = MODULE.select_common_site_values(hicar, rea_l, base, accounting)
+    assert accepted["wind_direction"] is not None
+
+    calm_observation = dict(base, wind_speed_10m_m_s=2.49)
+    rejected = MODULE.select_common_site_values(
+        base, base, calm_observation, accounting
+    )
+    assert rejected["wind_direction"] is None
+    counts = MODULE.common_triplet_accounting_results(accounting)["wind_direction"]
+    assert counts["accepted_common_triplet_count"] == 1
+    assert counts["exclusions"] == {"observation_calm_wind_direction_mask": 1}
+
+
 def test_full_station_comparison_reports_exact_synthetic_match(tmp_path):
     static = tmp_path / "static.nc"
     output = tmp_path / "output.nc"
