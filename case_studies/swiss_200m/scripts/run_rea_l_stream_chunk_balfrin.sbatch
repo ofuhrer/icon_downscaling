@@ -41,13 +41,14 @@ run=${SEGMENT_RUN_DIR:?}
 restart_input=${RESTART_INPUT:-}
 profile=${OUTPUT_PROFILE:-evaluation}
 output_interval=${OUTPUT_INTERVAL:-3600}
+radiation_update_interval=${HICAR_RADIATION_UPDATE_INTERVAL:-600.0}
 model_debug=${HICAR_MODEL_DEBUG:-0}
 disable_sx=${HICAR_DISABLE_SX:-0}
 allow_input_superset=${HICAR_ALLOW_INPUT_SUPERSET:-0}
 acc_synchronous=${HICAR_ACC_SYNCHRONOUS:-0}
 cfl_reduction=${HICAR_CFL_REDUCTION_FACTOR:-1.6}
 renderer="$repo_root/case_studies/swiss_200m/scripts/render_hicar_namelist.py"
-wrapper="$repo_root/case_studies/swiss_200m/scripts/gpu_rank_wrapper.sh"
+wrapper=${HICAR_RANK_WRAPPER:-"$repo_root/case_studies/swiss_200m/scripts/gpu_rank_wrapper.sh"}
 python=${HICAR_PYTHON:-python3}
 
 for path in "$exe" "$static" "$forcing_list" "$lbc_list" "$renderer" "$wrapper"; do
@@ -112,6 +113,7 @@ fi
   "${debug_args[@]}" \
   "${sx_args[@]}" \
   --output-interval "$output_interval" \
+  --radiation-update-interval "$radiation_update_interval" \
   --restart-interval "$restart_records" \
   "${restart_args[@]}" \
   --output-dir "$run/output" \
@@ -156,6 +158,7 @@ test -s "$restart" || { echo "missing terminal restart: $restart" >&2; exit 1; }
   --output-dir "$run/output" --restart "$restart" --start "$start" --end "$model_end" \
   --restart-time "$end" \
   --output-interval "$output_interval" --forcing-list "$forcing_list" \
+  --radiation-update-interval "$radiation_update_interval" \
   --boundary-list "$lbc_list" "${validation_restart_args[@]}" \
   "${input_validation_args[@]}" \
   >"$run/segment_validation.json"

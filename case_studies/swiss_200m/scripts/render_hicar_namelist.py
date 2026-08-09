@@ -68,6 +68,7 @@ def main() -> int:
     parser.add_argument("--restart-from")
     parser.add_argument("--restart-interval", type=int, default=24)
     parser.add_argument("--output-interval", type=int, default=3600)
+    parser.add_argument("--radiation-update-interval", type=float, default=600.0)
     parser.add_argument(
         "--output-profile", choices=("station", "evaluation", "debug"), default="evaluation"
     )
@@ -85,7 +86,11 @@ def main() -> int:
     start, end = timestamp(args.start_date), timestamp(args.end_date)
     if end <= start:
         raise SystemExit("--end-date must be after --start-date")
-    if args.output_interval <= 0 or args.restart_interval <= 0:
+    if (
+        args.output_interval <= 0
+        or args.restart_interval <= 0
+        or args.radiation_update_interval <= 0.0
+    ):
         raise SystemExit("output and restart intervals must be positive")
     if not 0.0 < args.cfl_reduction_factor <= 1.6:
         raise SystemExit("--cfl-reduction-factor must be in (0, 1.6]")
@@ -236,6 +241,7 @@ def main() -> int:
         "@RESTART_DIR@": f"{args.restart_dir.resolve()}/",
         "@RESTART_LINES@": restart_lines,
         "@OUTPUT_INTERVAL@": str(args.output_interval),
+        "@RADIATION_UPDATE_INTERVAL@": str(args.radiation_update_interval),
         "@OUTPUT_VARS@": output_variables[args.output_profile],
     }
     rendered = TEMPLATE.read_text()

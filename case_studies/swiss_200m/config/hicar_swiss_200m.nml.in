@@ -104,7 +104,7 @@
 &rad_parameters
   ! Explicitly freeze the previously effective RRTMGP defaults. Terrain
   ! radiation remains off unless a causal profile is selected explicitly.
-  update_interval_rad = 600.0
+  update_interval_rad = @RADIATION_UPDATE_INTERVAL@
   ! Simulation and forcing timestamps are UTC.
   tzone = 0.0
   icloud = 3

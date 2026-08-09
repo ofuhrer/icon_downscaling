@@ -104,6 +104,7 @@ def main() -> int:
         help="checkpoint timestamp; defaults to --end for a final segment",
     )
     parser.add_argument("--output-interval", type=int, required=True)
+    parser.add_argument("--radiation-update-interval", type=float, default=600.0)
     parser.add_argument("--forcing-list", type=Path, required=True)
     parser.add_argument("--boundary-list", type=Path, required=True)
     parser.add_argument(
@@ -119,7 +120,11 @@ def main() -> int:
     restart_time = datetime.fromisoformat(
         (args.restart_time or args.end).replace("T", " ").replace("Z", "")
     )
-    if end <= start or args.output_interval <= 0:
+    if (
+        end <= start
+        or args.output_interval <= 0
+        or args.radiation_update_interval <= 0.0
+    ):
         raise SystemExit("invalid segment interval")
     if not start < restart_time <= end:
         raise SystemExit("restart time must be inside the integrated segment")
@@ -163,7 +168,7 @@ def main() -> int:
     with netCDF4.Dataset(args.restart) as restart:
         numeric_physics = {
             "wind.alpha_const": 1.0,
-            "rad.update_interval_rad": 600.0,
+            "rad.update_interval_rad": args.radiation_update_interval,
             "domain.height_lowest_level": 20.0,
         }
         numeric_mismatches = {
