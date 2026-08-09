@@ -22,7 +22,7 @@ import json
 import math
 import os
 from pathlib import Path
-from statistics import mean, median
+from statistics import mean, median, quantiles
 from tempfile import NamedTemporaryFile
 from typing import Iterable
 
@@ -172,6 +172,16 @@ def comparison_row(
         "rea_l_observation_mean": None,
         "observation_mean": None,
     }
+    diagnostics: dict[str, float | None] = {
+        "hicar_mae": None,
+        "rea_l_mae": None,
+        "hicar_centered_rmse": None,
+        "rea_l_centered_rmse": None,
+        "hicar_standard_deviation_ratio": None,
+        "rea_l_standard_deviation_ratio": None,
+        "hicar_correlation": None,
+        "rea_l_correlation": None,
+    }
     try:
         hicar_model_mean = float(hicar["model_mean"])
         rea_l_model_mean = float(rea_l["model_mean"])
@@ -208,6 +218,60 @@ def comparison_row(
                 # the corresponding model means.
                 "observation_mean": (hicar_observation_mean + rea_l_observation_mean) / 2.0,
             }
+    try:
+        hicar_mae = float(hicar["mean_absolute_error"])
+        rea_l_mae = float(rea_l["mean_absolute_error"])
+    except (KeyError, TypeError, ValueError):
+        pass
+    else:
+        if math.isfinite(hicar_mae) and math.isfinite(rea_l_mae):
+            diagnostics["hicar_mae"] = hicar_mae
+            diagnostics["rea_l_mae"] = rea_l_mae
+    if moments["hicar_bias"] is not None and moments["rea_l_bias"] is not None:
+        diagnostics["hicar_centered_rmse"] = math.sqrt(
+            max(h_rmse * h_rmse - moments["hicar_bias"] ** 2, 0.0)
+        )
+        diagnostics["rea_l_centered_rmse"] = math.sqrt(
+            max(r_rmse * r_rmse - moments["rea_l_bias"] ** 2, 0.0)
+        )
+    if h_count >= 20:
+        try:
+            hicar_model_sd = float(hicar["model_standard_deviation"])
+            rea_l_model_sd = float(rea_l["model_standard_deviation"])
+            hicar_observation_sd = float(hicar["observation_standard_deviation"])
+            rea_l_observation_sd = float(rea_l["observation_standard_deviation"])
+            hicar_correlation = float(hicar["correlation"])
+            rea_l_correlation = float(rea_l["correlation"])
+        except (KeyError, TypeError, ValueError):
+            pass
+        else:
+            values = (
+                hicar_model_sd,
+                rea_l_model_sd,
+                hicar_observation_sd,
+                rea_l_observation_sd,
+                hicar_correlation,
+                rea_l_correlation,
+            )
+            if (
+                all(math.isfinite(value) for value in values)
+                and hicar_observation_sd > 0.0
+                and rea_l_observation_sd > 0.0
+                and math.isclose(
+                    hicar_observation_sd,
+                    rea_l_observation_sd,
+                    rel_tol=0.0,
+                    abs_tol=TIE_TOLERANCE,
+                )
+            ):
+                diagnostics.update(
+                    {
+                        "hicar_standard_deviation_ratio": hicar_model_sd / hicar_observation_sd,
+                        "rea_l_standard_deviation_ratio": rea_l_model_sd / rea_l_observation_sd,
+                        "hicar_correlation": hicar_correlation,
+                        "rea_l_correlation": rea_l_correlation,
+                    }
+                )
     return {
         "pair_count": h_count,
         "hicar_rmse": h_rmse,
@@ -215,6 +279,7 @@ def comparison_row(
         "rmse_delta_hicar_minus_rea_l": delta,
         "outcome": outcome,
         **moments,
+        **diagnostics,
     }, None
 
 
@@ -435,6 +500,55 @@ def summarize_group(rows: list[dict]) -> dict:
         # Preserve the original public field while exposing the consistently
         # composed ``equal_station_mean_`` + ``observation_mean`` name.
         result["equal_station_mean_observation"] = result["equal_station_mean_observation_mean"]
+    anatomy_fields = (
+        "hicar_bias",
+        "rea_l_bias",
+        "hicar_mae",
+        "rea_l_mae",
+    )
+    anatomy_rows = [
+        row for row in rows if all(row.get(field) is not None for field in anatomy_fields)
+    ]
+    if len(anatomy_rows) == len(rows):
+        hicar_bias = mean(row["hicar_bias"] for row in anatomy_rows)
+        rea_l_bias = mean(row["rea_l_bias"] for row in anatomy_rows)
+        result.update(
+            {
+                "error_anatomy_paired_station_count": len(anatomy_rows),
+                "equal_station_mean_hicar_mae": mean(
+                    row["hicar_mae"] for row in anatomy_rows
+                ),
+                "equal_station_mean_rea_l_mae": mean(
+                    row["rea_l_mae"] for row in anatomy_rows
+                ),
+                "equal_station_network_hicar_centered_rmse": math.sqrt(
+                    max(equal_station_network_hicar_rmse**2 - hicar_bias**2, 0.0)
+                ),
+                "equal_station_network_rea_l_centered_rmse": math.sqrt(
+                    max(equal_station_network_rea_l_rmse**2 - rea_l_bias**2, 0.0)
+                ),
+            }
+        )
+    diagnostic_fields = (
+        "hicar_standard_deviation_ratio",
+        "rea_l_standard_deviation_ratio",
+        "hicar_correlation",
+        "rea_l_correlation",
+    )
+    diagnostic_rows = [
+        row
+        for row in rows
+        if row["pair_count"] >= 20
+        and all(row.get(field) is not None for field in diagnostic_fields)
+    ]
+    if len(diagnostic_rows) >= 10:
+        result["diagnostic_paired_station_count"] = len(diagnostic_rows)
+        for field in diagnostic_fields:
+            values = [row[field] for row in diagnostic_rows]
+            lower, _, upper = quantiles(values, n=4, method="inclusive")
+            result[f"median_station_{field}"] = median(values)
+            result[f"station_{field}_q1"] = lower
+            result[f"station_{field}_q3"] = upper
     return result
 
 

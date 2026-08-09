@@ -65,9 +65,13 @@ def fixture(tmp_path):
                     "equal_station_network_rea_l_rmse": rea_l + 0.025,
                     "network_pooled_hicar_rmse": hicar + 0.05,
                     "network_pooled_rea_l_rmse": rea_l + 0.05}
-                if metric in MODULE.SCALAR_STATS:
+                if metric in MODULE.ERROR_ANATOMY_METRICS:
                     summary.update({"equal_station_mean_hicar_bias": -0.1,
                         "equal_station_mean_rea_l_bias": 0.1,
+                        "equal_station_mean_hicar_mae": hicar - 0.1,
+                        "equal_station_mean_rea_l_mae": rea_l - 0.1,
+                        "equal_station_network_hicar_centered_rmse": hicar,
+                        "equal_station_network_rea_l_centered_rmse": rea_l,
                         "equal_station_mean_hicar_model_mean": 10 + metric_index,
                         "equal_station_mean_rea_l_model_mean": 10.2 + metric_index,
                         "equal_station_mean_observation": 10.1 + metric_index})
@@ -76,8 +80,11 @@ def fixture(tmp_path):
             for hour in range(first_hour, 25):
                 lead = {"lead_hour": hour, "metric": metric, "pair_count": 96,
                     "hicar_rmse": hicar + hour / 50, "rea_l_rmse": rea_l + hour / 100}
-                if metric in MODULE.SCALAR_STATS:
+                if metric in MODULE.ERROR_ANATOMY_METRICS:
                     lead.update({"hicar_bias": -0.1, "rea_l_bias": 0.1,
+                        "hicar_mae": hicar - 0.1, "rea_l_mae": rea_l - 0.1,
+                        "hicar_centered_rmse": hicar,
+                        "rea_l_centered_rmse": rea_l,
                         "hicar_model_mean": 10 + metric_index,
                         "rea_l_model_mean": 10.2 + metric_index,
                         "observation_mean": 10.1 + metric_index})
@@ -187,7 +194,7 @@ def test_artifact_is_deterministic_and_canonical(tmp_path):
     assert {row["stratum"] for row in ridge_lead} == set(MODULE.RIDGE_LEAD_STRATA)
     assert {row["segment"] for row in ridge_lead} == {"first", "restarted"}
     assert all(row["hicar_bias"] is not None for row in seasonal
-        if row["metric"] in MODULE.SCALAR_STATS)
+        if row["metric"] in MODULE.ERROR_ANATOMY_METRICS)
     sensitivity = first["snapshot"]["datasets"]["seasonal_population_sensitivity"]
     assert {row["population"] for row in sensitivity} == {
         "All season-available stations",

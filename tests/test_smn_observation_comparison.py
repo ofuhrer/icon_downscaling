@@ -8,6 +8,7 @@ import sys
 
 import netCDF4
 import numpy as np
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -45,6 +46,30 @@ def test_exact_integral_lead_hour_rejects_sub_hour_and_negative_leads():
             assert "not an exact nonnegative integral-hour lead" in str(error)
         else:
             raise AssertionError(f"accepted invalid lead timestamp {valid.isoformat()}")
+
+
+def test_pair_statistics_exposes_minimal_error_anatomy():
+    statistics = MODULE.PairStatistics()
+    for model, observation in ((2.0, 1.0), (4.0, 2.0), (6.0, 3.0)):
+        statistics.add(model, observation)
+
+    result = statistics.result()
+    assert result["count"] == 3
+    assert result["bias"] == 2.0
+    assert result["mean_absolute_error"] == 2.0
+    assert result["root_mean_squared_error"] == pytest.approx(
+        math.sqrt(14.0 / 3.0)
+    )
+    assert result["centered_root_mean_squared_error"] == pytest.approx(
+        math.sqrt(2.0 / 3.0)
+    )
+    assert result["model_standard_deviation"] == pytest.approx(
+        math.sqrt(8.0 / 3.0)
+    )
+    assert result["observation_standard_deviation"] == pytest.approx(
+        math.sqrt(2.0 / 3.0)
+    )
+    assert result["correlation"] == pytest.approx(1.0)
 
 
 def test_retrieval_script_uses_smn_group_and_cluster_configuration():

@@ -29,6 +29,13 @@ def metric(
                 "model_mean": model_mean,
                 "observation_mean": observation_mean,
                 "bias": bias,
+                "mean_absolute_error": abs(bias),
+                "centered_root_mean_squared_error": (
+                    max(rmse**2 - bias**2, 0.0) ** 0.5
+                ),
+                "model_standard_deviation": 1.2,
+                "observation_standard_deviation": 1.0,
+                "correlation": 0.8,
             }
         )
     return result
@@ -220,6 +227,20 @@ def test_national_summary_and_exact_common_65(tmp_path):
     assert national_temperature["equal_station_network_rea_l_rmse"] == pytest.approx(1.5)
     assert national_temperature["equal_station_mean_hicar_bias"] == pytest.approx(1.33)
     assert national_temperature["equal_station_mean_rea_l_bias"] == pytest.approx(1.5)
+    assert national_temperature["equal_station_mean_hicar_mae"] == pytest.approx(1.33)
+    assert national_temperature["equal_station_mean_rea_l_mae"] == pytest.approx(1.5)
+    assert national_temperature["equal_station_network_hicar_centered_rmse"] == pytest.approx(
+        (
+            national_temperature["equal_station_network_hicar_rmse"] ** 2
+            - national_temperature["equal_station_mean_hicar_bias"] ** 2
+        ) ** 0.5
+    )
+    assert national_temperature["equal_station_network_rea_l_centered_rmse"] == 0.0
+    assert national_temperature["diagnostic_paired_station_count"] == 67
+    assert national_temperature["median_station_hicar_standard_deviation_ratio"] == 1.2
+    assert national_temperature["median_station_rea_l_standard_deviation_ratio"] == 1.2
+    assert national_temperature["median_station_hicar_correlation"] == 0.8
+    assert national_temperature["median_station_rea_l_correlation"] == 0.8
     assert national_temperature["equal_station_mean_hicar_model_mean"] == pytest.approx(281.33)
     assert national_temperature["equal_station_mean_rea_l_model_mean"] == pytest.approx(281.5)
     assert national_temperature["equal_station_mean_hicar_observation_mean"] == pytest.approx(280.0)

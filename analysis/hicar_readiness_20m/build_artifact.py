@@ -29,6 +29,7 @@ SCALAR_STATS = {
     "surface_pressure_height_adjusted_pa",
     "precipitation_interval_kg_m2",
 }
+ERROR_ANATOMY_METRICS = SCALAR_STATS | {"wind_speed_10m_m_s"}
 WIND_METRICS = {"wind_speed_10m_m_s", "wind_vector"}
 RIDGE_LEAD_STRATA = {
     "terrain_ridge_relative_gt_150m": "Terrain ridge (>150 m relative)",
@@ -163,6 +164,10 @@ def scalar_stats(row, label, prefix):
             "rea_l_model_mean": number(row, label, prefix + "rea_l_model_mean"),
             "hicar_observation_mean": number(row, label, prefix + "hicar_observation_mean", prefix + "observation_mean", prefix + "observation"),
             "rea_l_observation_mean": number(row, label, prefix + "rea_l_observation_mean", prefix + "observation_mean", prefix + "observation"),
+            "hicar_mae": number(row, label, prefix + "hicar_mae"),
+            "rea_l_mae": number(row, label, prefix + "rea_l_mae"),
+            "hicar_centered_rmse": number(row, label, "equal_station_network_hicar_centered_rmse"),
+            "rea_l_centered_rmse": number(row, label, "equal_station_network_rea_l_centered_rmse"),
         }
     return {
         "hicar_bias": number(row, label, "hicar_bias"),
@@ -171,6 +176,10 @@ def scalar_stats(row, label, prefix):
         "rea_l_model_mean": number(row, label, "rea_l_model_mean"),
         "hicar_observation_mean": number(row, label, "hicar_observation_mean", "observation_mean"),
         "rea_l_observation_mean": number(row, label, "rea_l_observation_mean", "observation_mean"),
+        "hicar_mae": number(row, label, "hicar_mae"),
+        "rea_l_mae": number(row, label, "rea_l_mae"),
+        "hicar_centered_rmse": number(row, label, "hicar_centered_rmse"),
+        "rea_l_centered_rmse": number(row, label, "rea_l_centered_rmse"),
     }
 
 
@@ -226,7 +235,7 @@ def derive_datasets(evidence):
                 "network_pooled_rea_l_rmse": pooled_rea_l,
                 "network_pooled_rmse_delta": pooled_hicar - pooled_rea_l,
                 "network_pooled_normalized_rmse_difference": normalized_difference(pooled_hicar, pooled_rea_l)}
-        if metric in SCALAR_STATS:
+        if metric in ERROR_ANATOMY_METRICS:
             item.update(scalar_stats(row, f"seasonal {row['season']}/{metric}", "equal_station_mean_"))
         seasonal_sensitivity.append(item)
         if row["subset"] == "national":
@@ -252,7 +261,7 @@ def derive_datasets(evidence):
                     "metric_order": list(METRICS).index(metric), "pair_count": int(row["pair_count"]),
                     "hicar_rmse": hicar, "rea_l_rmse": rea_l, "rmse_delta": hicar - rea_l,
                     "normalized_rmse_difference": normalized_difference(hicar, rea_l)}
-            if metric in SCALAR_STATS:
+            if metric in ERROR_ANATOMY_METRICS:
                 item.update(scalar_stats(row, f"lead {season}/{item['lead_hour']}/{metric}", ""))
             lead.append(item)
     for season in SEASONS:
@@ -478,6 +487,10 @@ def build_artifact(evidence):
              ("paired_station_count", "Paired stations"),
              ("hicar_rmse", "Equal-station network HICAR RMSE"),
              ("rea_l_rmse", "Equal-station network REA-L RMSE"),
+             ("hicar_mae", "Equal-station mean HICAR MAE"),
+             ("rea_l_mae", "Equal-station mean REA-L MAE"),
+             ("hicar_centered_rmse", "Equal-station network HICAR centered RMSE"),
+             ("rea_l_centered_rmse", "Equal-station network REA-L centered RMSE"),
              ("mean_station_hicar_rmse", "Mean station HICAR RMSE"),
              ("mean_station_rea_l_rmse", "Mean station REA-L RMSE"),
              ("network_pooled_hicar_rmse", "Pair-pooled HICAR RMSE"),

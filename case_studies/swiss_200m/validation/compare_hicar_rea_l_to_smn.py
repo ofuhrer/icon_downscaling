@@ -96,13 +96,22 @@ class PairStatistics:
             - self.sum_reference * self.sum_reference / count
         )
         denominator = math.sqrt(max(model_variance * reference_variance, 0.0))
+        bias = self.sum_error / count
+        rmse = math.sqrt(self.sum_squared_error / count)
         return {
             "count": self.count,
             "model_mean": self.sum_model / count,
             "observation_mean": self.sum_reference / count,
-            "bias": self.sum_error / count,
+            "bias": bias,
             "mean_absolute_error": self.sum_abs_error / count,
-            "root_mean_squared_error": math.sqrt(self.sum_squared_error / count),
+            "root_mean_squared_error": rmse,
+            "centered_root_mean_squared_error": math.sqrt(
+                max(rmse * rmse - bias * bias, 0.0)
+            ),
+            "model_standard_deviation": math.sqrt(max(model_variance / count, 0.0)),
+            "observation_standard_deviation": math.sqrt(
+                max(reference_variance / count, 0.0)
+            ),
             "correlation": covariance / denominator if denominator > 0.0 else None,
         }
 
