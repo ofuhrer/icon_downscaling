@@ -1,6 +1,6 @@
 {
   "root": "/scratch/mch/olifu/icon_hicar/rd/swiss_all_stations_20m/campaign_8a019da8_sleve41c",
-  "repo_root": "/scratch/mch/olifu/icon_hicar/rd/source/coordinator-national-41c92c9",
+  "repo_root": "/scratch/mch/olifu/icon_hicar/rd/source/coordinator-national-sleve-v1",
   "forcing_dir": "/scratch/mch/olifu/icon_hicar/rd/swiss_all_stations_20m/input/forcing",
   "python": "/scratch/mch/olifu/icon_hicar/venv_static/bin/python",
   "hicar_executable": "/scratch/mch/olifu/icon_hicar/rd/build/hicar-barekernels-8a019da8-gpu-nccl/HICAR_gpu",
