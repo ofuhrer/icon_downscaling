@@ -155,6 +155,22 @@ def test_national_summary_and_exact_common_65(tmp_path):
     assert summary["coverage"]["station_key_union_count"] == 67
     assert summary["coverage"]["station_key_four_season_intersection_count"] == 67
     assert summary["national_four_season_intersection"]["site_count"] == 67
+    assert summary["coverage"]["metric_eligible_four_season_intersection_counts"] == {
+        "temperature_2m_height_adjusted_k": 66,
+        "wind_vector": 67,
+    }
+    assert (
+        summary["national_metric_four_season_intersections"][
+            "temperature_2m_height_adjusted_k"
+        ]["site_count"]
+        == 66
+    )
+    assert (
+        "S066:67"
+        not in summary["national_metric_four_season_intersections"][
+            "temperature_2m_height_adjusted_k"
+        ]["site_keys"]
+    )
     assert summary["common_65"]["site_count"] == 65
     assert summary["common_65"]["site_keys"][0] == "S000:1"
     assert len(rows) == 4 * 67 * 2 - 1
@@ -174,6 +190,14 @@ def test_national_summary_and_exact_common_65(tmp_path):
     assert national_temperature["degraded_station_count"] == 16
     assert national_temperature["tied_station_count"] == 1
     assert national_temperature["mean_bias_paired_station_count"] == 67
+    assert national_temperature["mean_station_hicar_rmse"] == pytest.approx(1.33)
+    assert national_temperature["mean_station_rea_l_rmse"] == pytest.approx(1.5)
+    assert national_temperature["equal_station_mean_hicar_rmse"] == pytest.approx(1.33)
+    assert national_temperature["equal_station_mean_rea_l_rmse"] == pytest.approx(1.5)
+    assert national_temperature["equal_station_network_hicar_rmse"] == pytest.approx(
+        (sum((1.0 + index / 100.0) ** 2 for index in range(67)) / 67) ** 0.5
+    )
+    assert national_temperature["equal_station_network_rea_l_rmse"] == pytest.approx(1.5)
     assert national_temperature["equal_station_mean_hicar_bias"] == pytest.approx(1.33)
     assert national_temperature["equal_station_mean_rea_l_bias"] == pytest.approx(1.5)
     assert national_temperature["equal_station_mean_hicar_model_mean"] == pytest.approx(281.33)
@@ -198,7 +222,21 @@ def test_national_summary_and_exact_common_65(tmp_path):
         and item["stratum"] == "all_sites"
         and item["metric"] == "temperature_2m_height_adjusted_k"
     )
-    assert national_intersection_temperature["paired_station_count"] == 67
+    assert national_intersection_temperature["paired_station_count"] == 66
+    intersection_counts = {
+        (item["season"], item["metric"]): item["paired_station_count"]
+        for item in summary["equal_station_summaries"]
+        if item["subset"] == "national_four_season_intersection"
+        and item["stratum"] == "all_sites"
+    }
+    assert all(
+        intersection_counts[(season, "temperature_2m_height_adjusted_k")] == 66
+        for season in MODULE.SEASONS
+    )
+    assert all(
+        intersection_counts[(season, "wind_vector")] == 67
+        for season in MODULE.SEASONS
+    )
     lead_temperature = next(
         item
         for item in summary["lead_hour_tables"]["DJF"]
@@ -246,6 +284,13 @@ def test_network_pooled_rmse_uses_pair_counts_and_preserves_equal_station_mean()
     assert summary["pair_count_total"] == 4
     assert summary["equal_station_mean_hicar_rmse"] == pytest.approx(2.0)
     assert summary["equal_station_mean_rea_l_rmse"] == pytest.approx(3.0)
+    assert summary["mean_station_hicar_rmse"] == pytest.approx(2.0)
+    assert summary["mean_station_rea_l_rmse"] == pytest.approx(3.0)
+    assert summary["equal_station_network_hicar_rmse"] == pytest.approx(5.0**0.5)
+    assert summary["equal_station_network_rea_l_rmse"] == pytest.approx(10.0**0.5)
+    assert summary["equal_station_network_rmse_delta_hicar_minus_rea_l"] == pytest.approx(
+        5.0**0.5 - 10.0**0.5
+    )
     assert summary["network_pooled_hicar_rmse"] == pytest.approx(7.0**0.5)
     assert summary["network_pooled_rea_l_rmse"] == pytest.approx(13.0**0.5)
     assert summary["network_pooled_rmse_delta_hicar_minus_rea_l"] == pytest.approx(

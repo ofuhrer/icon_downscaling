@@ -364,6 +364,14 @@ def station_season_rows(
 def summarize_group(rows: list[dict]) -> dict:
     deltas = [row["rmse_delta_hicar_minus_rea_l"] for row in rows]
     pair_count_total = sum(row["pair_count"] for row in rows)
+    mean_station_hicar_rmse = mean(row["hicar_rmse"] for row in rows)
+    mean_station_rea_l_rmse = mean(row["rea_l_rmse"] for row in rows)
+    equal_station_network_hicar_rmse = math.sqrt(
+        mean(row["hicar_rmse"] ** 2 for row in rows)
+    )
+    equal_station_network_rea_l_rmse = math.sqrt(
+        mean(row["rea_l_rmse"] ** 2 for row in rows)
+    )
     network_pooled_hicar_rmse = math.sqrt(
         sum(row["pair_count"] * row["hicar_rmse"] ** 2 for row in rows) / pair_count_total
     )
@@ -373,8 +381,17 @@ def summarize_group(rows: list[dict]) -> dict:
     result = {
         "paired_station_count": len(rows),
         "pair_count_total": pair_count_total,
-        "equal_station_mean_hicar_rmse": mean(row["hicar_rmse"] for row in rows),
-        "equal_station_mean_rea_l_rmse": mean(row["rea_l_rmse"] for row in rows),
+        "mean_station_hicar_rmse": mean_station_hicar_rmse,
+        "mean_station_rea_l_rmse": mean_station_rea_l_rmse,
+        "mean_station_rmse_delta_hicar_minus_rea_l": mean(deltas),
+        "equal_station_network_hicar_rmse": equal_station_network_hicar_rmse,
+        "equal_station_network_rea_l_rmse": equal_station_network_rea_l_rmse,
+        "equal_station_network_rmse_delta_hicar_minus_rea_l": (
+            equal_station_network_hicar_rmse - equal_station_network_rea_l_rmse
+        ),
+        # Compatibility aliases for the original mean-of-station-RMSE estimand.
+        "equal_station_mean_hicar_rmse": mean_station_hicar_rmse,
+        "equal_station_mean_rea_l_rmse": mean_station_rea_l_rmse,
         "equal_station_mean_rmse_delta_hicar_minus_rea_l": mean(deltas),
         "network_pooled_hicar_rmse": network_pooled_hicar_rmse,
         "network_pooled_rea_l_rmse": network_pooled_rea_l_rmse,
@@ -424,13 +441,15 @@ def summarize_group(rows: list[dict]) -> dict:
 def equal_station_summaries(
     rows: list[dict],
     common_available: bool,
-    national_four_season_keys: set[str],
+    national_metric_four_season_keys: dict[str, set[str]],
 ) -> list[dict]:
     groups: dict[tuple[str, str, str, str], list[dict]] = defaultdict(list)
     for row in rows:
         strata = ("all_sites", row["elevation_class"], row["terrain_class"])
         subsets = ["national"]
-        if row["station_key"] in national_four_season_keys:
+        if row["station_key"] in national_metric_four_season_keys.get(
+            row["metric"], set()
+        ):
             subsets.append("national_four_season_intersection")
         if common_available and row["in_common_65"]:
             subsets.append("common_65")
@@ -613,6 +632,20 @@ def run(args: argparse.Namespace) -> dict:
     }
     national_key_sets = [set(report["site_metrics"]) for _, report in reports.values()]
     national_four_season_keys = set.intersection(*national_key_sets)
+    row_metrics = sorted({row["metric"] for row in rows})
+    national_metric_four_season_keys = {
+        metric: set.intersection(
+            *[
+                {
+                    row["station_key"]
+                    for row in rows
+                    if row["season"] == season and row["metric"] == metric
+                }
+                for season in SEASONS
+            ]
+        )
+        for metric in row_metrics
+    }
     common_provenance["site_keys"] = sorted(common_keys) if common_keys is not None else []
     summary = {
         "schema_version": 1,
@@ -634,14 +667,17 @@ def run(args: argparse.Namespace) -> dict:
                 "observation mean for that station aggregate."
             ),
             "aggregation": (
-                "Equal-station mean RMSE is the arithmetic mean of station RMSEs. "
-                "Network-pooled RMSE is reconstructed separately as "
+                "Mean-station RMSE is the arithmetic mean of station RMSEs. "
+                "Equal-station network RMSE is sqrt(mean_i(RMSE_i^2)), giving "
+                "each eligible station equal weight. Network-pooled RMSE is "
+                "reconstructed separately as "
                 "sqrt(sum(n_i * RMSE_i^2) / sum(n_i)), where n_i is the eligible "
                 "paired count for station i."
             ),
             "national_four_season_intersection": (
-                "The exact station-key intersection of the four national reports, "
-                "computed before station/metric pair-count eligibility is applied."
+                "For each metric, the exact intersection of stations with eligible "
+                "paired HICAR/REA-L aggregates in all four seasons. Raw station-key "
+                "coverage intersection is reported separately."
             ),
             "lead_hour_aggregation": (
                 "Lead-hour rows reproduce the evaluator's all-sites pooled-pair RMSE; "
@@ -665,6 +701,10 @@ def run(args: argparse.Namespace) -> dict:
             "events": coverage,
             "station_key_union_count": len(set.union(*national_key_sets)),
             "station_key_four_season_intersection_count": len(national_four_season_keys),
+            "metric_eligible_four_season_intersection_counts": {
+                metric: len(keys)
+                for metric, keys in national_metric_four_season_keys.items()
+            },
         },
         "data_quality": {
             "station_season_exclusions": station_exclusions,
@@ -675,12 +715,24 @@ def run(args: argparse.Namespace) -> dict:
         "station_season_row_count": len(rows),
         "metrics": sorted({row["metric"] for row in rows}),
         "equal_station_summaries": equal_station_summaries(
-            rows, common_keys is not None, national_four_season_keys
+            rows, common_keys is not None, national_metric_four_season_keys
         ),
         "lead_hour_tables": lead_tables,
         "national_four_season_intersection": {
+            "interpretation": (
+                "Backward-compatible raw station-key intersection before metric "
+                "eligibility; use national_metric_four_season_intersections for "
+                "same-station seasonal metric comparisons."
+            ),
             "site_count": len(national_four_season_keys),
             "site_keys": sorted(national_four_season_keys),
+        },
+        "national_metric_four_season_intersections": {
+            metric: {
+                "site_count": len(keys),
+                "site_keys": sorted(keys),
+            }
+            for metric, keys in national_metric_four_season_keys.items()
         },
         "common_65": common_provenance,
         "selected_site_listings": selected_site_listings(rows, metadata, args.worst_count),
