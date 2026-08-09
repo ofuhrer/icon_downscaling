@@ -94,8 +94,8 @@
   ! HICAR's generic USGS default leaves glaciers disabled. WorldCover snow/ice
   ! is mapped to USGS category 24, so select Noah-MP glacier physics explicitly.
   ice_category = 24
-  ! The pinned Noah-MP implements surface resistances only for options 1 and 2.
-  ! HICAR's implicit revMM5 choice of 3 leaves those resistances undefined.
+  ! Freeze HICAR's effective default rather than relying on namelist fallback.
+  ! The pinned Noah-MP implements surface resistances for options 1 and 2.
   nmp_opt_sfc = 1
   nmp_opt_soil = 2
 /
