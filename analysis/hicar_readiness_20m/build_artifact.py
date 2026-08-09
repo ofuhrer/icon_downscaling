@@ -32,8 +32,8 @@ SCALAR_STATS = {
 WIND_METRICS = {"wind_speed_10m_m_s", "wind_vector"}
 RIDGE_LEAD_STRATA = {
     "terrain_ridge_relative_gt_150m": "Terrain ridge (>150 m relative)",
-    "elevation_2000_3000m": "Station elevation 2000–3000 m",
-    "elevation_ge_3000m": "Station elevation >=3000 m",
+    "station_elevation_2000_3000m": "Station elevation 2000–3000 m",
+    "station_elevation_ge_3000m": "Station elevation >=3000 m",
 }
 FINDINGS = ("seasonal_skill", "lead_time", "elevation_wind",
             "footprint_sensitivity", "inputs_and_grid", "restart")
