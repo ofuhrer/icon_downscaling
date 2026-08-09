@@ -1,7 +1,9 @@
 from datetime import datetime
 
 import json
+from pathlib import Path
 
+import orchestration.rd_campaign as rd_campaign
 from orchestration.rd_campaign import Campaign, hours, segments
 
 
@@ -37,6 +39,7 @@ def campaign(tmp_path, *, full_season_input_lists: bool) -> Campaign:
         "hicar_build_provenance": "build.txt",
         "rbf_weights": "weights.nc",
         "full_season_input_lists": full_season_input_lists,
+        "radiation_update_interval": 600,
         "seasons": [{
             "name": "autumn",
             "start": "2020-10-02T00:00:00",
@@ -75,3 +78,35 @@ def test_default_input_plan_remains_segment_local(tmp_path) -> None:
     assert len(records) == 13
     assert forcing_list == segment_root / "forcing.txt"
     assert boundary_list == segment_root / "lbc.txt"
+
+
+def test_radiation_update_interval_is_explicit_in_model_environment(
+    tmp_path, monkeypatch
+) -> None:
+    configured = campaign(tmp_path, full_season_input_lists=False)
+    configured.config["seasons"][0]["end"] = "2020-10-02T01:00:00"
+    configured.seasons = [
+        rd_campaign.Season(
+            "autumn",
+            datetime(2020, 10, 2, 0),
+            datetime(2020, 10, 2, 1),
+            tmp_path / "static.nc",
+        )
+    ]
+    configured.radiation_update_interval = 600.0
+    for when in hours(configured.seasons[0].start, configured.seasons[0].end):
+        forcing, boundary = configured.paths(configured.seasons[0], when)
+        forcing.parent.mkdir(parents=True, exist_ok=True)
+        for path in (forcing, boundary):
+            path.touch()
+            Path(f"{path}.ready").touch()
+
+    submitted = []
+
+    def fake_submit(script, environment, job_name, *, partition, sbatch_options=()):
+        submitted.append(environment)
+        return "12345"
+
+    monkeypatch.setattr(rd_campaign, "submit", fake_submit)
+    assert configured.submit_segments() == 1
+    assert submitted[0]["HICAR_RADIATION_UPDATE_INTERVAL"] == "600.0"

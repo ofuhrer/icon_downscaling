@@ -2,6 +2,16 @@
 
 ## Current conclusion
 
+**The replacement national 20 m / 12 m setup is not campaign-ready.** Four
+successively narrower interventions against the RRTMGP/OpenACC LW mapping stack
+(`7729e124`, `fb4d811b`, `bc9dc1ac`, and `6071058f`) plus globally synchronous
+execution all failed normal-cadence one-hour A/A repeatability. The final
+candidate still differed at 60 minutes in 19 evaluation fields, with `lwtr`
+again directly affected. The launch was therefore withheld: no daylight
+restart proof, four-season integration, or new all-station skill claim was
+made. This stopping conclusion supersedes the historical investigation detail
+below.
+
 The repository is now oriented around one R&D path. The first direct-input
 pilot found an unstable cached RBF stencil that created isolated 320 m s-1
 winds; the remap is corrected and two-hour direct-input runs are finite across
@@ -26,7 +36,7 @@ wind degradation is over ridges and above 3000 m. This is ready for focused
 R&D interventions, not for a 20-year production choice or a claim of
 scientifically sound added value.
 
-The active national follow-up is deliberately broader than the 65-site bridge
+The stopped national follow-up was deliberately broader than the 65-site bridge
 subset. Its staged observations contain every measurement-site key returned by
 the broad Switzerland-covering SMN DWH query: 157 station abbreviations in each
 event, 170 distinct abbreviation/measurement-site keys in the union, and 166
@@ -81,20 +91,59 @@ cells (0.001892 K), and soil water at 47 cells (8.94e-7), while the Noah-MP
 timestep counter and phase offset are exact. This proves that the remaining
 failure is genuine localized Noah-MP/OpenACC non-repeatability before restart,
 not an extra timestep, LBC interpolation, output-only recomputation, or cadence
-state. Compiler-wide synchronous OpenACC execution alone previously retained a
-smaller two-record A/A failure, and combining it with the `IndexShade` fix did
-not remove the 2-record-versus-3-record response; a same-three-record synchronous
-A/A control is now the smallest active discriminating experiment. A
+state. Compiler-wide synchronous OpenACC execution does not repair it: the
+same-three-record A/A control still differs in 21 of 30 outputs and directly in
+canopy temperature at 37,031 cells, ground-surface temperature at 24,561, soil
+temperature at 2,389, and soil water at 2,128, while cadence state remains
+exact. This supports an in-kernel vector-lane race rather than missing waits
+between kernels. A
 broader standards-motivated loop-private Noah-MP patch (`e5d01a16`) also failed
 its same-input A/A test and was rejected. Source tracing shows that no future
 regular-forcing payload is read and that sparse LBC only validates metadata for
 unused future frames; those frames alter I/O/allocation timing, not the intended
 physical state. The endpoint response therefore exposes residual ordering
-sensitivity rather than an LBC-interpolation side effect. The seasonal forcing
-cache may continue to build, but no national seasonal model chain may launch
-until a replacement runtime/source intervention passes same-input A/A and
-continuous-versus-segmented equality. No national added-value result or
-national restart-equivalence claim is yet established.
+sensitivity rather than an LBC-interpolation side effect. Source audit traced
+the remaining defect to upstream Noah-MP `9e293596`, which fused five separate
+vegetated surface-energy kernels into one long-lived OpenACC parallel region:
+scratch declared private there is per gang, then shared by vector lanes. Clean
+candidate `311e2262` reverses exactly that six-file execution-organization
+commit while retaining all later Noah-MP driver/glacier/restart fixes and
+leaving the physical equations, options, and intended operation order
+unchanged. Its release/NVHPC/NCCL build is complete; three cold A/A replicates
+now match bit-for-bit pairwise at initialization and after one hour in all 30
+output variables and all 196 model-core restart variables on the same ordered
+12-node allocation. This rejects the residual cold-start nondeterminism only
+for that exact three-record configuration and source/build/topology. A first
+25-record continuous control is identical to the three-record control at the
+initial output but differs after one hour in 21 of 30 output fields, including
+large land-state differences. That comparison also changed the requested end
+time and Slurm allocation, so it is a useful race detector but not clean
+evidence of list-length dependence. Reader tracing proves that future records
+contribute metadata/support validation and allocation timing only, not future
+atmospheric payloads or intended first-hour state. The terminal run also takes
+no extra physics step: its final control pass occurs after the one-hour state
+was packed.
+
+A second source audit found the same persistent-region defect in the
+bare-ground surface-energy path, introduced by Noah-MP `9a252eac`; it is the
+only remaining long-lived OpenACC parallel region enclosing gang-vector loops
+in the pinned Noah-MP source. HICAR `8a019da8` therefore also restores separate
+bare-ground kernels in exactly the three affected execution-organization
+files. A follow-up runtime/source check rejected a separate option-3 concern:
+the namelist machinery's effective default is already `nmp_opt_sfc=1`; it
+changes to 3 only when the user explicitly supplies `-1`. The prior national
+runs therefore used supported Noah-MP MOST option 1, as confirmed by the nearly
+identical first-hour flux fields when option 1 is written explicitly.
+Coordinator `f283aef` pins that existing effective choice to remove the
+ambiguity; this is configuration provenance, not a physics intervention. Its
+clean NVHPC/NCCL build is complete. The first corrected-runtime repeatability
+job completed one replicate and was then pre-empted during the second; the
+other discriminators were canceled when a forcing-geometry defect was found.
+They therefore establish neither failure nor exactness and must be rerun with
+the repaired campaign inputs. No national seasonal model chain may launch
+until the repaired-input A/A and continuous-versus-segmented controls pass. No
+national added-value result or national restart-equivalence claim is yet
+established.
 
 The active path is:
 
@@ -113,15 +162,16 @@ and restart completeness.
 | --- | --- | --- |
 | Grid | 200 m, 2061x1431 national domain | Covers all 170 available SwissMetNet measurement-site keys with a 40 km outer margin; the two-hour pilot establishes workable 12-node GPU resource use |
 | Vertical grid | 80 levels, 12 km top, nominal 20 m first layer, stretch 0.65; hard 12 m thickness floor | National minimum interface thickness is 15.956 m, minimum mass-level spacing 16.642 m, and minimum mass Jacobian 0.17183; no layer is below the requested 12 m lower bound |
+| Surface exchange | revMM5 atmospheric surface layer; explicit Noah-MP MOST resistance option 1 | This pins the previously effective default; option 3 is not active and the explicit line is provenance, not a physics change |
 | Boundary terrain | 30 km cosine blend from REA-L-CH1 HSURF at the edge to the high-resolution DEM inward | Verified directly: edge weights are exactly zero, the transition ends at 29.8 km, terrain equals driving terrain on zero-weight cells and the high-resolution DEM on unit-weight cells, and the stored blend differs from the formula by at most 0.000131 m. It is deliberately broader than the separate 10 km atmospheric LBC shoulder, and all evaluated stations are inward of both zones |
 | Terrain coordinate | SLEVE 2/6; smoothing window 5, 10 cycles | Previously stable; retain for controlled comparison |
 | Wind | Adjoint variational, `Sx=true`, 500 m smoothing, alpha 1, 2500 iterations | Best-supported current option |
 | Dynamics | RK3, density advection | Explicit and internally consistent |
-| Atmospheric input | Hourly native REA-L decoded and transformed by hicarprep | Corrected national 00/01/02 UTC products and both two-hour pilot trajectories pass; four complete seasonal forcing sets remain in progress |
+| Atmospheric input | Hourly native REA-L decoded and transformed by hicarprep | Spring and autumn are complete and independently edge-validated; summer stopped after 18 complete hours and winter was not produced once the runtime failed repeatability |
 | Moisture | Dry-air mixing ratios; QI explicitly zero only because source is absent; W diagnosed by HICAR | Explicit and interpretable; W remains a sensitivity |
 | LBC | Hourly sparse hicarprep states, 10 km shoulder | Usable provisional choice; width is not closed |
 | Land initialization | Native TERRA soil state plus ICON SWE/depth/density and bulk `T_SNOW` transferred to NoahMP | Integrated starting point; glacier snow is preserved and sourced vegetation climatologies are wired, but the winter response and any supplied climatology still need controlled tests |
-| Radiation | RRTMGP, 600 s update; terrain radiation off | Correct campaign baseline until focused terrain-radiation tests pass |
+| Radiation | RRTMGP, 600 s update; terrain radiation off | Blocked: the 12-node NVHPC/OpenACC path is not A/A repeatable even after the bounded mapping interventions; no campaign baseline is selected |
 
 The forcing renderer now accepts only this configuration plus three output
 profiles. It requires one static domain, four soil layers, matching hourly
@@ -219,12 +269,24 @@ list in both segments to control the demonstrated metadata-order sensitivity.
   most six such jobs concurrently because pp-long does not account requested
   memory when packing jobs. The two-hour national pilot measured model
   throughput before the four-season campaign was permitted to proceed.
-- HICAR prints a model-top extrapolation warning for the direct forcing, but
-  this is a strict-comparison false alarm rather than inadequate vertical
-  coverage: float32 forcing HFL is at most 0.0143 m below the reconstructed
-  child top near 11.9 km AGL. Only the top mass level can be clamped by this
-  centimetre-scale difference, so this is not a material vertical-coverage
-  limitation for the station-level analysis.
+- A model-top warning exposed a real hicarprep geometry mismatch. The
+  transform copied authoritative static HHL but reconstructed HFL as the
+  arithmetic midpoint of adjacent interfaces. HICAR's nonlinear SLEVE
+  coordinate instead evaluates the mapping at the mass-level reference
+  height. Sampled old records differ from static HFL by up to 0.435 m; at the
+  top the forcing deficit is up to 0.0143 m and triggers upper-level clamping.
+  Coordinator `40eec5f` now preserves static HFL exactly. A float32 emulation
+  then showed that HICAR's own single-precision reconstruction can be one ULP
+  (0.000977 m at the top) above the rounded static value in 202,503 columns.
+  Coordinator `41c92c9` therefore raises only the serialized forcing top mass
+  level by one float32 ULP; its verified cover relative to emulated runtime is
+  0--0.001953 m in every column. The paired validator requires that explicit
+  contract. Atomic migration copies and checksum-verifies each old record,
+  replaces only regular/sparse geometry and their binding hash, validates the
+  pair, and only then restores ready markers. All old spring/autumn ready
+  markers were quarantined while this repair runs; expensive atmospheric
+  interpolation remains reusable. Campaign diagnostics using the old geometry
+  were retired.
 - Corrected 00, 01, and 02 UTC forcing/LBC pairs all passed the paired real-data
   validator with the conditioned operator (jobs 5042798, 5042799, and 5042810).
   A continuous two-hour full-physics run at HICAR `5fc3c71b` then completed
@@ -345,6 +407,24 @@ that instantaneous HICAR values are compared with hourly station aggregates.
 Reports need paired differences and uncertainty intervals before a claim of
 added value is robust.
 
+National verification remains deliberately small: primary equal-station RMSE,
+signed bias, MAE, RMS station bias, and within-station centered RMSE. The exact
+decomposition is network RMSE squared = mean squared station bias + mean
+squared within-station centered RMSE; subtracting only the signed national-mean
+bias is invalid when opposing persistent station biases cancel. Station-level
+standard-deviation ratios and correlations are median/IQR diagnostics only,
+with at least 20 hourly pairs per station-event and at least 10 stations per
+displayed group. HICAR-minus-REA-L station differences and improved/degraded
+counts preserve the paired comparison. Lead-hour traces are event-specific
+elapsed-time diagnostics, not forecast-degradation curves, because one event
+per season confounds lead with valid hour, diurnal evolution, and event.
+Wind-speed bias/MAE and vector RMSE distinguish amplitude from directional
+error without requiring a circular headline score. If circular direction is
+shown diagnostically, its calm mask is now observation-only at 2.5 m s-1 so
+model performance cannot change the verification sample (`40cf0c5`). Groups
+with fewer than ten stations are named-site evidence, not aggregate skill; in
+particular the old two-to-three-site >=3000 m class is descriptive only.
+
 ## Four-season campaign result
 
 All eight 12-hour model segments completed on the `preemptible` partition on
@@ -382,6 +462,50 @@ Above 3000 m, HICAR wind-speed/vector RMSE reached 9.67/11.85 m s-1 versus
 The next wind experiments should therefore target high-terrain/ridge behavior,
 not increase horizontal resolution or campaign duration blindly.
 
+Reprocessing the full diagnostic reports with station-aware error anatomy
+materially narrows that interpretation. The apparent ridge/high-elevation
+failure is overwhelmingly the autumn event, not a four-season invariant. Ridge
+wind-speed RMSE was HICAR/REA-L 2.49/2.76, 2.72/2.62, and 2.39/2.47 m s-1 in
+winter, spring, and summer, but 10.94/5.81 in autumn; the corresponding vector
+values were 3.47/3.66, 4.46/3.89, 3.54/3.55, and 13.60/8.64 m s-1. Only 9--10
+ridge stations contributed per event, and just 2--3 stations lay above 3000 m,
+so this supports an event/station-local diagnosis rather than a generic ridge
+claim. In autumn, wind-speed network RMSE 5.51 m s-1 decomposes into 4.15 m s-1
+RMS station bias and 3.63 m s-1 within-station centered RMSE, versus 2.82 and
+2.73 for REA-L: both persistent spatial/representativeness error and temporal
+evolution matter. Above 3000 m the HICAR components are 14.69 and 10.54 m s-1,
+but that three-station result is descriptive only.
+
+The elapsed-hour tables also reject a generic lead-time degradation story.
+National wind differences are nearly flat in winter, spring, and summer. In
+autumn, HICAR-minus-REA-L wind-speed RMSE changes from -0.07 m s-1 averaged over
+hours 0--11 to +2.64 over hours 13--23; ridge wind changes from -0.17 to +8.43,
+with the transition visible across hours 11/12/13 (+2.46/+4.84/+7.04) and a
+maximum +10.23 at hour 19. Vector wind shows the same event evolution. Because
+the other three cases do not show a restart-hour discontinuity, this is more
+consistent with the autumn storm/diurnal regime and the now-rejected
+bare-ground GPU runtime than with restart or elapsed lead itself. Summer temperature and
+spring humidity also worsen in their second halves, but with strong concurrent
+bias changes; these remain valid-time/event effects until independent cases
+repeat them. Legacy reports do not retain samples needed for correlation or
+standard-deviation-ratio diagnostics, so those must wait for the national
+campaign.
+
+For the scalar fields, the added decomposition explains several otherwise
+ambiguous RMSE changes. HICAR's pressure improvement in winter/spring/summer is
+almost entirely smaller persistent station bias (RMS station bias about
+109--120 Pa versus 145--159 Pa), while its within-station temporal error is
+slightly worse (41--50 Pa versus 36--46 Pa). Autumn pressure is worse in both
+components. Autumn RH improves overall because HICAR reduces RMS station bias
+to 12.1 from 14.7 percentage points despite a slightly worse centered error
+(11.5 versus 10.5). Temperature deficits in winter, spring, and especially
+summer contain both larger station-bias and centered components; summer is not
+merely a uniform warm offset. Summer and autumn precipitation errors are
+dominated by within-station/event evolution rather than mean bias; in autumn
+HICAR even has the smaller RMS station bias but the larger centered error and
+therefore the larger total RMSE. These are useful hypotheses for the corrected
+national rerun, not conclusions about seasonal climatology.
+
 These are exploratory scores, not confidence bounds: four single-day cases
 do not estimate seasonal climate skill, observations are hourly aggregates
 while HICAR surface fields are instantaneous, and station/time errors are
@@ -390,34 +514,69 @@ that 200 m HICAR already adds wind skill over REA-L-CH1.
 
 ## Decision sequence
 
-1. Resolve and prove national 12-node GPU repeatability, then prove exact
-   continuous-versus-segmented restart equivalence before seasonal launch.
-2. Complete the national four-season experiment and use every season-eligible
-   SwissMetNet site as the primary population; use metric-specific four-season
-   intersections only as a population-stability sensitivity.
-3. Diagnose high-ridge/high-elevation wind descriptively across all four
-   events, separating station-grid representativeness, surface/PBL response,
-   terrain-coordinate wind balancing, and LBC/W effects. Do not interpret
-   sparse ridge stations as a universal ridge-wind truth.
-4. Quantify lead-hour error structure, including the segment turnover, while
-   stating that four single-day trajectories confound lead time with valid
-   time, diurnal evolution, and event.
-5. Do not test 100 m or plan a 20-year run until the ridge-wind failure is
-   understood and added value repeats in more than one independent event.
+1. Stop the current campaign path. Do not resume input preparation or launch
+   the national seasonal integrations with the tested NVHPC/OpenACC RRTMGP
+   runtime.
+2. Resume only after an explicit new decision to investigate the remaining
+   RRTMGP source/kernel defect or to qualify a scientifically acceptable
+   alternative radiation/runtime path. Any replacement must first pass the
+   same normal-cadence one-hour A/A test and then the 00--08 UTC daylight
+   continuous/segmented restart proof.
+3. Only after those proofs should the already-defined all-station seasonal,
+   ridge/elevation, and lead/valid-time analyses be reconsidered. Do not test
+   100 m or plan a 20-year run on the present evidence.
 
 ## Verification status
 
-- Coordinator tests: 131 passed.
+- Coordinator tests: 136 passed.
 - Repository syntax/policy checks: passed.
-- The active national candidate is clean HICAR `7d84a960`, which adds the
-  targeted Noah-MP `IndexShade` OpenACC fix to `eff54862`. The clean 12-node
-  NVHPC/NCCL build exists, but the identical-three-record invariant A/A test
-  fails in both output and restart-resident land state; the candidate is not a
-  reproducible campaign runtime.
-  The rejected broad loop-private patch, reader change, broad end-check, and
-  restart-wind interventions remain absent. The earlier two-node
-  `16de4b84` endpoint/restart proof remains valid only for its smaller topology
-  and case.
+- The remaining 12-node GPU nondeterminism is isolated to repeated RRTMGP
+  execution, not restart I/O or the LBC endpoint. With normal 600-second
+  radiation, replicas first differ after two to four radiation updates in
+  exactly 32 contiguous `lwtr` cells corresponding to one flattened GPU warp;
+  surface/PBL and later dynamical fields then amplify the seed. Four replicas
+  with only the initial radiation call (`update_interval_rad=7200`) were exact
+  at every output slice and across all 196 terminal-restart variables. Stable
+  gas-concentration mappings (`5372fc7e`) did not remove the failure. Explicit
+  scalar privatization compiled to identical accelerator code and failed;
+  direct lane-owned broadband accumulation (`121176e3`) changed the generated
+  kernel but still diverged at 30 minutes and is rejected. Clean HICAR
+  `7729e124` explicitly staged both RRTMGP LW flux arrays through host memory
+  and remapped fresh plain arrays for both LW consumers. All four normal-cadence
+  production-topology replicas completed, but A--B first diverged at 30 minutes
+  and A--C/A--D at 50 minutes; the first seed remained one contiguous GPU-warp
+  footprint of 31--32 `lwtr` cells.
+  Host staging is therefore rejected and proves that the nondeterminism is
+  already present in the RRTMGP fluxes or their inputs, rather than being only
+  stale pointer visibility in HICAR's downstream LW consumers. Global
+  synchronous execution of clean `5372fc7e` made A--B and A--C exact but A--D
+  again first diverged at 30 minutes in `lwtr`; synchronization is rejected.
+  Clean `fb4d811b` removed HICAR's outer mapping of the two LW broadband output
+  arrays and retained a fresh host-stage/device-stage handoff. All four
+  replicas were exact at 30 minutes, but A--B diverged at 50 minutes, again
+  beginning in `lwtr`; outer mapping ownership alone is rejected. Clean
+  `bc9dc1ac` additionally made the frontend's balanced enter/copyout pair the
+  sole owner of caller broadband arrays while inner solver aliases used
+  `present` and allocated only spectral scratch. A--B remained exact through
+  50 minutes but diverged at 60 minutes, again beginning in `lwtr`; this deeper
+  ownership cleanup is also rejected. The final mapping discriminator was
+  clean `6071058f`, which removes the one-angle kernel's redundant
+  enter/delete/copyout ownership of spectral scratch already owned by its
+  caller. Its A--B terminal state still diverged at 60 minutes: 19 evaluation
+  fields differed, including 52,401 `lwtr` cells (maximum LW-tendency
+  difference 0.7407), with a maximum cross-field absolute difference of
+  1121.93. The identified duplicate-mapping stack is therefore not the root
+  fix; removing it only delayed the same failure. Normal-cadence 12-node GPU
+  RRTMGP is not repeatable enough for scientific attribution, so the daylight
+  proof and seasonal campaign were not launched. Per the explicit stopping
+  decision, no further source discriminator is planned. Compact durable
+  evidence is under
+  `/store_new/mch/msopr/olifu/icon_downscaling/rd/national_20m_rrtmgp_stop_6071058f`:
+  the terminal A--B comparison, clean-build provenance, exact HICAR source
+  bundle, and static-geometry report.
+  A matched CPU 10-minute A/A output test is exact, but the demonstrated GPU
+  onset occurs later, so it is supporting architectural evidence rather than a
+  one-hour CPU proof.
   The generic GPU unit-test executable still has an unrelated
   multi-device PRESENT failure and the CPU build exposes a pre-existing
   SNOWPACK real-constant overflow; neither occurs in the production topology.
@@ -429,3 +588,8 @@ that 200 m HICAR already adds wind skill over REA-L-CH1.
   four reports, campaign/build provenance, eight segment manifests, the
   bitwise restart comparison, and verified source bundles. Large trajectory
   data remains in scratch.
+- Preparation for the replacement 20 m / 12 m national campaign stopped with
+  complete validated spring and autumn records (25 forcing plus 25 LBC each),
+  18 complete summer hours (36 ready markers), and no winter records. The
+  controller and six active summer workers were canceled once the final GPU
+  repeatability experiment failed; no partial published products remain.

@@ -20,6 +20,7 @@
   "model_time": "06:00:00",
   "output_profile": "evaluation",
   "output_interval": 3600,
+  "radiation_update_interval": 600,
   "seasons": [
     {
       "name": "winter",

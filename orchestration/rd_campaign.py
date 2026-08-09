@@ -166,6 +166,9 @@ class Campaign:
         self.input_time = str(self.config.get("input_time", "01:00:00"))
         self.model_nodes = int(self.config.get("model_nodes", 2))
         self.model_time = str(self.config.get("model_time", "06:00:00"))
+        self.radiation_update_interval = float(
+            self.config.get("radiation_update_interval", 600.0)
+        )
         self.full_season_input_lists = bool(
             self.config.get("full_season_input_lists", False)
         )
@@ -179,8 +182,12 @@ class Campaign:
             or self.max_active_inputs <= 0
             or self.input_cpus <= 0
             or self.model_nodes <= 0
+            or self.radiation_update_interval <= 0
         ):
-            raise ValueError("segment length, attempts, and active inputs must be positive")
+            raise ValueError(
+                "segment length, attempts, resource counts, and radiation cadence "
+                "must be positive"
+            )
         if not self.input_partitions:
             raise ValueError("input_partitions must not be empty")
 
@@ -347,6 +354,9 @@ class Campaign:
                     "RESTART_INPUT": str(previous_restart or ""),
                     "OUTPUT_PROFILE": self.config.get("output_profile", "evaluation"),
                     "OUTPUT_INTERVAL": str(self.config.get("output_interval", 3600)),
+                    "HICAR_RADIATION_UPDATE_INTERVAL": str(
+                        self.radiation_update_interval
+                    ),
                     "HICAR_DISABLE_SX": "1" if self.config.get("disable_sx", False) else "0",
                     "HICAR_ALLOW_INPUT_SUPERSET": (
                         "1" if self.full_season_input_lists else "0"
