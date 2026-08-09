@@ -68,11 +68,24 @@ wind elapsed time, U/V, pressure, Exner pressure, surface pressure, and active
 forcing state are exact. This A/A failure proves that neither an extra timestep
 nor the unused endpoint forcing/LBC record initiates the remaining mismatch;
 the active national NVHPC/OpenACC path contains a timing- or ordering-sensitive
-land-state calculation. Synchronous-OpenACC and targeted Noah-MP race tests are
-in progress. The seasonal forcing cache may continue to build, but no national
-seasonal model chain may launch until an identical-run A/A and the full
-continuous/restart chain are bitwise exact. No national added-value result or
-national restart-equivalence claim is yet established.
+land-state calculation. Making Noah-MP's canopy `IndexShade` selector private
+to each OpenACC gang (`7d84a960`) made a same-input A/A pair exact across all
+196 model-core restart variables, but the 2-record versus 3-record control
+still differed in 21 of 30 evaluation fields. Compiler-wide synchronous
+OpenACC execution alone retained a smaller A/A failure, and combining it with
+the `IndexShade` fix did not remove the 21-field endpoint-list response. A
+broader standards-motivated loop-private Noah-MP patch (`e5d01a16`) also failed
+its same-input A/A test and was rejected. Source tracing shows that no future
+regular-forcing payload is read and that sparse LBC only validates metadata for
+unused future frames; those frames alter I/O/allocation timing, not the intended
+physical state. The endpoint response therefore exposes residual ordering
+sensitivity rather than an LBC-interpolation side effect. The selected R&D
+workaround is to give every segment the same complete, validated seasonal
+forcing/LBC lists and prove same-list A/A plus continuous-versus-segmented
+equality. That decisive all-196-variable national test is pending. The seasonal
+forcing cache may continue to build, but no national seasonal model chain may
+launch until it passes. No national added-value result or national
+restart-equivalence claim is yet established.
 
 The active path is:
 
@@ -103,7 +116,9 @@ and restart completeness.
 
 The forcing renderer now accepts only this configuration plus three output
 profiles. It requires one static domain, four soil layers, matching hourly
-forcing/LBC records, exact segment bracketing, and explicit restart input.
+forcing/LBC records, a list that brackets the segment, and explicit restart
+input. The national campaign deliberately reuses one identical full-season
+list in both segments to control the demonstrated metadata-order sensitivity.
 
 ## Critical input findings
 
@@ -383,13 +398,15 @@ that 200 m HICAR already adds wind skill over REA-L-CH1.
 
 ## Verification status
 
-- Coordinator tests: 92 passed.
+- Coordinator tests: 127 passed.
 - Repository syntax/policy checks: passed.
-- HICAR source is clean at `16de4b84`; its tree equals `e89b3f0c` plus the
-  endpoint-step fix, focused control-flow regression, and Noah-MP restart
-  geometry arithmetic fix. The rejected reader, broad end-check, and
-  restart-wind interventions remain absent. The clean topology-matched
-  NVHPC/NCCL build and bitwise endpoint/restart pilots completed on two nodes.
+- The active national candidate is clean HICAR `7d84a960`, which adds the
+  targeted Noah-MP `IndexShade` OpenACC fix to `eff54862`. The clean 12-node
+  NVHPC/NCCL build exists and the invariant-list release comparison is pending.
+  The rejected broad loop-private patch, reader change, broad end-check, and
+  restart-wind interventions remain absent. The earlier two-node
+  `16de4b84` endpoint/restart proof remains valid only for its smaller topology
+  and case.
   The generic GPU unit-test executable still has an unrelated
   multi-device PRESENT failure and the CPU build exposes a pre-existing
   SNOWPACK real-constant overflow; neither occurs in the production topology.
