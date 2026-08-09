@@ -103,6 +103,8 @@ def test_national_summary_and_exact_common_65(tmp_path):
         rows = list(csv.DictReader(stream))
 
     assert summary["coverage"]["station_key_union_count"] == 67
+    assert summary["coverage"]["station_key_four_season_intersection_count"] == 67
+    assert summary["national_four_season_intersection"]["site_count"] == 67
     assert summary["common_65"]["site_count"] == 65
     assert summary["common_65"]["site_keys"][0] == "S000:1"
     assert len(rows) == 4 * 67 * 2 - 1
@@ -121,12 +123,70 @@ def test_national_summary_and_exact_common_65(tmp_path):
     assert national_temperature["improved_station_count"] == 50
     assert national_temperature["degraded_station_count"] == 16
     assert national_temperature["tied_station_count"] == 1
+    national_intersection_temperature = next(
+        item
+        for item in summary["equal_station_summaries"]
+        if item["subset"] == "national_four_season_intersection"
+        and item["season"] == "DJF"
+        and item["stratum"] == "all_sites"
+        and item["metric"] == "temperature_2m_height_adjusted_k"
+    )
+    assert national_intersection_temperature["paired_station_count"] == 67
     assert len(summary["lead_hour_tables"]["JJA"]) == 2
     assert len(summary["selected_site_listings"]["station_elevation_ge_3000m"]) == 1
     assert len(summary["selected_site_listings"]["terrain_ridge_relative_gt_150m"]) == 2
     assert summary["footprint_sensitivity"]["status"] == (
         "not_computable_from_evaluator_aggregates"
     )
+
+
+def test_national_four_season_intersection_is_distinct_from_per_season(tmp_path):
+    national = {
+        season: make_report(tmp_path / f"national-{season}.json", season)
+        for season in MODULE.SEASONS
+    }
+    mam = json.loads(national["MAM"].read_text())
+    missing_key = "S066:67"
+    mam["station_mapping"]["sites"] = [
+        site for site in mam["station_mapping"]["sites"] if site["key"] != missing_key
+    ]
+    del mam["site_metrics"][missing_key]
+    national["MAM"].write_text(json.dumps(mam))
+
+    bridge = [
+        make_report(tmp_path / f"bridge-{season}.json", season, 65)
+        for season in MODULE.SEASONS
+    ]
+    output_csv = tmp_path / "station-season.csv"
+    output_json = tmp_path / "summary.json"
+    argv = []
+    for season, path in national.items():
+        argv.extend(["--report", f"{season}={path}"])
+    for path in bridge:
+        argv.extend(["--common-65-report", str(path)])
+    argv.extend(["--output-csv", str(output_csv), "--output-summary", str(output_json)])
+
+    assert MODULE.main(argv) == 0
+    summary = json.loads(output_json.read_text())
+    groups = {
+        (item["subset"], item["season"], item["stratum"], item["metric"]): item
+        for item in summary["equal_station_summaries"]
+    }
+    metric_name = "temperature_2m_height_adjusted_k"
+
+    assert summary["coverage"]["station_key_union_count"] == 67
+    assert summary["coverage"]["station_key_four_season_intersection_count"] == 66
+    assert summary["national_four_season_intersection"]["site_count"] == 66
+    assert missing_key not in summary["national_four_season_intersection"]["site_keys"]
+    assert groups[("national", "DJF", "all_sites", metric_name)][
+        "paired_station_count"
+    ] == 67
+    assert groups[
+        ("national_four_season_intersection", "DJF", "all_sites", metric_name)
+    ]["paired_station_count"] == 66
+    assert groups[("common_65", "DJF", "all_sites", metric_name)][
+        "paired_station_count"
+    ] == 65
 
 
 def test_common_definition_must_have_exactly_65_keys(tmp_path):

@@ -331,11 +331,17 @@ def summarize_group(rows: list[dict]) -> dict:
     }
 
 
-def equal_station_summaries(rows: list[dict], common_available: bool) -> list[dict]:
+def equal_station_summaries(
+    rows: list[dict],
+    common_available: bool,
+    national_four_season_keys: set[str],
+) -> list[dict]:
     groups: dict[tuple[str, str, str, str], list[dict]] = defaultdict(list)
     for row in rows:
         strata = ("all_sites", row["elevation_class"], row["terrain_class"])
         subsets = ["national"]
+        if row["station_key"] in national_four_season_keys:
+            subsets.append("national_four_season_intersection")
         if common_available and row["in_common_65"]:
             subsets.append("common_65")
         for subset in subsets:
@@ -526,6 +532,7 @@ def run(args: argparse.Namespace) -> dict:
         for season, (_, report) in reports.items()
     }
     national_key_sets = [set(report["site_metrics"]) for _, report in reports.values()]
+    national_four_season_keys = set.intersection(*national_key_sets)
     common_provenance["site_keys"] = sorted(common_keys) if common_keys is not None else []
     summary = {
         "schema_version": 1,
@@ -543,6 +550,10 @@ def run(args: argparse.Namespace) -> dict:
             "aggregation": (
                 "Arithmetic means of station RMSEs: each station has equal weight; "
                 "pair-count-pooled RMSE is intentionally not reconstructed from aggregates."
+            ),
+            "national_four_season_intersection": (
+                "The exact station-key intersection of the four national reports, "
+                "computed before station/metric pair-count eligibility is applied."
             ),
             "lead_hour_aggregation": (
                 "Lead-hour rows reproduce the evaluator's all-sites pooled-pair RMSE; "
@@ -562,9 +573,7 @@ def run(args: argparse.Namespace) -> dict:
         "coverage": {
             "events": coverage,
             "station_key_union_count": len(set.union(*national_key_sets)),
-            "station_key_four_season_intersection_count": len(
-                set.intersection(*national_key_sets)
-            ),
+            "station_key_four_season_intersection_count": len(national_four_season_keys),
         },
         "data_quality": {
             "station_season_exclusions": station_exclusions,
@@ -575,9 +584,13 @@ def run(args: argparse.Namespace) -> dict:
         "station_season_row_count": len(rows),
         "metrics": sorted({row["metric"] for row in rows}),
         "equal_station_summaries": equal_station_summaries(
-            rows, common_keys is not None
+            rows, common_keys is not None, national_four_season_keys
         ),
         "lead_hour_tables": lead_tables,
+        "national_four_season_intersection": {
+            "site_count": len(national_four_season_keys),
+            "site_keys": sorted(national_four_season_keys),
+        },
         "common_65": common_provenance,
         "selected_site_listings": selected_site_listings(
             rows, metadata, args.worst_count
