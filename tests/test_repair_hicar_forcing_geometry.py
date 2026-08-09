@@ -112,3 +112,15 @@ def test_repair_replaces_only_geometry_and_rebinds_boundary(tmp_path: Path) -> N
         assert repaired_boundary.initial_condition_sha256 == sha256(forcing)
     assert Path(f"{forcing}.ready").exists()
     assert Path(f"{boundary}.ready").exists()
+
+    repeated = subprocess.run(
+        [
+            sys.executable, str(REPAIR), "--forcing-file", str(forcing),
+            "--boundary-file", str(boundary), "--static-file", str(static),
+        ],
+        text=True,
+        capture_output=True,
+    )
+    assert repeated.returncode == 0, repeated.stderr
+    assert Path(f"{forcing}.ready").exists()
+    assert Path(f"{boundary}.ready").exists()

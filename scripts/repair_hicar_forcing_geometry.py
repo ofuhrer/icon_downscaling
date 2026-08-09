@@ -51,6 +51,35 @@ def repair_pair(
 ) -> tuple[str, str]:
     forcing_ready = Path(f"{forcing_path}.ready")
     boundary_ready = Path(f"{boundary_path}.ready")
+    static_sha = sha256(static_path)
+    with netCDF4.Dataset(forcing_path) as forcing, netCDF4.Dataset(
+        boundary_path
+    ) as boundary:
+        migrated = (
+            str(getattr(forcing, "geometry_source_sha256", "")) == static_sha
+            and str(getattr(boundary, "geometry_source_sha256", "")) == static_sha
+        )
+    if migrated:
+        forcing_ready.unlink(missing_ok=True)
+        boundary_ready.unlink(missing_ok=True)
+        subprocess.run(
+            [
+                sys.executable,
+                str(validator),
+                "--forcing-file",
+                str(forcing_path),
+                "--boundary-file",
+                str(boundary_path),
+                "--static-file",
+                str(static_path),
+            ],
+            check=True,
+        )
+        forcing_sha = sha256(forcing_path)
+        boundary_sha = sha256(boundary_path)
+        forcing_ready.touch(exist_ok=False)
+        boundary_ready.touch(exist_ok=False)
+        return forcing_sha, boundary_sha
     if forcing_ready.exists() != boundary_ready.exists():
         raise FileNotFoundError("forcing and boundary publication markers are inconsistent")
 
@@ -60,7 +89,6 @@ def repair_pair(
     boundary_ready.unlink(missing_ok=True)
     try:
         with netCDF4.Dataset(static_path) as static:
-            static_sha = sha256(static_path)
             static_hhl = np.asarray(static["HHL"][:])
             static_hfl = np.asarray(static["HFL"][:])
 
