@@ -30,6 +30,27 @@ from .vertical import (
 REQUIRED_FULL_LEVEL_FIELDS = ("T", "P", "QV")
 REQUIRED_HYDROMETEORS = ("QC", "QI")
 OPTIONAL_HYDROMETEORS = ("QR", "QS", "QG")
+
+
+def forcing_geometry_for_serialization(
+    hhl: np.ndarray, hfl: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return float32 forcing geometry with guaranteed top-level parent cover.
+
+    HICAR reconstructs its SLEVE coordinate in single precision.  Re-evaluating
+    the same expression can put the child top one float32 ULP above the static
+    value rounded from float64.  Raising only the serialized forcing top by one
+    ULP prevents vertical-LUT clamping without changing the authoritative state
+    geometry used by hicarprep.
+    """
+    serialized_hhl = np.asarray(hhl, dtype=np.float32)
+    serialized_hfl = np.asarray(hfl, dtype=np.float32).copy()
+    if serialized_hfl.ndim != 3 or serialized_hfl.shape[0] < 1:
+        raise ValueError("forcing HFL must have at least one three-dimensional level")
+    serialized_hfl[-1] = np.nextafter(
+        serialized_hfl[-1], np.float32(np.inf)
+    )
+    return serialized_hhl, serialized_hfl
 WATER_FIELDS = ("QV", "QC", "QI", "QR", "QS", "QG")
 MINIMUM_REMAPPED_LAYER_THICKNESS_M = 20.0
 
@@ -202,6 +223,7 @@ def write_hicar_forcing_record(
         raise ValueError("forcing state must use the authoritative static HHL/HFL geometry")
     if terrain.shape != (ny, nx) or land_fraction.shape != (ny, nx):
         raise ValueError("static terrain/land fraction shape does not match forcing grid")
+    serialized_hhl, serialized_hfl = forcing_geometry_for_serialization(hhl, hfl)
 
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
@@ -220,8 +242,12 @@ def write_hicar_forcing_record(
             dataset.createVariable("lon_1", "f8", ("y_1", "x_1"), zlib=True)[:] = lon
             dataset["lat_1"].units = "degrees_north"
             dataset["lon_1"].units = "degrees_east"
-            dataset.createVariable("HHL", "f4", ("z_hl", "y_1", "x_1"), zlib=True)[:] = hhl
-            dataset.createVariable("HFL", "f4", ("z", "y_1", "x_1"), zlib=True)[:] = hfl
+            dataset.createVariable("HHL", "f4", ("z_hl", "y_1", "x_1"), zlib=True)[:] = (
+                serialized_hhl
+            )
+            dataset.createVariable("HFL", "f4", ("z", "y_1", "x_1"), zlib=True)[:] = (
+                serialized_hfl
+            )
             dataset.createVariable("HSURF", "f4", ("y_1", "x_1"), zlib=True)[:] = terrain
             dataset.createVariable("FR_LAND", "f4", ("y_1", "x_1"), zlib=True)[:] = land_fraction
             for name, values in payloads.items():
@@ -255,6 +281,7 @@ def write_hicar_forcing_record(
             dataset.source_sha256 = sha256(source_path)
             dataset.static_sha256 = sha256(static_path)
             dataset.target_grid_fingerprint = grid_fingerprint(lat, lon)
+            dataset.geometry_serialization = "static_sleve_with_one_ulp_top_cover"
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)

@@ -43,11 +43,13 @@ def files(root: Path, invalid_hfl: bool = False) -> tuple[Path, Path, Path]:
                             ("QC", 0.0), ("QI", 0.0), ("U", 5.0), ("V", -2.0)):
             dataset.createVariable(name, "f4", ("time", "z", "y_1", "x_1"))[:] = value
         hhl = np.array([0.0, 100.0, 300.0])[:, None, None] * np.ones((1, 2, 2))
-        hfl = np.array([50.0, 200.0 if not invalid_hfl else 210.0])[:, None, None] * np.ones((1, 2, 2))
+        valid_top = np.nextafter(np.float32(200.0), np.float32(np.inf))
+        hfl = np.array([50.0, 210.0 if invalid_hfl else valid_top])[:, None, None] * np.ones((1, 2, 2))
         dataset.createVariable("HHL", "f4", ("z_hl", "y_1", "x_1"))[:] = hhl
         dataset.createVariable("HFL", "f4", ("z", "y_1", "x_1"))[:] = hfl
         dataset.createVariable("HSURF", "f4", ("y_1", "x_1"))[:] = 0.0
         dataset.createVariable("FR_LAND", "f4", ("y_1", "x_1"))[:] = 1.0
+        dataset.geometry_serialization = "static_sleve_with_one_ulp_top_cover"
     with netCDF4.Dataset(boundary, "w") as dataset:
         for name, size in (
             ("boundary_point", 2), ("u_boundary_point", 2),

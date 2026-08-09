@@ -25,6 +25,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from preprocessing.hicarprep.products import sha256  # noqa: E402
+from preprocessing.hicarprep.pipeline import (  # noqa: E402
+    forcing_geometry_for_serialization,
+)
 
 
 def _temporary_copy(path: Path) -> Path:
@@ -58,6 +61,8 @@ def repair_pair(
         migrated = (
             str(getattr(forcing, "geometry_source_sha256", "")) == static_sha
             and str(getattr(boundary, "geometry_source_sha256", "")) == static_sha
+            and str(getattr(forcing, "geometry_serialization", ""))
+            == "static_sleve_with_one_ulp_top_cover"
         )
     if migrated:
         forcing_ready.unlink(missing_ok=True)
@@ -98,10 +103,14 @@ def repair_pair(
                 raise ValueError("forcing is not a hicarprep target record")
             if str(getattr(forcing, "static_sha256", "")) != static_sha:
                 raise ValueError("forcing and static domain identities differ")
-            forcing["HHL"][:] = static_hhl
-            forcing["HFL"][:] = static_hfl
+            serialized_hhl, serialized_hfl = forcing_geometry_for_serialization(
+                static_hhl, static_hfl
+            )
+            forcing["HHL"][:] = serialized_hhl
+            forcing["HFL"][:] = serialized_hfl
             forcing.geometry_source = "authoritative static SLEVE HHL/HFL"
             forcing.geometry_source_sha256 = static_sha
+            forcing.geometry_serialization = "static_sleve_with_one_ulp_top_cover"
         forcing_sha = sha256(forcing_temporary)
 
         boundary_temporary = _temporary_copy(boundary_path)

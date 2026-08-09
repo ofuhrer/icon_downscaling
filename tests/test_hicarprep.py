@@ -598,7 +598,15 @@ class ProductPipelineTests(unittest.TestCase):
                 self.assertEqual(dataset.water_representation, "dry-air mixing ratio")
                 self.assertEqual(dataset["P"].dimensions, ("time", "z", "y_1", "x_1"))
                 self.assertEqual(dataset["HHL"].dimensions, ("z_hl", "y_1", "x_1"))
-                np.testing.assert_array_equal(dataset["HFL"][:], hfl.astype(np.float32))
+                expected_hfl = hfl.astype(np.float32)
+                expected_hfl[-1] = np.nextafter(
+                    expected_hfl[-1], np.float32(np.inf)
+                )
+                np.testing.assert_array_equal(dataset["HFL"][:], expected_hfl)
+                self.assertEqual(
+                    dataset.geometry_serialization,
+                    "static_sleve_with_one_ulp_top_cover",
+                )
                 np.testing.assert_allclose(dataset["U"][0, 0, 0], [0.5, 1.5, 2.5])
                 np.testing.assert_allclose(dataset["V"][0, 0, :, 0], [0.5, 1.5])
                 valid = netCDF4.num2date(

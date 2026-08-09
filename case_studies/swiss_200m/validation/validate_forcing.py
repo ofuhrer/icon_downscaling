@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from preprocessing.hicarprep.boundary import validate_boundary_sequence
+from preprocessing.hicarprep.pipeline import forcing_geometry_for_serialization
 from preprocessing.hicarprep.products import sha256
 
 
@@ -78,10 +79,15 @@ def main() -> int:
             raise SystemExit("forcing heights are not strictly bottom-to-top")
         if "HHL" not in static.variables or "HFL" not in static.variables:
             raise SystemExit("runtime domain lacks authoritative HHL/HFL geometry")
-        static_hhl = np.asarray(static["HHL"][:], dtype=hhl.dtype)
-        static_hfl = np.asarray(static["HFL"][:], dtype=hfl.dtype)
+        static_hhl, static_hfl = forcing_geometry_for_serialization(
+            static["HHL"][:], static["HFL"][:]
+        )
         if not np.array_equal(hhl, static_hhl) or not np.array_equal(hfl, static_hfl):
             raise SystemExit("forcing HHL/HFL differ from the authoritative runtime geometry")
+        if str(getattr(forcing, "geometry_serialization", "")) != (
+            "static_sleve_with_one_ulp_top_cover"
+        ):
+            raise SystemExit("forcing lacks the required top-cover serialization contract")
         if not np.array_equal(forcing["lat_1"][:], static["lat"][:]) or not np.array_equal(
             forcing["lon_1"][:], static["lon"][:]
         ):

@@ -106,7 +106,9 @@ def test_repair_replaces_only_geometry_and_rebinds_boundary(tmp_path: Path) -> N
     )
     assert result.returncode == 0, result.stderr
     with netCDF4.Dataset(forcing) as repaired, netCDF4.Dataset(boundary) as repaired_boundary:
-        np.testing.assert_array_equal(repaired["HFL"][:], hfl.astype(np.float32))
+        expected_hfl = hfl.astype(np.float32)
+        expected_hfl[-1] = np.nextafter(expected_hfl[-1], np.float32(np.inf))
+        np.testing.assert_array_equal(repaired["HFL"][:], expected_hfl)
         np.testing.assert_array_equal(repaired["U"][:], payload)
         np.testing.assert_array_equal(repaired_boundary["HFL"][:], hfl[:, [0, 1], [0, 1]])
         assert repaired_boundary.initial_condition_sha256 == sha256(forcing)
