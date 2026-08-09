@@ -55,8 +55,15 @@ def test_exact_comparison_excludes_guard_and_reports_coordinate(tmp_path: Path) 
     assert result["schema"]["excluded_shared_variables"] == {
         "time": "canonical_dimension_coordinate"
     }
-    assert result["left"]["sha256"] != ""
+    assert "sha256" not in result["left"]
+    assert result["comparison_contract"]["whole_file_sha256_included"] is False
     assert result["right"]["path"] == str(right.resolve())
+
+    hashed = COMPARATOR.compare_restart_files(
+        left, right, include_file_sha256=True, max_chunk_bytes=32
+    )
+    assert hashed["left"]["sha256"] != ""
+    assert hashed["comparison_contract"]["whole_file_sha256_included"] is True
 
     all_variables = COMPARATOR.compare_restart_files(
         left, right, include_coordinate_variables=True, max_chunk_bytes=32

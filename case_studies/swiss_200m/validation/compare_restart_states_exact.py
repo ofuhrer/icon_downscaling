@@ -255,23 +255,19 @@ def compare_restart_files(
     *,
     common_variables: bool = False,
     include_coordinate_variables: bool = False,
+    include_file_sha256: bool = False,
     max_chunk_bytes: int = DEFAULT_CHUNK_BYTES,
 ) -> dict[str, object]:
     """Compare restart files and return a JSON-serializable result."""
     left_path = left_path.resolve()
     right_path = right_path.resolve()
     file_records = {
-        "left": {
-            "path": str(left_path),
-            "size_bytes": left_path.stat().st_size,
-            "sha256": sha256_file(left_path),
-        },
-        "right": {
-            "path": str(right_path),
-            "size_bytes": right_path.stat().st_size,
-            "sha256": sha256_file(right_path),
-        },
+        "left": {"path": str(left_path), "size_bytes": left_path.stat().st_size},
+        "right": {"path": str(right_path), "size_bytes": right_path.stat().st_size},
     }
+    if include_file_sha256:
+        file_records["left"]["sha256"] = sha256_file(left_path)
+        file_records["right"]["sha256"] = sha256_file(right_path)
 
     differing: dict[str, object] = {}
     excluded: dict[str, str] = {}
@@ -343,6 +339,7 @@ def compare_restart_files(
                 list(pair) for pair in sorted(HORIZONTAL_DIMENSION_PAIRS)
             ],
             "schema_strict": not common_variables,
+            "whole_file_sha256_included": include_file_sha256,
             "max_chunk_bytes": max_chunk_bytes,
         },
         **file_records,
@@ -369,6 +366,14 @@ def main() -> int:
         help="Also compare canonical dimension coordinates (the historical 196-variable mode).",
     )
     parser.add_argument(
+        "--file-sha256",
+        action="store_true",
+        help=(
+            "Also hash both complete NetCDF files. This doubles large-file I/O and "
+            "is unnecessary for the exact model-state comparison."
+        ),
+    )
+    parser.add_argument(
         "--chunk-mib",
         type=float,
         default=DEFAULT_CHUNK_BYTES / 1024**2,
@@ -388,6 +393,7 @@ def main() -> int:
         args.right,
         common_variables=args.common_variables,
         include_coordinate_variables=args.include_coordinate_variables,
+        include_file_sha256=args.file_sha256,
         max_chunk_bytes=max(1, int(args.chunk_mib * 1024**2)),
     )
     payload = json.dumps(result, indent=2, sort_keys=True) + "\n"
