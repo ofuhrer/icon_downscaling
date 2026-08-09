@@ -1,0 +1,17 @@
+{
+  "snapshot_generated_at": "REPLACE_WITH_REVIEWED_UTC_TIMESTAMP",
+  "files": {
+    "campaign_evidence": "results/campaign_evidence.json",
+    "geometry_validation": "results/geometry_validation.json",
+    "restart_comparison": "results/restart_comparison.json",
+    "national_summary": "results/national_summary.json",
+    "station_season_csv": "results/station_season_metrics.csv",
+    "reviewed_assessment": "results/reviewed_assessment.json",
+    "footprint_reports": {
+      "DJF": "results/footprint_DJF.json",
+      "MAM": "results/footprint_MAM.json",
+      "JJA": "results/footprint_JJA.json",
+      "SON": "results/footprint_SON.json"
+    }
+  }
+}
