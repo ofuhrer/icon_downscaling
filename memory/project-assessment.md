@@ -48,22 +48,36 @@ the initial output, then differed in 21 of 30 evaluation variables at one hour
 even though both used the checkpoint/slab output path. The first divergence
 therefore occurs before any restart is read; the phase offset is downstream,
 not evidence of an initiating clock defect. A controlled non-SMP-aware MPI
-reduction still diverged, so collective ordering is not the repair. The cause
-is an uninitialized Noah-MP scratch `snow_nlayers` array read by the active
+reduction still diverged, so collective ordering is not the repair. One cause
+was an uninitialized Noah-MP scratch `snow_nlayers` array read by the active
 cold-start snow-temperature override: unused extra forcing/LBC metadata changes
 allocation history, then the bad snow-layer count changes the land state. The
 one-hour checkpoints differ in 103 of 196 variables and `snow_temperature`
 differs by up to 273.16 K, matching that mechanism. HICAR `eff54862` now reads
-the initialized prognostic snow-layer count instead; its national A/B and
-restart-chain confirmation is running. The seasonal forcing cache may continue
-to build, but no national seasonal model chain may launch until that test is
-bitwise exact. No national added-value result or national restart-equivalence
-claim is yet established.
+the initialized prognostic snow-layer count instead. That removes the enormous
+snow-temperature signature, but the corrected different-metadata cold controls
+still diverge after one hour in 18 of 30 evaluation fields (soil temperature
+maximum 0.000519 K, 2 m temperature 0.0504 K, PBL height 1358 m). More
+decisively, repeating the *same* normal configuration with the same binary and
+same ordered 12-node allocation is not bit-reproducible: the initial output is
+exact, while the one-hour output differs in 21 of 30 evaluation fields. The
+largest direct land differences are 0.00952 K in soil temperature and 0.1509 K
+in surface temperature; subsequent atmospheric differences include 0.0813 K
+in 2 m temperature and 1106 m in PBL height. Time, LSM/radiation cadence state,
+wind elapsed time, U/V, pressure, Exner pressure, surface pressure, and active
+forcing state are exact. This A/A failure proves that neither an extra timestep
+nor the unused endpoint forcing/LBC record initiates the remaining mismatch;
+the active national NVHPC/OpenACC path contains a timing- or ordering-sensitive
+land-state calculation. Synchronous-OpenACC and targeted Noah-MP race tests are
+in progress. The seasonal forcing cache may continue to build, but no national
+seasonal model chain may launch until an identical-run A/A and the full
+continuous/restart chain are bitwise exact. No national added-value result or
+national restart-equivalence claim is yet established.
 
 The active path is:
 
-`native REA-L GRIB -> hicarprep target state + sparse LBC -> HICAR -> common
-station/REA-L comparison`
+`native REA-L GRIB -> hicarprep target state + sparse LBC -> HICAR -> paired
+station/valid-time comparison with native REA-L`
 
 The old fieldextra forcing path, pressure/wind certificates, publication
 states, release gates, recovery bundles, and generalized production campaign
@@ -77,7 +91,7 @@ and restart completeness.
 | --- | --- | --- |
 | Grid | 200 m, 2061x1431 national domain | Covers all 170 available SwissMetNet measurement-site keys with a 40 km outer margin; the two-hour pilot establishes workable 12-node GPU resource use |
 | Vertical grid | 80 levels, 12 km top, nominal 20 m first layer, stretch 0.65; hard 12 m thickness floor | National minimum interface thickness is 15.956 m, minimum mass-level spacing 16.642 m, and minimum mass Jacobian 0.17183; no layer is below the requested 12 m lower bound |
-| Boundary terrain | 30 km cosine blend from REA-L-CH1 HSURF at the edge to the high-resolution DEM inward | Verified in the static artifact; deliberately broader than the separate 10 km atmospheric LBC shoulder, and all evaluated stations are inward of both zones |
+| Boundary terrain | 30 km cosine blend from REA-L-CH1 HSURF at the edge to the high-resolution DEM inward | Verified directly: edge weights are exactly zero, the transition ends at 29.8 km, terrain equals driving terrain on zero-weight cells and the high-resolution DEM on unit-weight cells, and the stored blend differs from the formula by at most 0.000131 m. It is deliberately broader than the separate 10 km atmospheric LBC shoulder, and all evaluated stations are inward of both zones |
 | Terrain coordinate | SLEVE 2/6; smoothing window 5, 10 cycles | Previously stable; retain for controlled comparison |
 | Wind | Adjoint variational, `Sx=true`, 500 m smoothing, alpha 1, 2500 iterations | Best-supported current option |
 | Dynamics | RK3, density advection | Explicit and internally consistent |
@@ -132,13 +146,18 @@ forcing/LBC records, exact segment bracketing, and explicit restart input.
   now resolves `NZ` and `ADVECT_DENSITY`; the forcing/LBC pair is validated
   before either ready marker; forcing caches are season/domain-specific; and
   runtime completion checks now require exact timestamps, selected physics,
-  all forcing brackets, and an exact terminal restart.
+  all forcing brackets, and an exact terminal restart. The rendered national
+  pilot namelist has `nz = 80`, `advect_density = .True.`, and no unresolved
+  `@...@` tokens. Both its regular and LBC records embed the same runtime-static
+  SHA256, so season-specific land states cannot alias by valid time alone.
 - Sparse LBC U and V now always have distinct face-grid point sets, dimensions,
   weights, and bounds checks. Their values are reconstructed by midpoint
   interpolation from the mass-grid wind used by the regular forcing reader.
-  This matches the structured-grid staggering convention but still needs a
-  real two-hour turnover diagnostic because insertion occurs after the wind
-  projection and can temporarily perturb discrete continuity.
+  The real national LBC has 345,780 mass supports and 345,882 supports on each
+  face grid; the U and V index pairs differ at 343,821 positions and are unique
+  within each support. This matches the structured-grid staggering convention
+  but insertion still occurs after the wind projection and can temporarily
+  perturb discrete continuity.
 - Static construction now partitions the public-source product and appends
   HHL/HFL before publication. The first rebuilt Alpine-bridge grid exposed an
   important weakness in the nominal-level setting: its true SLEVE minimum was
@@ -176,6 +195,12 @@ forcing/LBC records, exact segment bracketing, and explicit restart input.
   most six such jobs concurrently because pp-long does not account requested
   memory when packing jobs. The two-hour national pilot measured model
   throughput before the four-season campaign was permitted to proceed.
+- HICAR prints a model-top extrapolation warning for the direct forcing, but
+  this is a strict-comparison false alarm rather than inadequate vertical
+  coverage: float32 forcing HFL is at most 0.0143 m below the reconstructed
+  child top near 11.9 km AGL. Only the top mass level can be clamped by this
+  centimetre-scale difference, so this is not a material vertical-coverage
+  limitation for the station-level analysis.
 - Corrected 00, 01, and 02 UTC forcing/LBC pairs all passed the paired real-data
   validator with the conditioned operator (jobs 5042798, 5042799, and 5042810).
   A continuous two-hour full-physics run at HICAR `5fc3c71b` then completed
@@ -286,12 +311,15 @@ disposable overlap hour. Filesystem truth is limited to input ready markers,
 Slurm job IDs, restarts, `segment.json`, and `segment.complete`. The campaign
 record includes source commits and working-tree hashes.
 
-The four-season experiment should use equal-duration, synoptically varied
-windows and score HICAR and REA-L against the same SwissMetNet sites, QC masks,
-and times. Current comparison code uses nearest HICAR cells and bilinear REA-L.
-Its main statistical limitation is that instantaneous HICAR values are compared
-with hourly station aggregates. Reports need paired differences and uncertainty
-intervals before a claim of added value is robust.
+The four-season experiment uses equal-duration, synoptically varied windows and
+scores HICAR and REA-L against the same SwissMetNet sites, QC masks, and exact
+common valid-time triplets. The active national comparison uses the nearest
+HICAR cell and staged nearest native REA-L samples extracted from exact
+observation rectangles; the maximum staged REA-L distance is 0.863 km and the
+maximum HICAR-cell distance is 0.124 km. Its main statistical limitation is
+that instantaneous HICAR values are compared with hourly station aggregates.
+Reports need paired differences and uncertainty intervals before a claim of
+added value is robust.
 
 ## Four-season campaign result
 
@@ -338,15 +366,20 @@ that 200 m HICAR already adds wind skill over REA-L-CH1.
 
 ## Decision sequence
 
-1. Diagnose the high-ridge and above-3000 m wind degradation using the existing
-   autumn trajectory and station mappings: separate representativeness,
-   surface/PBL response, terrain-coordinate wind balancing, and LBC/W effects.
-2. Run the smallest controlled A/B intervention selected by that diagnosis;
-   keep the 200 m bridge and the same events/sites so skill changes are paired.
-3. Add paired score differences and dependence-aware uncertainty only once an
-   intervention shows a practically meaningful improvement.
-4. Do not test 100 m or plan a 20-year run until the ridge-wind failure is
-   reduced and added value repeats in more than one independent event.
+1. Resolve and prove national 12-node GPU repeatability, then prove exact
+   continuous-versus-segmented restart equivalence before seasonal launch.
+2. Complete the national four-season experiment and use every season-eligible
+   SwissMetNet site as the primary population; use metric-specific four-season
+   intersections only as a population-stability sensitivity.
+3. Diagnose high-ridge/high-elevation wind descriptively across all four
+   events, separating station-grid representativeness, surface/PBL response,
+   terrain-coordinate wind balancing, and LBC/W effects. Do not interpret
+   sparse ridge stations as a universal ridge-wind truth.
+4. Quantify lead-hour error structure, including the segment turnover, while
+   stating that four single-day trajectories confound lead time with valid
+   time, diurnal evolution, and event.
+5. Do not test 100 m or plan a 20-year run until the ridge-wind failure is
+   understood and added value repeats in more than one independent event.
 
 ## Verification status
 
