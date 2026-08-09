@@ -441,6 +441,23 @@ def test_mean_and_bias_require_matching_observation_aggregate():
     assert comparison["rea_l_bias"] is None
 
 
+def test_station_diagnostics_require_twenty_temporal_pairs():
+    hicar = metric(1.0, count=19, model_mean=281.0, observation_mean=280.0, bias=1.0)
+    rea_l = metric(1.5, count=19, model_mean=281.5, observation_mean=280.0, bias=1.5)
+
+    comparison, reason = MODULE.comparison_row(
+        hicar, rea_l, "temperature_2m_height_adjusted_k"
+    )
+
+    assert reason is None
+    assert comparison["hicar_mae"] == 1.0
+    assert comparison["rea_l_mae"] == 1.5
+    assert comparison["hicar_standard_deviation_ratio"] is None
+    assert comparison["rea_l_standard_deviation_ratio"] is None
+    assert comparison["hicar_correlation"] is None
+    assert comparison["rea_l_correlation"] is None
+
+
 def test_rejects_nonempty_evaluator_issues(tmp_path):
     path = make_report(tmp_path / "report.json", "DJF")
     value = json.loads(path.read_text())

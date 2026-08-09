@@ -72,6 +72,17 @@ def test_pair_statistics_exposes_minimal_error_anatomy():
     assert result["correlation"] == pytest.approx(1.0)
 
 
+def test_pair_statistics_does_not_invent_constant_series_correlation():
+    statistics = MODULE.PairStatistics()
+    for observation in (1.0, 2.0, 3.0):
+        statistics.add(4.0, observation)
+
+    result = statistics.result()
+    assert result["model_standard_deviation"] == 0.0
+    assert result["observation_standard_deviation"] > 0.0
+    assert result["correlation"] is None
+
+
 def test_retrieval_script_uses_smn_group_and_cluster_configuration():
     script = (
         ROOT
