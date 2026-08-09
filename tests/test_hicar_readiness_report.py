@@ -59,6 +59,10 @@ def fixture(tmp_path):
                     "paired_station_count": station_count,
                     "equal_station_mean_hicar_rmse": hicar,
                     "equal_station_mean_rea_l_rmse": rea_l,
+                    "mean_station_hicar_rmse": hicar,
+                    "mean_station_rea_l_rmse": rea_l,
+                    "equal_station_network_hicar_rmse": hicar + 0.025,
+                    "equal_station_network_rea_l_rmse": rea_l + 0.025,
                     "network_pooled_hicar_rmse": hicar + 0.05,
                     "network_pooled_rea_l_rmse": rea_l + 0.05}
                 if metric in MODULE.SCALAR_STATS:
@@ -160,18 +164,39 @@ def test_artifact_is_deterministic_and_canonical(tmp_path):
     seasonal = first["snapshot"]["datasets"]["seasonal_metrics"]
     assert {row["metric"] for row in seasonal} == set(MODULE.METRICS)
     assert all(row["paired_station_count"] == 12 for row in seasonal)
+    assert all(
+        row["hicar_rmse"] == row["equal_station_network_hicar_rmse"]
+        for row in seasonal
+    )
+    assert {row["primary_rmse_estimand"] for row in seasonal} == {
+        "equal_station_network_rmse"
+    }
+    assert all(row["mean_station_hicar_rmse"] < row["hicar_rmse"] for row in seasonal)
     assert all(row["network_pooled_hicar_rmse"] > row["hicar_rmse"] for row in seasonal)
     assert all(row["hicar_bias"] is not None for row in seasonal
         if row["metric"] in MODULE.SCALAR_STATS)
     sensitivity = first["snapshot"]["datasets"]["seasonal_population_sensitivity"]
     assert {row["population"] for row in sensitivity} == {
-        "All season-available stations", "Four-season station intersection"}
+        "All season-available stations",
+        "Four-season metric-eligible station intersection",
+    }
     assert {row["paired_station_count"] for row in sensitivity} == {10, 12}
     station = first["snapshot"]["datasets"]["station_wind"][0]
     assert station["hicar_minus_station_elevation_m"] == pytest.approx(
         station["hicar_elevation_m"] - station["station_elevation_m"]
     )
     assert all(not item["path"].startswith("/") for item in first["sources"])
+    population_columns = {
+        column["label"]
+        for table in first["manifest"]["tables"]
+        if table["id"] == "population_table"
+        for column in table["columns"]
+    }
+    assert {
+        "Equal-station network HICAR RMSE",
+        "Mean station HICAR RMSE",
+        "Pair-pooled HICAR RMSE",
+    } <= population_columns
 
     national_path = tmp_path / "results" / "national.json"
     national = json.loads(national_path.read_text())

@@ -169,19 +169,46 @@ def derive_datasets(evidence):
         metric = row["metric"]
         if row["subset"] not in {"national", "national_four_season_intersection"} or row["stratum"] != "all_sites" or metric not in METRICS:
             continue
-        hicar = float(row["equal_station_mean_hicar_rmse"])
-        rea_l = float(row["equal_station_mean_rea_l_rmse"])
+        mean_station_hicar = number(
+            row,
+            f"seasonal {row['season']}/{metric}",
+            "mean_station_hicar_rmse",
+            "equal_station_mean_hicar_rmse",
+        )
+        mean_station_rea_l = number(
+            row,
+            f"seasonal {row['season']}/{metric}",
+            "mean_station_rea_l_rmse",
+            "equal_station_mean_rea_l_rmse",
+        )
+        hicar = number(
+            row,
+            f"seasonal {row['season']}/{metric}",
+            "equal_station_network_hicar_rmse",
+        )
+        rea_l = number(
+            row,
+            f"seasonal {row['season']}/{metric}",
+            "equal_station_network_rea_l_rmse",
+        )
         pooled_hicar = float(row["network_pooled_hicar_rmse"])
         pooled_rea_l = float(row["network_pooled_rea_l_rmse"])
         population = ("All season-available stations" if row["subset"] == "national"
-                      else "Four-season station intersection")
+                      else "Four-season metric-eligible station intersection")
         item = {"season": row["season"], "metric": metric, "metric_label": METRICS[metric][0],
                 "unit": METRICS[metric][1], "metric_order": list(METRICS).index(metric),
                 "population": population, "population_order": 0 if row["subset"] == "national" else 1,
                 "paired_station_count": int(row["paired_station_count"]),
+                "primary_rmse_estimand": "equal_station_network_rmse",
                 "hicar_rmse": hicar, "rea_l_rmse": rea_l,
                 "rmse_delta": hicar - rea_l,
                 "normalized_rmse_difference": normalized_difference(hicar, rea_l),
+                "mean_station_hicar_rmse": mean_station_hicar,
+                "mean_station_rea_l_rmse": mean_station_rea_l,
+                "mean_station_rmse_delta": mean_station_hicar - mean_station_rea_l,
+                "equal_station_network_hicar_rmse": hicar,
+                "equal_station_network_rea_l_rmse": rea_l,
+                "equal_station_network_rmse_delta": hicar - rea_l,
                 "network_pooled_hicar_rmse": pooled_hicar,
                 "network_pooled_rea_l_rmse": pooled_rea_l,
                 "network_pooled_rmse_delta": pooled_hicar - pooled_rea_l,
@@ -204,7 +231,7 @@ def derive_datasets(evidence):
     for season in SEASONS:
         for row in national["lead_hour_tables"][season]:
             metric = row["metric"]
-            if metric not in METRICS:
+            if metric not in METRICS or row.get("stratum", "all_sites") != "all_sites":
                 continue
             hicar, rea_l = float(row["hicar_rmse"]), float(row["rea_l_rmse"])
             item = {"season": season, "lead_hour": int(row["lead_hour"]), "metric": metric,
@@ -335,13 +362,15 @@ def build_artifact(evidence):
         return value
 
     charts = [
-        {"id": "seasonal_metrics", "title": "Seasonal normalized RMSE difference across five metrics",
-         "subtitle": "(HICAR - REA-L)/(HICAR + REA-L); negative values favor HICAR",
+        {"id": "seasonal_metrics", "title": "Seasonal equal-station network RMSE difference",
+         "subtitle": "sqrt(mean station MSE); normalized HICAR - REA-L difference, negative favors HICAR",
          "type": "bar", "dataset": "seasonal_metrics", "sourceId": "seasonal_metrics_query",
          "encodings": {"x": encoding("season", "Season", "ordinal"),
              "y": encoding("normalized_rmse_difference", "Normalized RMSE difference"),
              "color": encoding("metric_label", "Metric", "nominal"),
              "tooltip": [encoding("paired_station_count", "Paired stations"),
+                         encoding("mean_station_hicar_rmse", "Mean station HICAR RMSE"),
+                         encoding("network_pooled_hicar_rmse", "Pair-pooled HICAR RMSE"),
                          encoding("unit", "Native unit", "text")]}},
         {"id": "lead_metrics", "title": "Normalized RMSE difference by lead hour and metric",
          "subtitle": "Four event trajectories per metric; lead hour remains confounded with valid time",
@@ -382,28 +411,36 @@ def build_artifact(evidence):
 
     tables = [
         {"id": "seasonal_table", "title": "Seasonal headline metrics, native units",
-         "subtitle": "Counts are metric- and season-specific; mean/bias fields apply to temperature, humidity, and precipitation",
+         "subtitle": "Equal-station network RMSE is primary; mean-station and pair-pooled RMSE are sensitivities",
          "dataset": "seasonal_metrics", "sourceId": "seasonal_metrics_query", "density": "compact",
          "defaultSort": {"field": "season", "direction": "asc"},
          "columns": columns(("season", "Season"), ("metric_label", "Metric"), ("unit", "Unit"),
-             ("paired_station_count", "Paired stations"), ("hicar_rmse", "HICAR RMSE"),
-             ("rea_l_rmse", "REA-L RMSE"), ("hicar_bias", "HICAR bias"),
+             ("paired_station_count", "Paired stations"),
+             ("hicar_rmse", "Equal-station network HICAR RMSE"),
+             ("rea_l_rmse", "Equal-station network REA-L RMSE"),
+             ("mean_station_hicar_rmse", "Mean station HICAR RMSE"),
+             ("mean_station_rea_l_rmse", "Mean station REA-L RMSE"),
+             ("network_pooled_hicar_rmse", "Pair-pooled HICAR RMSE"),
+             ("network_pooled_rea_l_rmse", "Pair-pooled REA-L RMSE"),
+             ("hicar_bias", "HICAR bias"),
              ("rea_l_bias", "REA-L bias"), ("hicar_model_mean", "HICAR mean"),
              ("rea_l_model_mean", "REA-L mean"),
              ("hicar_observation_mean", "Obs mean (HICAR pairs)"),
              ("rea_l_observation_mean", "Obs mean (REA-L pairs)"))},
         {"id": "population_table", "title": "Seasonal station-population sensitivity",
-         "subtitle": "Primary all-available results alongside the exact four-season key intersection",
+         "subtitle": "All season-eligible stations alongside each metric's exact four-season eligible intersection",
          "dataset": "seasonal_population_sensitivity", "sourceId": "seasonal_population_sensitivity_query", "density": "compact",
          "defaultSort": {"field": "season", "direction": "asc"},
          "columns": columns(("season", "Season"), ("metric_label", "Metric"),
              ("population", "Station population"), ("paired_station_count", "Paired stations"),
-             ("hicar_rmse", "Equal-station HICAR RMSE"),
-             ("rea_l_rmse", "Equal-station REA-L RMSE"),
-             ("normalized_rmse_difference", "Equal-station normalized difference"),
-             ("network_pooled_hicar_rmse", "Pooled-pair HICAR RMSE"),
-             ("network_pooled_rea_l_rmse", "Pooled-pair REA-L RMSE"),
-             ("network_pooled_normalized_rmse_difference", "Pooled-pair normalized difference"))},
+             ("hicar_rmse", "Equal-station network HICAR RMSE"),
+             ("rea_l_rmse", "Equal-station network REA-L RMSE"),
+             ("normalized_rmse_difference", "Equal-station network normalized difference"),
+             ("mean_station_hicar_rmse", "Mean station HICAR RMSE"),
+             ("mean_station_rea_l_rmse", "Mean station REA-L RMSE"),
+             ("network_pooled_hicar_rmse", "Pair-pooled HICAR RMSE"),
+             ("network_pooled_rea_l_rmse", "Pair-pooled REA-L RMSE"),
+             ("network_pooled_normalized_rmse_difference", "Pair-pooled normalized difference"))},
         {"id": "elevation_table", "title": "Wind eligibility and skill by elevation and terrain stratum",
          "subtitle": "Station counts and valid-pair totals are shown separately for wind speed and vector",
          "dataset": "elevation_counts", "sourceId": "elevation_counts_query", "density": "compact",

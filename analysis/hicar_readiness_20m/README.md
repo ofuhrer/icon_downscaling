@@ -39,12 +39,15 @@ row counts and times, adequate chart samples, and paired footprint counts.
 The report never treats all station keys as valid for every metric: every row
 shows its actual station or observation count, and wind results include counts
 by elevation and terrain class. Seasonal headline results use every eligible
-station available in that season; the exact four-season station intersection
-is retained as a population-sensitivity table. For each 24-hour event the
-report requires leads 0--24 for instantaneous metrics and 1--24 for interval
-precipitation.
-Seasonal tables retain both the station-fair arithmetic mean of station RMSEs
-and the observation-pair-pooled RMSE reconstructed with station pair counts.
+station available in that season; each metric's exact four-season eligible
+station intersection is retained as a population-sensitivity table. For each
+24-hour event the report requires leads 0--24 for instantaneous metrics and
+1--24 for interval precipitation.
+Seasonal tables use equal-station network RMSE
+(`sqrt(mean(station RMSE squared))`) as the primary score. They separately
+retain the arithmetic mean of station RMSEs and the observation-pair-pooled
+RMSE reconstructed with station pair counts; these are distinct estimands and
+are labelled accordingly.
 
 ## Reproduce the analysis
 
