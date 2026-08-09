@@ -14,6 +14,7 @@
   "input_partitions": ["pp-long"],
   "max_active_inputs": 6,
   "input_cpus": 4,
+  "input_memory": "128G",
   "input_time": "06:00:00",
   "model_nodes": 12,
   "model_time": "06:00:00",

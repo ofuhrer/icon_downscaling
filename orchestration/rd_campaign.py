@@ -162,6 +162,7 @@ class Campaign:
         self.input_partitions = self.config.get("input_partitions", ["pp-short"])
         self.max_active_inputs = int(self.config.get("max_active_inputs", 2))
         self.input_cpus = int(self.config.get("input_cpus", 4))
+        self.input_memory = str(self.config.get("input_memory", "64G"))
         self.input_time = str(self.config.get("input_time", "01:00:00"))
         self.model_nodes = int(self.config.get("model_nodes", 2))
         self.model_time = str(self.config.get("model_time", "06:00:00"))
@@ -267,6 +268,7 @@ class Campaign:
                 partition=partition,
                 sbatch_options=(
                     f"--cpus-per-task={self.input_cpus}",
+                    f"--mem={self.input_memory}",
                     f"--time={self.input_time}",
                 ),
             )
