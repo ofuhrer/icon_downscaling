@@ -4,8 +4,8 @@
 The evaluator reports contain aggregate errors at each station and lead hour.
 Consequently, this program can make both equal-station comparisons and
 pair-count-weighted network-pooled RMSE reconstructions without opening large
-HICAR files.  It deliberately excludes a station/metric when HICAR and REA-L
-do not have the same positive pair count.
+HICAR files. It deliberately excludes a station/metric when HICAR and REA-L
+do not have the same pair count or fewer than 20 valid hourly pairs.
 
 Footprint sensitivity cannot be reconstructed from evaluator aggregates.  The
 output JSON therefore records the exact row-level/model-file contract needed by
@@ -30,6 +30,7 @@ from typing import Iterable
 SEASONS = ("DJF", "MAM", "JJA", "SON")
 SOURCES = ("hicar", "rea_l")
 TIE_TOLERANCE = 1.0e-12
+MINIMUM_STATION_EVENT_PAIRS = 20
 
 FOOTPRINT_INPUT_CONTRACT = {
     "status": "not_computable_from_evaluator_aggregates",
@@ -401,6 +402,9 @@ def station_season_rows(
                 if comparison is None:
                     exclusions[f"{reason}:{season}:{metric}"] += 1
                     continue
+                if comparison["pair_count"] < MINIMUM_STATION_EVENT_PAIRS:
+                    exclusions[f"insufficient_pair_count:{season}:{metric}"] += 1
+                    continue
                 elevation = float(site["station_elevation_m"])
                 relative = float(site["terrain_relative_elevation_m"])
                 rows.append(
@@ -510,8 +514,18 @@ def summarize_group(rows: list[dict]) -> dict:
         row for row in rows if all(row.get(field) is not None for field in anatomy_fields)
     ]
     if len(anatomy_rows) == len(rows):
-        hicar_bias = mean(row["hicar_bias"] for row in anatomy_rows)
-        rea_l_bias = mean(row["rea_l_bias"] for row in anatomy_rows)
+        hicar_rms_station_bias = math.sqrt(
+            mean(row["hicar_bias"] ** 2 for row in anatomy_rows)
+        )
+        rea_l_rms_station_bias = math.sqrt(
+            mean(row["rea_l_bias"] ** 2 for row in anatomy_rows)
+        )
+        hicar_within_station_centered_rmse = math.sqrt(
+            mean(row["hicar_centered_rmse"] ** 2 for row in anatomy_rows)
+        )
+        rea_l_within_station_centered_rmse = math.sqrt(
+            mean(row["rea_l_centered_rmse"] ** 2 for row in anatomy_rows)
+        )
         result.update(
             {
                 "error_anatomy_paired_station_count": len(anatomy_rows),
@@ -521,11 +535,23 @@ def summarize_group(rows: list[dict]) -> dict:
                 "equal_station_mean_rea_l_mae": mean(
                     row["rea_l_mae"] for row in anatomy_rows
                 ),
-                "equal_station_network_hicar_centered_rmse": math.sqrt(
-                    max(equal_station_network_hicar_rmse**2 - hicar_bias**2, 0.0)
+                "equal_station_rms_hicar_station_bias": hicar_rms_station_bias,
+                "equal_station_rms_rea_l_station_bias": rea_l_rms_station_bias,
+                "equal_station_within_station_hicar_centered_rmse": (
+                    hicar_within_station_centered_rmse
                 ),
-                "equal_station_network_rea_l_centered_rmse": math.sqrt(
-                    max(equal_station_network_rea_l_rmse**2 - rea_l_bias**2, 0.0)
+                "equal_station_within_station_rea_l_centered_rmse": (
+                    rea_l_within_station_centered_rmse
+                ),
+                # Retain the established public names, now with the exact
+                # station-aware decomposition. Removing only the signed
+                # network-mean bias incorrectly classifies opposing persistent
+                # station biases as temporal variability.
+                "equal_station_network_hicar_centered_rmse": (
+                    hicar_within_station_centered_rmse
+                ),
+                "equal_station_network_rea_l_centered_rmse": (
+                    rea_l_within_station_centered_rmse
                 ),
             }
         )
@@ -781,8 +807,9 @@ def run(args: argparse.Namespace) -> dict:
             "station_grain": "one station-season-metric row",
             "comparison": "RMSE(HICAR, observation) minus RMSE(REA-L, observation)",
             "pairing_rule": (
-                "retain only positive, equal HICAR and REA-L pair counts within "
-                "each evaluator station/metric aggregate"
+                "retain only equal HICAR and REA-L pair counts of at least "
+                f"{MINIMUM_STATION_EVENT_PAIRS} within each evaluator "
+                "station/metric aggregate"
             ),
             "pairing_limitation": (
                 "Equal aggregate counts do not independently prove identical valid-time "
@@ -801,6 +828,12 @@ def run(args: argparse.Namespace) -> dict:
                 "reconstructed separately as "
                 "sqrt(sum(n_i * RMSE_i^2) / sum(n_i)), where n_i is the eligible "
                 "paired count for station i."
+            ),
+            "error_anatomy_decomposition": (
+                "For each model, equal-station network RMSE squared equals the "
+                "mean squared station bias plus the mean squared within-station "
+                "centered RMSE. Signed network bias is reported separately; it "
+                "is not used to remove opposing persistent station biases."
             ),
             "national_four_season_intersection": (
                 "For each metric, the exact intersection of stations with eligible "

@@ -229,12 +229,13 @@ def test_national_summary_and_exact_common_65(tmp_path):
     assert national_temperature["equal_station_mean_rea_l_bias"] == pytest.approx(1.5)
     assert national_temperature["equal_station_mean_hicar_mae"] == pytest.approx(1.33)
     assert national_temperature["equal_station_mean_rea_l_mae"] == pytest.approx(1.5)
-    assert national_temperature["equal_station_network_hicar_centered_rmse"] == pytest.approx(
-        (
-            national_temperature["equal_station_network_hicar_rmse"] ** 2
-            - national_temperature["equal_station_mean_hicar_bias"] ** 2
-        ) ** 0.5
+    assert national_temperature["equal_station_rms_hicar_station_bias"] == pytest.approx(
+        national_temperature["equal_station_network_hicar_rmse"]
     )
+    assert national_temperature["equal_station_rms_rea_l_station_bias"] == 1.5
+    assert national_temperature["equal_station_within_station_hicar_centered_rmse"] == 0.0
+    assert national_temperature["equal_station_within_station_rea_l_centered_rmse"] == 0.0
+    assert national_temperature["equal_station_network_hicar_centered_rmse"] == 0.0
     assert national_temperature["equal_station_network_rea_l_centered_rmse"] == 0.0
     assert national_temperature["diagnostic_paired_station_count"] == 67
     assert national_temperature["median_station_hicar_standard_deviation_ratio"] == 1.2

@@ -70,6 +70,8 @@ def fixture(tmp_path):
                         "equal_station_mean_rea_l_bias": 0.1,
                         "equal_station_mean_hicar_mae": hicar - 0.1,
                         "equal_station_mean_rea_l_mae": rea_l - 0.1,
+                        "equal_station_rms_hicar_station_bias": 0.2,
+                        "equal_station_rms_rea_l_station_bias": 0.3,
                         "equal_station_network_hicar_centered_rmse": hicar,
                         "equal_station_network_rea_l_centered_rmse": rea_l,
                         "equal_station_mean_hicar_model_mean": 10 + metric_index,
@@ -114,7 +116,7 @@ def fixture(tmp_path):
                     "metric": metric, "pair_count": 8, "hicar_rmse": hicar,
                     "rea_l_rmse": rea_l})
     national = {"method": {"station_grain": "one station-season-metric row",
-        "pairing_rule": "retain equal positive model pair counts",
+        "pairing_rule": "retain equal model pair counts of at least 20",
         "aggregation": "arithmetic means of station RMSEs",
         "lead_hour_aggregation": "all-sites pooled-pair RMSE"},
         "coverage": {"events": {season: {} for season in MODULE.SEASONS},

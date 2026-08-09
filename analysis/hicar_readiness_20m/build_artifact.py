@@ -168,6 +168,12 @@ def scalar_stats(row, label, prefix):
             "rea_l_mae": number(row, label, prefix + "rea_l_mae"),
             "hicar_centered_rmse": number(row, label, "equal_station_network_hicar_centered_rmse"),
             "rea_l_centered_rmse": number(row, label, "equal_station_network_rea_l_centered_rmse"),
+            "hicar_rms_station_bias": number(
+                row, label, "equal_station_rms_hicar_station_bias"
+            ),
+            "rea_l_rms_station_bias": number(
+                row, label, "equal_station_rms_rea_l_station_bias"
+            ),
         }
     return {
         "hicar_bias": number(row, label, "hicar_bias"),
@@ -499,8 +505,10 @@ def build_artifact(evidence):
              ("rea_l_rmse", "Equal-station network REA-L RMSE"),
              ("hicar_mae", "Equal-station mean HICAR MAE"),
              ("rea_l_mae", "Equal-station mean REA-L MAE"),
-             ("hicar_centered_rmse", "Equal-station network HICAR centered RMSE"),
-             ("rea_l_centered_rmse", "Equal-station network REA-L centered RMSE"),
+             ("hicar_rms_station_bias", "HICAR RMS station bias"),
+             ("rea_l_rms_station_bias", "REA-L RMS station bias"),
+             ("hicar_centered_rmse", "HICAR within-station centered RMSE"),
+             ("rea_l_centered_rmse", "REA-L within-station centered RMSE"),
              ("mean_station_hicar_rmse", "Mean station HICAR RMSE"),
              ("mean_station_rea_l_rmse", "Mean station REA-L RMSE"),
              ("network_pooled_hicar_rmse", "Pair-pooled HICAR RMSE"),
