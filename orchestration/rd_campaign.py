@@ -341,6 +341,7 @@ class Campaign:
                     sbatch_options=(
                         f"--nodes={self.model_nodes}",
                         f"--time={self.model_time}",
+                        "--no-requeue",
                     ),
                 )
                 (segment_root / f"attempt-{attempt}.job").write_text(job + "\n")
