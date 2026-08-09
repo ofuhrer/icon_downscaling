@@ -55,6 +55,19 @@ def test_bulk_snow_temperature_is_a_cold_start_only_noahmp_override() -> None:
     assert "options%domain%snow_temp_var" in DOMAIN_SOURCE.read_text()
 
 
+def test_bulk_snow_temperature_uses_initialized_noahmp_layer_count() -> None:
+    source = LSM_SOURCE.read_text()
+    start = source.index("! Copy NoahMP-sized scratch back")
+    stop = source.index(
+        "!$acc parallel loop gang vector collapse(2) present(veg_type", start
+    )
+    block = source[start:stop]
+
+    assert "snow_nlayers => domain%vars_2d" in block
+    assert "num_snow_layers + snow_nlayers(i,j)" in block
+    assert "num_snow_layers + nmp_snow_nlayers(i,j)" not in block
+
+
 def test_pinned_noahmp_patch_preserves_supplied_glacier_snow() -> None:
     source = NOAHMP_PATCH.read_text()
     assert "Preserve caller-provided glacier SWE and snow depth" in source

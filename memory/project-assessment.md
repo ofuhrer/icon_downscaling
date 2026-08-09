@@ -33,10 +33,20 @@ abbreviations and 170 distinct abbreviation/measurement-site keys; 166 keys are
 present in all four events. The 2061x1431 grid has a nominal 20 m lowest layer,
 an achieved 15.956 m minimum interface thickness, and a hard 12 m acceptance
 floor. Continuous and hourly-segmented two-hour pilots both passed their runtime
-validators. Exact all-variable comparison of their terminal restart states is
-still running, and the national seasonal forcing cache is still being built;
-therefore no national added-value result or national restart-equivalence claim
-is yet established.
+validators, but exact comparison of their terminal restart states failed: 108
+of 196 variables differ, including maximum differences of 0.946 K in potential
+temperature and about 0.23 m s-1 in horizontal wind. Persisted land and
+radiation phase offsets differ by 0.00399971 s. A separate cold two-hour run
+with a one-hour checkpoint was bitwise identical to the one-hour segment at
+the initial output, then differed in 21 of 30 evaluation variables at one hour
+even though both used the checkpoint/slab output path. The first divergence
+therefore occurs before any restart is read; the phase offset is downstream,
+not evidence of an initiating clock defect. Allocation-dependent collective
+reductions are the leading hypothesis and exact controlled MPI tests are in
+progress. The seasonal forcing cache may continue to build, but no national
+seasonal model chain may launch until cold-run and segmented reproducibility
+is restored. No national added-value result or national restart-equivalence
+claim is yet established.
 
 The active path is:
 
