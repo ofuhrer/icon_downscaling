@@ -7,6 +7,7 @@ import argparse
 import csv
 from hashlib import sha256
 import json
+import math
 import os
 from pathlib import Path
 import sqlite3
@@ -29,6 +30,11 @@ SCALAR_STATS = {
     "precipitation_interval_kg_m2",
 }
 WIND_METRICS = {"wind_speed_10m_m_s", "wind_vector"}
+RIDGE_LEAD_STRATA = {
+    "terrain_ridge_relative_gt_150m": "Terrain ridge (>150 m relative)",
+    "elevation_2000_3000m": "Station elevation 2000–3000 m",
+    "elevation_ge_3000m": "Station elevation >=3000 m",
+}
 FINDINGS = ("seasonal_skill", "lead_time", "elevation_wind",
             "footprint_sensitivity", "inputs_and_grid", "restart")
 TITLE = "HICAR 20 m national four-season readiness assessment"
@@ -37,6 +43,7 @@ QUERIES = {
     "seasonal_metrics": f"SELECT * FROM seasonal ORDER BY {SEASON_ORDER}, metric_order",
     "seasonal_population_sensitivity": f"SELECT * FROM seasonal_sensitivity ORDER BY {SEASON_ORDER}, metric_order, population_order",
     "lead_metrics": f"SELECT * FROM lead ORDER BY {SEASON_ORDER}, metric_order, lead_hour",
+    "ridge_lead_metrics": f"SELECT * FROM ridge_lead ORDER BY {SEASON_ORDER}, stratum, lead_hour",
     "station_wind": f"SELECT * FROM station ORDER BY {SEASON_ORDER}, metric_order, station_elevation_m, station_key",
     "elevation_counts": f"SELECT * FROM elevation ORDER BY {SEASON_ORDER}, metric_order, elevation_class, terrain_class",
     "footprint_wind": f"SELECT * FROM footprint ORDER BY {SEASON_ORDER}, site_key, radius_km",
@@ -227,7 +234,7 @@ def derive_datasets(evidence):
     if {(row["season"], row["metric"]) for row in seasonal} != {
         (season, metric) for season in SEASONS for metric in METRICS
     }:
-        raise ValueError("national seasonal summaries must contain all five headline metrics in all four seasons")
+        raise ValueError("national seasonal summaries must contain all six headline metrics in all four seasons")
     if {(row["season"], row["metric"], row["population_order"]) for row in seasonal_sensitivity} != {
         (season, metric, population) for season in SEASONS for metric in METRICS for population in (0, 1)
     }:
@@ -254,6 +261,33 @@ def derive_datasets(evidence):
             expected = set(range(1, 25)) if metric == "precipitation_interval_kg_m2" else set(range(25))
             if len(hours) != len(expected) or set(hours) != expected:
                 raise ValueError(f"{season}/{metric} lead hours must be exactly {sorted(expected)}; got {sorted(hours)}")
+
+    ridge_lead = []
+    for season in SEASONS:
+        for row in national["lead_hour_tables"][season]:
+            stratum = row.get("stratum", "all_sites")
+            if row["metric"] != "wind_vector" or stratum not in RIDGE_LEAD_STRATA:
+                continue
+            hicar, rea_l = float(row["hicar_rmse"]), float(row["rea_l_rmse"])
+            hour = int(row["lead_hour"])
+            ridge_lead.append({
+                "season": season,
+                "lead_hour": hour,
+                "segment": "first" if hour <= 12 else "restarted",
+                "turnover_relative_hour": hour - 12,
+                "stratum": stratum,
+                "stratum_label": RIDGE_LEAD_STRATA[stratum],
+                "pair_count": int(row["pair_count"]),
+                "hicar_rmse": hicar,
+                "rea_l_rmse": rea_l,
+                "rmse_delta": hicar - rea_l,
+                "normalized_rmse_difference": normalized_difference(hicar, rea_l),
+            })
+    missing_ridge = {
+        (season, stratum) for season in SEASONS for stratum in RIDGE_LEAD_STRATA
+    } - {(row["season"], row["stratum"]) for row in ridge_lead}
+    if missing_ridge:
+        raise ValueError(f"ridge/high-elevation wind-vector lead evidence is missing: {sorted(missing_ridge)}")
 
     station = []
     for row in evidence["station_rows"]:
@@ -282,14 +316,22 @@ def derive_datasets(evidence):
     elevation = []
     for (season, metric, elevation_class, terrain_class), rows in groups.items():
         count = len(rows)
-        hicar = sum(row["hicar_rmse"] for row in rows) / count
-        rea_l = sum(row["rea_l_rmse"] for row in rows) / count
+        mean_hicar = sum(row["hicar_rmse"] for row in rows) / count
+        mean_rea_l = sum(row["rea_l_rmse"] for row in rows) / count
+        hicar = math.sqrt(sum(row["hicar_rmse"] ** 2 for row in rows) / count)
+        rea_l = math.sqrt(sum(row["rea_l_rmse"] ** 2 for row in rows) / count)
         elevation.append({"season": season, "metric": metric, "metric_label": METRICS[metric][0],
             "unit": METRICS[metric][1], "metric_order": list(METRICS).index(metric),
             "elevation_class": elevation_class, "terrain_class": terrain_class,
             "paired_station_count": count, "pair_count_total": sum(row["pair_count"] for row in rows),
             "mean_terrain_relative_elevation_m": sum(row["terrain_relative_elevation_m"] for row in rows) / count,
-            "mean_hicar_rmse": hicar, "mean_rea_l_rmse": rea_l, "mean_rmse_delta": hicar - rea_l,
+            "primary_rmse_estimand": "equal_station_network_rmse",
+            "equal_station_network_hicar_rmse": hicar,
+            "equal_station_network_rea_l_rmse": rea_l,
+            "equal_station_network_rmse_delta": hicar - rea_l,
+            "mean_station_hicar_rmse": mean_hicar,
+            "mean_station_rea_l_rmse": mean_rea_l,
+            "mean_station_rmse_delta": mean_hicar - mean_rea_l,
             "normalized_rmse_difference": normalized_difference(hicar, rea_l)})
 
     footprint = []
@@ -312,10 +354,10 @@ def derive_datasets(evidence):
     if len(footprint) < 8:
         raise ValueError("footprint results are too sparse")
     tables = {"seasonal_metrics": "seasonal", "seasonal_population_sensitivity": "seasonal_sensitivity",
-              "lead_metrics": "lead", "station_wind": "station",
+              "lead_metrics": "lead", "ridge_lead_metrics": "ridge_lead", "station_wind": "station",
               "elevation_counts": "elevation", "footprint_wind": "footprint"}
     rows = {"seasonal_metrics": seasonal, "seasonal_population_sensitivity": seasonal_sensitivity,
-            "lead_metrics": lead, "station_wind": station,
+            "lead_metrics": lead, "ridge_lead_metrics": ridge_lead, "station_wind": station,
             "elevation_counts": elevation, "footprint_wind": footprint}
     return {name: query_rows(tables[name], rows[name], QUERIES[name]) for name in rows}
 
@@ -343,6 +385,7 @@ def build_artifact(evidence):
         "seasonal_metrics": ["national_summary.json#equal_station_summaries"],
         "seasonal_population_sensitivity": ["national_summary.json#equal_station_summaries"],
         "lead_metrics": ["national_summary.json#lead_hour_tables"],
+        "ridge_lead_metrics": ["national_summary.json#lead_hour_tables"],
         "station_wind": ["station_season_metrics.csv"],
         "elevation_counts": ["station_season_metrics.csv"],
         "footprint_wind": [f"footprint_{season}.json#sites" for season in SEASONS],
@@ -387,6 +430,17 @@ def build_artifact(evidence):
              "facet": encoding("metric_label", "Metric", "nominal"),
              "tooltip": [encoding("pair_count", "Paired observations"),
                          encoding("unit", "Native unit", "text")]}},
+        {"id": "ridge_lead_metrics", "title": "Ridge/high-elevation wind-vector skill around restart turnover",
+         "subtitle": "Lead 12 is the first segment endpoint; lead 13 is the first unique restarted-segment output",
+         "type": "line", "dataset": "ridge_lead_metrics", "sourceId": "ridge_lead_metrics_query",
+         "encodings": {"x": encoding("lead_hour", "Lead hour", unit="h"),
+             "y": encoding("normalized_rmse_difference", "Normalized RMSE difference"),
+             "color": encoding("stratum_label", "Spatial stratum", "nominal"),
+             "facet": encoding("season", "Season", "nominal"),
+             "tooltip": [encoding("pair_count", "Paired observations"),
+                         encoding("segment", "Segment", "text"),
+                         encoding("hicar_rmse", "HICAR vector RMSE", unit="m s^-1"),
+                         encoding("rea_l_rmse", "REA-L vector RMSE", unit="m s^-1")]}},
         {"id": "station_wind", "title": "Station wind skill difference by elevation",
          "subtitle": "Wind speed and vector RMSE; one point per eligible station-season",
          "type": "scatter", "dataset": "station_wind", "sourceId": "station_wind_query",
@@ -455,7 +509,10 @@ def build_artifact(evidence):
              ("elevation_class", "Elevation stratum"), ("terrain_class", "Terrain class"),
              ("paired_station_count", "Paired stations"), ("pair_count_total", "Valid pairs"),
              ("mean_terrain_relative_elevation_m", "Mean terrain-relative elevation (m)"),
-             ("mean_hicar_rmse", "HICAR RMSE"), ("mean_rea_l_rmse", "REA-L RMSE"))},
+             ("equal_station_network_hicar_rmse", "Equal-station network HICAR RMSE"),
+             ("equal_station_network_rea_l_rmse", "Equal-station network REA-L RMSE"),
+             ("mean_station_hicar_rmse", "Mean station HICAR RMSE"),
+             ("mean_station_rea_l_rmse", "Mean station REA-L RMSE"))},
         {"id": "footprint_table", "title": "Selected-site footprint sensitivity detail",
          "dataset": "footprint_wind", "sourceId": "footprint_wind_query", "density": "compact",
          "defaultSort": {"field": "season", "direction": "asc"},
@@ -480,6 +537,7 @@ def build_artifact(evidence):
         {"id": "population_table_block", "type": "table", "tableId": "population_table"},
         finding("lead_time", "national_file"),
         {"id": "lead_chart", "type": "chart", "chartId": "lead_metrics"},
+        {"id": "ridge_lead_chart", "type": "chart", "chartId": "ridge_lead_metrics"},
         finding("elevation_wind", "station_file"),
         {"id": "station_chart", "type": "chart", "chartId": "station_wind"},
         {"id": "elevation_table_block", "type": "table", "tableId": "elevation_table"},
@@ -526,7 +584,7 @@ def main():
         write_json(args.output, artifact)
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as error:
         parser.error(str(error))
-    print(f"Wrote {args.output} from five reviewed datasets")
+    print(f"Wrote {args.output} with six headline metrics from reviewed evidence")
 
 
 if __name__ == "__main__":

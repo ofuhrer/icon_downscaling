@@ -82,6 +82,16 @@ def fixture(tmp_path):
                         "rea_l_model_mean": 10.2 + metric_index,
                         "observation_mean": 10.1 + metric_index})
                 leads[season].append(lead)
+        for stratum_index, stratum in enumerate(MODULE.RIDGE_LEAD_STRATA):
+            for hour in range(25):
+                leads[season].append({
+                    "lead_hour": hour,
+                    "stratum": stratum,
+                    "metric": "wind_vector",
+                    "pair_count": 24,
+                    "hicar_rmse": 3.0 + stratum_index / 10 + hour / 100,
+                    "rea_l_rmse": 3.2 + stratum_index / 10 + hour / 100,
+                })
         for metric_index, metric in enumerate(MODULE.METRICS):
             for station_index in range(12):
                 hicar = 1.5 + station_index / 20 + season_index / 10 + metric_index / 10
@@ -159,7 +169,7 @@ def test_artifact_is_deterministic_and_canonical(tmp_path):
     assert first["snapshot"]["status"] == "ready"
     assert {name: len(rows) for name, rows in first["snapshot"]["datasets"].items()} == {
         "seasonal_metrics": 24, "seasonal_population_sensitivity": 48,
-        "lead_metrics": 596, "station_wind": 96,
+        "lead_metrics": 596, "ridge_lead_metrics": 300, "station_wind": 96,
         "elevation_counts": 24, "footprint_wind": 8}
     seasonal = first["snapshot"]["datasets"]["seasonal_metrics"]
     assert {row["metric"] for row in seasonal} == set(MODULE.METRICS)
@@ -173,6 +183,9 @@ def test_artifact_is_deterministic_and_canonical(tmp_path):
     }
     assert all(row["mean_station_hicar_rmse"] < row["hicar_rmse"] for row in seasonal)
     assert all(row["network_pooled_hicar_rmse"] > row["hicar_rmse"] for row in seasonal)
+    ridge_lead = first["snapshot"]["datasets"]["ridge_lead_metrics"]
+    assert {row["stratum"] for row in ridge_lead} == set(MODULE.RIDGE_LEAD_STRATA)
+    assert {row["segment"] for row in ridge_lead} == {"first", "restarted"}
     assert all(row["hicar_bias"] is not None for row in seasonal
         if row["metric"] in MODULE.SCALAR_STATS)
     sensitivity = first["snapshot"]["datasets"]["seasonal_population_sensitivity"]
@@ -217,7 +230,7 @@ def test_artifact_is_deterministic_and_canonical(tmp_path):
         for season, rows in national["lead_hour_tables"].items()
     }
     dump(national_path, national)
-    with pytest.raises(ValueError, match="all five headline metrics"):
+    with pytest.raises(ValueError, match="all six headline metrics"):
         MODULE.derive_datasets(MODULE.load_evidence(tmp_path / "inputs.json"))
 
 

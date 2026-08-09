@@ -123,6 +123,32 @@ def test_dry_run_builds_complete_command_plan_without_netcdf(tmp_path, monkeypat
     )
 
 
+def test_all_station_coverage_requires_exact_observed_mapping(tmp_path):
+    report = tmp_path / "evaluator.json"
+    report.write_text(json.dumps({
+        "observation_inventory": {"site_count": 3},
+        "station_mapping": {
+            "site_count": 3,
+            "excluded_outside_domain_site_count": 0,
+            "sites": [{"key": key} for key in ("A:1", "B:1", "C:1")],
+        },
+    }))
+    assert MODULE.validate_all_station_coverage(report) == {
+        "observation_site_count": 3,
+        "mapped_site_count": 3,
+        "listed_site_count": 3,
+        "excluded_outside_domain_site_count": 0,
+    }
+
+    payload = json.loads(report.read_text())
+    payload["station_mapping"]["site_count"] = 2
+    payload["station_mapping"]["sites"] = payload["station_mapping"]["sites"][:2]
+    payload["station_mapping"]["excluded_outside_domain_site_count"] = 1
+    report.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="all-station coverage failed"):
+        MODULE.validate_all_station_coverage(report)
+
+
 @pytest.mark.parametrize("mode", ("duplicate", "missing"))
 def test_rejects_duplicate_or_missing_join_time(tmp_path, monkeypatch, mode):
     config, data_root, output_root, output_times = build_campaign(tmp_path)

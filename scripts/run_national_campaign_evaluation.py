@@ -333,6 +333,27 @@ def atomic_json(path: Path, value: dict) -> None:
     os.replace(temporary, path)
 
 
+def validate_all_station_coverage(path: Path) -> dict:
+    """Require the evaluator itself to prove that no observed site was dropped."""
+    report = json.loads(path.read_text(encoding="utf-8"))
+    observed = int(report["observation_inventory"]["site_count"])
+    mapping = report["station_mapping"]
+    mapped = int(mapping["site_count"])
+    excluded = int(mapping["excluded_outside_domain_site_count"])
+    listed = len(mapping["sites"])
+    if excluded != 0 or mapped != observed or listed != observed:
+        raise ValueError(
+            f"{path}: all-station coverage failed: observed={observed}, "
+            f"mapped={mapped}, listed={listed}, excluded={excluded}"
+        )
+    return {
+        "observation_site_count": observed,
+        "mapped_site_count": mapped,
+        "listed_site_count": listed,
+        "excluded_outside_domain_site_count": excluded,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--campaign-config", required=True, type=Path)
@@ -358,8 +379,18 @@ def main(argv: list[str] | None = None) -> int:
             **plan,
         }
         if not args.dry_run:
-            for command in plan["commands"]:
+            labels = ("DJF", "MAM", "JJA", "SON")
+            evaluator_paths = [
+                Path(plan["outputs"]["evaluators"][label]) for label in labels
+            ]
+            coverage = {}
+            for index, command in enumerate(plan["commands"]):
                 subprocess.run(command, cwd=args.repo_root, check=True)
+                if index < len(evaluator_paths):
+                    coverage[labels[index]] = validate_all_station_coverage(
+                        evaluator_paths[index]
+                    )
+            manifest["all_station_coverage"] = coverage
         atomic_json(args.output_root / "evaluation_manifest.json", manifest)
     except (
         OSError,
