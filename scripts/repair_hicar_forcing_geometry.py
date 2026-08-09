@@ -31,15 +31,33 @@ from preprocessing.hicarprep.pipeline import (  # noqa: E402
 
 
 def _temporary_copy(path: Path) -> Path:
+    source_before = path.stat()
     descriptor, name = tempfile.mkstemp(
         prefix=f".{path.name}.", suffix=".partial", dir=path.parent
     )
     os.close(descriptor)
     temporary = Path(name)
-    shutil.copyfile(path, temporary)
-    with temporary.open("rb") as stream:
-        os.fsync(stream.fileno())
-    if temporary.stat().st_size != path.stat().st_size or sha256(temporary) != sha256(path):
+    # Avoid shutil.copyfile's Linux sendfile fast path.  On the Balfrin
+    # parallel filesystem it reproducibly produced a same-sized but
+    # checksum-different copy for one 1.46 GB sparse-LBC record, while a
+    # buffered read/write copy was byte-identical and the source stayed
+    # stable.  Keep the checksum check as the publication boundary.
+    with path.open("rb") as source, temporary.open("wb") as target:
+        shutil.copyfileobj(source, target, length=16 * 1024 * 1024)
+        target.flush()
+        os.fsync(target.fileno())
+    source_after = path.stat()
+    source_unchanged = (
+        source_before.st_dev == source_after.st_dev
+        and source_before.st_ino == source_after.st_ino
+        and source_before.st_size == source_after.st_size
+        and source_before.st_mtime_ns == source_after.st_mtime_ns
+    )
+    if (
+        not source_unchanged
+        or temporary.stat().st_size != source_after.st_size
+        or sha256(temporary) != sha256(path)
+    ):
         temporary.unlink(missing_ok=True)
         raise OSError(f"temporary copy of {path} is not byte-identical")
     return temporary
