@@ -93,6 +93,7 @@ def load_report(path: Path) -> dict:
     with path.open(encoding="utf-8") as stream:
         report = json.load(stream)
     required = {
+        "common_triplet_accounting",
         "event_name",
         "matched_model_times",
         "station_mapping",
@@ -102,6 +103,9 @@ def load_report(path: Path) -> dict:
     absent = sorted(required - set(report))
     if absent:
         raise ValueError(f"{path}: missing report fields: {', '.join(absent)}")
+    accounting = report["common_triplet_accounting"]
+    if not isinstance(accounting, dict) or not isinstance(accounting.get("metrics"), dict):
+        raise ValueError(f"{path}: invalid common-triplet accounting")
     if report.get("issues"):
         raise ValueError(f"{path}: evaluator reports issues: {report['issues']}")
     return report

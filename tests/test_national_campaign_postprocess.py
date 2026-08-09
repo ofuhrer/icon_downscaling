@@ -109,6 +109,7 @@ def make_report(path, season, site_count=67, common_count=65, mismatch=False):
     }
     report = {
         "schema_version": 1,
+        "common_triplet_accounting": {"metrics": {}},
         "event_name": f"event-{season}",
         "matched_model_times": ["2020-01-01T00:00:00+00:00"],
         "station_mapping": {"sites": sites},
@@ -118,6 +119,15 @@ def make_report(path, season, site_count=67, common_count=65, mismatch=False):
     }
     path.write_text(json.dumps(report))
     return path
+
+
+def test_report_requires_common_triplet_accounting(tmp_path):
+    path = make_report(tmp_path / "legacy.json", "DJF")
+    report = json.loads(path.read_text())
+    report.pop("common_triplet_accounting")
+    path.write_text(json.dumps(report))
+    with pytest.raises(ValueError, match="common_triplet_accounting"):
+        MODULE.load_report(path)
 
 
 def test_national_summary_and_exact_common_65(tmp_path):
