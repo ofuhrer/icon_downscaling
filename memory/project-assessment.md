@@ -41,11 +41,17 @@ with a one-hour checkpoint was bitwise identical to the one-hour segment at
 the initial output, then differed in 21 of 30 evaluation variables at one hour
 even though both used the checkpoint/slab output path. The first divergence
 therefore occurs before any restart is read; the phase offset is downstream,
-not evidence of an initiating clock defect. Allocation-dependent collective
-reductions are the leading hypothesis and exact controlled MPI tests are in
-progress. The seasonal forcing cache may continue to build, but no national
-seasonal model chain may launch until cold-run and segmented reproducibility
-is restored. No national added-value result or national restart-equivalence
+not evidence of an initiating clock defect. A controlled non-SMP-aware MPI
+reduction still diverged, so collective ordering is not the repair. The cause
+is an uninitialized Noah-MP scratch `snow_nlayers` array read by the active
+cold-start snow-temperature override: unused extra forcing/LBC metadata changes
+allocation history, then the bad snow-layer count changes the land state. The
+one-hour checkpoints differ in 103 of 196 variables and `snow_temperature`
+differs by up to 273.16 K, matching that mechanism. HICAR `eff54862` now reads
+the initialized prognostic snow-layer count instead; its national A/B and
+restart-chain confirmation is running. The seasonal forcing cache may continue
+to build, but no national seasonal model chain may launch until that test is
+bitwise exact. No national added-value result or national restart-equivalence
 claim is yet established.
 
 The active path is:
