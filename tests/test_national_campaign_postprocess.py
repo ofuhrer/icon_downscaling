@@ -91,6 +91,16 @@ def make_report(path, season, site_count=67, common_count=65, mismatch=False):
                         bias=1.0,
                     ),
                     "wind_vector": metric(3.0, site_count, vector=True),
+                },
+                "terrain_ridge_relative_gt_150m": {
+                    "temperature_2m_height_adjusted_k": metric(
+                        2.0,
+                        2,
+                        model_mean=282.0,
+                        observation_mean=280.0,
+                        bias=2.0,
+                    ),
+                    "wind_vector": metric(4.0, 2, vector=True),
                 }
             },
             "rea_l": {
@@ -103,6 +113,16 @@ def make_report(path, season, site_count=67, common_count=65, mismatch=False):
                         bias=1.5,
                     ),
                     "wind_vector": metric(2.5, site_count, vector=True),
+                },
+                "terrain_ridge_relative_gt_150m": {
+                    "temperature_2m_height_adjusted_k": metric(
+                        1.0,
+                        2,
+                        model_mean=281.0,
+                        observation_mean=280.0,
+                        bias=1.0,
+                    ),
+                    "wind_vector": metric(3.0, 2, vector=True),
                 }
             },
         }
@@ -241,6 +261,7 @@ def test_national_summary_and_exact_common_65(tmp_path):
         item
         for item in summary["lead_hour_tables"]["DJF"]
         if item["metric"] == "temperature_2m_height_adjusted_k"
+        and item["stratum"] == "all_sites"
     )
     assert lead_temperature["hicar_bias"] == pytest.approx(1.0)
     assert lead_temperature["rea_l_bias"] == pytest.approx(1.5)
@@ -249,7 +270,24 @@ def test_national_summary_and_exact_common_65(tmp_path):
     assert lead_temperature["hicar_observation_mean"] == pytest.approx(280.0)
     assert lead_temperature["rea_l_observation_mean"] == pytest.approx(280.0)
     assert lead_temperature["observation_mean"] == pytest.approx(280.0)
-    assert len(summary["lead_hour_tables"]["JJA"]) == 2
+    assert {
+        (item["stratum"], item["metric"])
+        for item in summary["lead_hour_tables"]["JJA"]
+    } == {
+        ("all_sites", "temperature_2m_height_adjusted_k"),
+        ("all_sites", "wind_vector"),
+        ("terrain_ridge_relative_gt_150m", "temperature_2m_height_adjusted_k"),
+        ("terrain_ridge_relative_gt_150m", "wind_vector"),
+    }
+    ridge_wind = next(
+        item
+        for item in summary["lead_hour_tables"]["JJA"]
+        if item["stratum"] == "terrain_ridge_relative_gt_150m"
+        and item["metric"] == "wind_vector"
+    )
+    assert ridge_wind["pair_count"] == 2
+    assert ridge_wind["hicar_rmse"] == pytest.approx(4.0)
+    assert ridge_wind["rea_l_rmse"] == pytest.approx(3.0)
     assert len(summary["selected_site_listings"]["station_elevation_ge_3000m"]) == 1
     assert len(summary["selected_site_listings"]["terrain_ridge_relative_gt_150m"]) == 2
     assert summary["footprint_sensitivity"]["status"] == (

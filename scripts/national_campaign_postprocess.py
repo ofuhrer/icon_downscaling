@@ -479,17 +479,31 @@ def lead_hour_tables(
         for raw_hour, values in sorted(
             report["lead_time_metrics"].items(), key=lambda item: int(item[0])
         ):
-            hicar = values.get("hicar", {}).get("all_sites", {})
-            rea_l = values.get("rea_l", {}).get("all_sites", {})
-            metrics = set(hicar) & set(rea_l)
-            if selected_metrics is not None:
-                metrics &= selected_metrics
-            for metric in sorted(metrics):
-                comparison, reason = comparison_row(hicar[metric], rea_l[metric], metric)
-                if comparison is None:
-                    exclusions[f"{reason}:{season}:{raw_hour}:{metric}"] += 1
-                    continue
-                season_rows.append({"lead_hour": int(raw_hour), "metric": metric, **comparison})
+            hicar_strata = values.get("hicar", {})
+            rea_l_strata = values.get("rea_l", {})
+            for stratum in sorted(set(hicar_strata) & set(rea_l_strata)):
+                hicar = hicar_strata[stratum]
+                rea_l = rea_l_strata[stratum]
+                metrics = set(hicar) & set(rea_l)
+                if selected_metrics is not None:
+                    metrics &= selected_metrics
+                for metric in sorted(metrics):
+                    comparison, reason = comparison_row(
+                        hicar[metric], rea_l[metric], metric
+                    )
+                    if comparison is None:
+                        exclusions[
+                            f"{reason}:{season}:{raw_hour}:{stratum}:{metric}"
+                        ] += 1
+                        continue
+                    season_rows.append(
+                        {
+                            "lead_hour": int(raw_hour),
+                            "stratum": stratum,
+                            "metric": metric,
+                            **comparison,
+                        }
+                    )
         output[season] = season_rows
     return output, dict(sorted(exclusions.items()))
 
@@ -680,8 +694,8 @@ def run(args: argparse.Namespace) -> dict:
                 "coverage intersection is reported separately."
             ),
             "lead_hour_aggregation": (
-                "Lead-hour rows reproduce the evaluator's all-sites pooled-pair RMSE; "
-                "they are not equal-station averages."
+                "Lead-hour rows reproduce the evaluator's pooled-pair RMSE for every "
+                "reported spatial stratum; they are not equal-station averages."
             ),
             "rmse_delta_sign": "negative improves on REA-L; positive degrades",
             "terrain_ridge_definition": (
