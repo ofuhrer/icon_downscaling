@@ -32,6 +32,10 @@ METRICS = (
     "wind_speed_10m_m_s",
     "wind_vector",
 )
+DIAGNOSTIC_METRICS = (
+    "u_wind_10m_m_s",
+    "v_wind_10m_m_s",
+)
 
 
 def parse_time(value: str) -> datetime:
@@ -268,7 +272,7 @@ def command_plan(
     postprocess = [python, str(scripts["postprocessor"])]
     for label in ("DJF", "MAM", "JJA", "SON"):
         postprocess.extend(["--report", f"{label}={seasons[label]['evaluator_report']}"])
-    for metric in METRICS:
+    for metric in METRICS + DIAGNOSTIC_METRICS:
         postprocess.extend(["--metric", metric])
     postprocess.extend(
         ["--output-csv", str(station_csv), "--output-summary", str(national_summary)]
