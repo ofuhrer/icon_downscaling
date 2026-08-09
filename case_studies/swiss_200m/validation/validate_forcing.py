@@ -76,8 +76,12 @@ def main() -> int:
         hfl = np.asarray(forcing["HFL"][:])
         if np.any(np.diff(hhl, axis=0) <= 0.0) or np.any(np.diff(hfl, axis=0) <= 0.0):
             raise SystemExit("forcing heights are not strictly bottom-to-top")
-        if not np.allclose(hfl, 0.5 * (hhl[:-1] + hhl[1:]), rtol=2e-6, atol=2e-3):
-            raise SystemExit("HFL is inconsistent with HHL")
+        if "HHL" not in static.variables or "HFL" not in static.variables:
+            raise SystemExit("runtime domain lacks authoritative HHL/HFL geometry")
+        static_hhl = np.asarray(static["HHL"][:], dtype=hhl.dtype)
+        static_hfl = np.asarray(static["HFL"][:], dtype=hfl.dtype)
+        if not np.array_equal(hhl, static_hhl) or not np.array_equal(hfl, static_hfl):
+            raise SystemExit("forcing HHL/HFL differ from the authoritative runtime geometry")
         if not np.array_equal(forcing["lat_1"][:], static["lat"][:]) or not np.array_equal(
             forcing["lon_1"][:], static["lon"][:]
         ):

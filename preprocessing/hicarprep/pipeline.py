@@ -189,6 +189,8 @@ def write_hicar_forcing_record(
     with netCDF4.Dataset(static_path) as static:
         static_lat = np.asarray(static["lat"][:], dtype=np.float64)
         static_lon = np.asarray(static["lon"][:], dtype=np.float64)
+        static_hhl = np.asarray(static["HHL"][:], dtype=np.float64)
+        static_hfl = np.asarray(static["HFL"][:], dtype=np.float64)
         terrain = np.asarray(static["topo"][:], dtype=np.float64)
         land_fraction = np.asarray(
             static["land_fraction"][:] if "land_fraction" in static.variables else static["landmask"][:],
@@ -196,6 +198,8 @@ def write_hicar_forcing_record(
         )
     if not np.array_equal(lat, static_lat) or not np.array_equal(lon, static_lon):
         raise ValueError("forcing state and static horizontal grids do not match exactly")
+    if not np.array_equal(hhl, static_hhl) or not np.array_equal(hfl, static_hfl):
+        raise ValueError("forcing state must use the authoritative static HHL/HFL geometry")
     if terrain.shape != (ny, nx) or land_fraction.shape != (ny, nx):
         raise ValueError("static terrain/land fraction shape does not match forcing grid")
 
@@ -502,6 +506,7 @@ def transform_icon_state(
         target_lat = np.asarray(static["lat"][:], dtype=np.float64)
         target_lon = np.asarray(static["lon"][:], dtype=np.float64)
         target_hhl = np.asarray(static["HHL"][:], dtype=np.float64)
+        target_hfl = np.asarray(static["HFL"][:], dtype=np.float64)
         x = np.asarray(static["x"][:], dtype=np.float64)
         y = np.asarray(static["y"][:], dtype=np.float64)
     if weights.target_fingerprint != grid_fingerprint(target_lat, target_lon):
@@ -509,6 +514,10 @@ def transform_icon_state(
     ny, nx = target_lat.shape
     if not np.all(np.diff(target_hhl, axis=0) > 0.0):
         raise ValueError("HICAR static HHL must be strictly bottom-to-top")
+    if target_hfl.shape != (target_hhl.shape[0] - 1, ny, nx):
+        raise ValueError("HICAR static HFL must match the HHL mass-level shape")
+    if not np.all(np.isfinite(target_hfl)) or not np.all(np.diff(target_hfl, axis=0) > 0.0):
+        raise ValueError("HICAR static HFL must be finite and strictly bottom-to-top")
     with netCDF4.Dataset(source_path) as source:
         source_lat = read_coordinate(source, "clat")
         source_lon = read_coordinate(source, "clon")
@@ -650,7 +659,11 @@ def transform_icon_state(
         {
             "W": target_w,
             "HHL": target_hhl,
-            "HFL": 0.5 * (target_hhl[:-1] + target_hhl[1:]),
+            # HICAR evaluates the nonlinear SLEVE mapping at the mass-level
+            # reference height.  Except for a linear mapping, that is not the
+            # arithmetic mean of the two surrounding interfaces.  Preserve
+            # the authoritative mass geometry generated with the static grid.
+            "HFL": target_hfl,
             "lat": target_lat,
             "lon": target_lon,
             "terrain_difference": terrain_differences,

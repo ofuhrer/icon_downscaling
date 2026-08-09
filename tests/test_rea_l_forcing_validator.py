@@ -22,8 +22,13 @@ def files(root: Path, invalid_hfl: bool = False) -> tuple[Path, Path, Path]:
     lon = np.array([[7.0, 7.1], [7.0, 7.1]])
     with netCDF4.Dataset(static, "w") as dataset:
         dataset.createDimension("y", 2); dataset.createDimension("x", 2)
+        dataset.createDimension("level", 2); dataset.createDimension("half_level", 3)
         dataset.createVariable("lat", "f8", ("y", "x"))[:] = lat
         dataset.createVariable("lon", "f8", ("y", "x"))[:] = lon
+        hhl = np.array([0.0, 100.0, 300.0])[:, None, None] * np.ones((1, 2, 2))
+        hfl = np.array([50.0, 200.0])[:, None, None] * np.ones((1, 2, 2))
+        dataset.createVariable("HHL", "f8", ("half_level", "y", "x"))[:] = hhl
+        dataset.createVariable("HFL", "f8", ("level", "y", "x"))[:] = hfl
     with netCDF4.Dataset(forcing, "w") as dataset:
         for name, size in (("time", 1), ("z", 2), ("z_hl", 3), ("y_1", 2), ("x_1", 2)):
             dataset.createDimension(name, size)
@@ -98,7 +103,7 @@ def test_inconsistent_height_fails(tmp_path: Path) -> None:
         text=True, capture_output=True,
     )
     assert result.returncode != 0
-    assert "HFL is inconsistent" in result.stderr
+    assert "forcing HHL/HFL differ" in result.stderr
 
 
 def test_mismatched_boundary_pair_fails(tmp_path: Path) -> None:

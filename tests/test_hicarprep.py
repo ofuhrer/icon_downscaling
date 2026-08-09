@@ -556,12 +556,17 @@ class ProductPipelineTests(unittest.TestCase):
             with netCDF4.Dataset(static, "w") as dataset:
                 dataset.createDimension("y", ny)
                 dataset.createDimension("x", nx)
+                dataset.createDimension("level", levels)
+                dataset.createDimension("half_level", levels + 1)
                 dataset.createVariable("lat", "f8", ("y", "x"))[:] = lat
                 dataset.createVariable("lon", "f8", ("y", "x"))[:] = lon
                 dataset.createVariable("topo", "f8", ("y", "x"))[:] = terrain
                 dataset.createVariable("landmask", "i2", ("y", "x"))[:] = 1
+                hhl = np.stack((terrain, terrain + 100.0, terrain + 300.0))
+                hfl = np.stack((terrain + 47.0, terrain + 188.0))
+                dataset.createVariable("HHL", "f8", ("half_level", "y", "x"))[:] = hhl
+                dataset.createVariable("HFL", "f8", ("level", "y", "x"))[:] = hfl
             source.write_bytes(b"native-icon-provenance")
-            hhl = np.stack((terrain, terrain + 100.0, terrain + 300.0))
             state = {
                 "T": np.full((levels, ny, nx), 280.0),
                 "P": np.full((levels, ny, nx), 90_000.0),
@@ -577,7 +582,7 @@ class ProductPipelineTests(unittest.TestCase):
                     (levels, ny + 1, nx),
                 ).copy(),
                 "HHL": hhl,
-                "HFL": 0.5 * (hhl[:-1] + hhl[1:]),
+                "HFL": hfl,
                 "lat": lat,
                 "lon": lon,
             }
@@ -593,6 +598,7 @@ class ProductPipelineTests(unittest.TestCase):
                 self.assertEqual(dataset.water_representation, "dry-air mixing ratio")
                 self.assertEqual(dataset["P"].dimensions, ("time", "z", "y_1", "x_1"))
                 self.assertEqual(dataset["HHL"].dimensions, ("z_hl", "y_1", "x_1"))
+                np.testing.assert_array_equal(dataset["HFL"][:], hfl.astype(np.float32))
                 np.testing.assert_allclose(dataset["U"][0, 0, 0], [0.5, 1.5, 2.5])
                 np.testing.assert_allclose(dataset["V"][0, 0, :, 0], [0.5, 1.5])
                 valid = netCDF4.num2date(
@@ -771,6 +777,13 @@ class ProductPipelineTests(unittest.TestCase):
             weights.write(weight_path)
             state, diagnostics = transform_icon_state(source_path, static_path, weights)
             self.assertEqual(diagnostics["source_vertical_order"], "top_to_bottom")
+            with netCDF4.Dataset(static_path) as static:
+                np.testing.assert_array_equal(state["HFL"], static["HFL"][:])
+                self.assertFalse(
+                    np.array_equal(
+                        state["HFL"], 0.5 * (state["HHL"][:-1] + state["HHL"][1:])
+                    )
+                )
             write_initial_condition(
                 initial_path,
                 state,
