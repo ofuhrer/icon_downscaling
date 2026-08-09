@@ -177,7 +177,7 @@ def test_artifact_is_deterministic_and_canonical(tmp_path):
     assert {name: len(rows) for name, rows in first["snapshot"]["datasets"].items()} == {
         "seasonal_metrics": 24, "seasonal_population_sensitivity": 48,
         "lead_metrics": 596, "ridge_lead_metrics": 300, "station_wind": 96,
-        "elevation_counts": 24, "footprint_wind": 8}
+        "elevation_counts": 32, "footprint_wind": 8}
     seasonal = first["snapshot"]["datasets"]["seasonal_metrics"]
     assert {row["metric"] for row in seasonal} == set(MODULE.METRICS)
     assert all(row["paired_station_count"] == 12 for row in seasonal)

@@ -46,7 +46,7 @@ QUERIES = {
     "lead_metrics": f"SELECT * FROM lead ORDER BY {SEASON_ORDER}, metric_order, lead_hour",
     "ridge_lead_metrics": f"SELECT * FROM ridge_lead ORDER BY {SEASON_ORDER}, stratum, lead_hour",
     "station_wind": f"SELECT * FROM station ORDER BY {SEASON_ORDER}, metric_order, station_elevation_m, station_key",
-    "elevation_counts": f"SELECT * FROM elevation ORDER BY {SEASON_ORDER}, metric_order, elevation_class, terrain_class",
+    "elevation_counts": f"SELECT * FROM elevation ORDER BY {SEASON_ORDER}, metric_order, stratification, stratum",
     "footprint_wind": f"SELECT * FROM footprint ORDER BY {SEASON_ORDER}, site_key, radius_km",
 }
 
@@ -320,10 +320,19 @@ def derive_datasets(evidence):
 
     groups = {}
     for row in station:
-        key = (row["season"], row["metric"], row["elevation_class"], row["terrain_class"])
-        groups.setdefault(key, []).append(row)
+        terrain_key = (
+            row["season"], row["metric"], "terrain", row["terrain_class"],
+            row["terrain_class"].replace("_", " "),
+        )
+        groups.setdefault(terrain_key, []).append(row)
+        if row["station_elevation_m"] >= 2000.0:
+            high_key = (
+                row["season"], row["metric"], "elevation",
+                "station_elevation_ge_2000m", "Station elevation >=2000 m",
+            )
+            groups.setdefault(high_key, []).append(row)
     elevation = []
-    for (season, metric, elevation_class, terrain_class), rows in groups.items():
+    for (season, metric, stratification, stratum, stratum_label), rows in groups.items():
         count = len(rows)
         mean_hicar = sum(row["hicar_rmse"] for row in rows) / count
         mean_rea_l = sum(row["rea_l_rmse"] for row in rows) / count
@@ -331,7 +340,8 @@ def derive_datasets(evidence):
         rea_l = math.sqrt(sum(row["rea_l_rmse"] ** 2 for row in rows) / count)
         elevation.append({"season": season, "metric": metric, "metric_label": METRICS[metric][0],
             "unit": METRICS[metric][1], "metric_order": list(METRICS).index(metric),
-            "elevation_class": elevation_class, "terrain_class": terrain_class,
+            "stratification": stratification, "stratum": stratum,
+            "stratum_label": stratum_label,
             "paired_station_count": count, "pair_count_total": sum(row["pair_count"] for row in rows),
             "mean_terrain_relative_elevation_m": sum(row["terrain_relative_elevation_m"] for row in rows) / count,
             "primary_rmse_estimand": "equal_station_network_rmse",
@@ -514,12 +524,12 @@ def build_artifact(evidence):
              ("network_pooled_hicar_rmse", "Pair-pooled HICAR RMSE"),
              ("network_pooled_rea_l_rmse", "Pair-pooled REA-L RMSE"),
              ("network_pooled_normalized_rmse_difference", "Pair-pooled normalized difference"))},
-        {"id": "elevation_table", "title": "Wind eligibility and skill by elevation and terrain stratum",
-         "subtitle": "Station counts and valid-pair totals are shown separately for wind speed and vector",
+        {"id": "elevation_table", "title": "Wind skill by independent terrain and high-elevation strata",
+         "subtitle": "Valley/neutral/ridge and >=2000 m groups are not crossed; >=3000 m sites remain named station evidence",
          "dataset": "elevation_counts", "sourceId": "elevation_counts_query", "density": "compact",
          "defaultSort": {"field": "season", "direction": "asc"},
          "columns": columns(("season", "Season"), ("metric_label", "Metric"),
-             ("elevation_class", "Elevation stratum"), ("terrain_class", "Terrain class"),
+             ("stratification", "Stratification"), ("stratum_label", "Stratum"),
              ("paired_station_count", "Paired stations"), ("pair_count_total", "Valid pairs"),
              ("mean_terrain_relative_elevation_m", "Mean terrain-relative elevation (m)"),
              ("equal_station_network_hicar_rmse", "Equal-station network HICAR RMSE"),
