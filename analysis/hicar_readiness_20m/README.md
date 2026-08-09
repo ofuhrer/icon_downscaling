@@ -44,11 +44,12 @@ station available in that season; each metric's exact four-season eligible
 station intersection is retained as a population-sensitivity table. For each
 24-hour event the report requires leads 0--24 for instantaneous metrics and
 1--24 for interval precipitation.
-Wind-vector lead trajectories are also retained for terrain-ridge,
-2000--3000 m, and at-least-3000 m station strata so the 11--14 h transition
-around the restart can be inspected directly. Lead 24 is shown but excluded
-from descriptive fitted slopes because the staged instantaneous REA-L fields
-switch native cycle there.
+Wind-vector lead trajectories are also retained for terrain-ridge and
+at-least-2000 m station strata so the 11--14 h transition around the restart
+can be inspected directly. The few stations at or above 3000 m remain named
+station evidence rather than a network aggregate. Lead 24 is shown but
+excluded from descriptive fitted slopes because the staged instantaneous
+REA-L fields switch native cycle there.
 Seasonal tables use equal-station network RMSE
 (`sqrt(mean(station RMSE squared))`) as the primary score. They separately
 retain the arithmetic mean of station RMSEs and the observation-pair-pooled
