@@ -157,6 +157,29 @@ def test_report_requires_common_triplet_accounting(tmp_path):
         MODULE.load_report(path)
 
 
+def test_station_event_summary_requires_twenty_common_pairs(tmp_path):
+    reports = {}
+    for season in MODULE.SEASONS:
+        path = make_report(tmp_path / f"low-count-{season}.json", season, site_count=1)
+        report = json.loads(path.read_text())
+        values = report["site_metrics"]["S000:1"]
+        for source in MODULE.SOURCES:
+            values[source]["temperature_2m_height_adjusted_k"]["count"] = 19
+        path.write_text(json.dumps(report))
+        reports[season] = (path, MODULE.load_report(path))
+
+    rows, exclusions, _ = MODULE.station_season_rows(
+        reports,
+        common_keys=None,
+        selected_metrics={"temperature_2m_height_adjusted_k"},
+    )
+    assert rows == []
+    assert exclusions == {
+        f"insufficient_pair_count:{season}:temperature_2m_height_adjusted_k": 1
+        for season in MODULE.SEASONS
+    }
+
+
 def test_national_summary_and_exact_common_65(tmp_path):
     national = {}
     bridge = []
