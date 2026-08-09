@@ -1,4 +1,5 @@
 import importlib.util
+from datetime import timedelta
 import json
 import math
 from pathlib import Path
@@ -21,6 +22,29 @@ SPEC = importlib.util.spec_from_file_location("smn_comparison", MODULE_PATH)
 MODULE = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
+
+
+def test_exact_integral_lead_hour_accepts_only_nonnegative_whole_hours():
+    start = MODULE.parse_time("20200701000000")
+
+    assert MODULE.exact_integral_lead_hour(start, start) == 0
+    assert MODULE.exact_integral_lead_hour(start + timedelta(hours=27), start) == 27
+
+
+def test_exact_integral_lead_hour_rejects_sub_hour_and_negative_leads():
+    start = MODULE.parse_time("20200701000000")
+
+    for valid in (
+        start + timedelta(minutes=30),
+        start + timedelta(hours=1, seconds=1),
+        start - timedelta(hours=1),
+    ):
+        try:
+            MODULE.exact_integral_lead_hour(valid, start)
+        except ValueError as error:
+            assert "not an exact nonnegative integral-hour lead" in str(error)
+        else:
+            raise AssertionError(f"accepted invalid lead timestamp {valid.isoformat()}")
 
 
 def test_retrieval_script_uses_smn_group_and_cluster_configuration():

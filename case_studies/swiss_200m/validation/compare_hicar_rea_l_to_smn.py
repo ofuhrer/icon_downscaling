@@ -183,6 +183,21 @@ def canonical_time(value: datetime) -> datetime:
     return value
 
 
+def exact_integral_lead_hour(valid: datetime, start: datetime) -> int:
+    """Return a nonnegative whole-hour lead, rejecting ambiguous timestamps."""
+    delta = valid - start
+    if (
+        delta < timedelta(0)
+        or delta.microseconds != 0
+        or delta.seconds % 3600 != 0
+    ):
+        raise ValueError(
+            f"model output time {valid.isoformat()} is not an exact nonnegative "
+            f"integral-hour lead from {start.isoformat()}"
+        )
+    return delta.days * 24 + delta.seconds // 3600
+
+
 def decoded_times(dataset: netCDF4.Dataset) -> list[datetime]:
     variable = dataset.variables["time"]
     values = netCDF4.num2date(
@@ -845,6 +860,7 @@ def main() -> int:
         previous_model_time = None
         matched_times = []
         for valid in ordered_times:
+            lead_hour = exact_integral_lead_hour(valid, ordered_times[0])
             if valid not in reference_records:
                 failures.append(f"missing REA-L reference at {valid.isoformat()}")
                 continue
@@ -853,7 +869,6 @@ def main() -> int:
                 continue
             model_dataset, model_index = model_records[valid]
             reference_dataset = reference_records[valid]
-            lead_hour = int(round((valid - ordered_times[0]).total_seconds() / 3600.0))
             lead_accumulator = lead_time_accumulators.setdefault(
                 lead_hour, create_accumulators(classes)
             )
