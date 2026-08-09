@@ -33,7 +33,12 @@ def _temporary_copy(path: Path) -> Path:
     )
     os.close(descriptor)
     temporary = Path(name)
-    shutil.copy2(path, temporary)
+    shutil.copyfile(path, temporary)
+    with temporary.open("rb") as stream:
+        os.fsync(stream.fileno())
+    if temporary.stat().st_size != path.stat().st_size or sha256(temporary) != sha256(path):
+        temporary.unlink(missing_ok=True)
+        raise OSError(f"temporary copy of {path} is not byte-identical")
     return temporary
 
 
