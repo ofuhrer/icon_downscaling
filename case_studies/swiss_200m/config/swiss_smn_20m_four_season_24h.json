@@ -10,7 +10,7 @@
   "segment_hours": 12,
   "max_attempts": 4,
   "input_partitions": ["pp-long"],
-  "max_active_inputs": 8,
+  "max_active_inputs": 16,
   "input_cpus": 4,
   "input_time": "06:00:00",
   "model_nodes": 12,
