@@ -165,6 +165,9 @@ class Campaign:
         self.input_time = str(self.config.get("input_time", "01:00:00"))
         self.model_nodes = int(self.config.get("model_nodes", 2))
         self.model_time = str(self.config.get("model_time", "06:00:00"))
+        self.full_season_input_lists = bool(
+            self.config.get("full_season_input_lists", False)
+        )
         self.seasons = [
             Season(item["name"], parse_time(item["start"]), parse_time(item["end"]), Path(item["static"]))
             for item in self.config["seasons"]
@@ -287,6 +290,16 @@ class Campaign:
                 return path
         return None
 
+    def segment_input_plan(
+        self, season: Season, segment_root: Path, start: datetime, end: datetime
+    ) -> tuple[list[tuple[Path, Path]], Path, Path]:
+        """Return the records and list paths used by one model segment."""
+        list_start = season.start if self.full_season_input_lists else start
+        list_end = season.end if self.full_season_input_lists else end
+        records = [self.paths(season, when) for when in hours(list_start, list_end)]
+        list_root = self.root / season.name if self.full_season_input_lists else segment_root
+        return records, list_root / "forcing.txt", list_root / "lbc.txt"
+
     def submit_segments(self) -> int:
         submitted = 0
         for season in self.seasons:
@@ -302,12 +315,12 @@ class Campaign:
                 # A chain is intentionally serial; another season may proceed independently.
                 if index and previous_restart is None:
                     break
-                records = [self.paths(season, when) for when in hours(start, end)]
+                records, forcing_list, boundary_list = self.segment_input_plan(
+                    season, segment_root, start, end
+                )
                 if not all(Path(f"{forcing}.ready").is_file() and Path(f"{boundary}.ready").is_file()
                            for forcing, boundary in records):
                     break
-                forcing_list = segment_root / "forcing.txt"
-                boundary_list = segment_root / "lbc.txt"
                 forcing_list.write_text("".join(f'"{item[0]}"\n' for item in records))
                 boundary_list.write_text("".join(f'"{item[1]}"\n' for item in records))
                 previous = submitted_attempt(segment_root, self.max_attempts)
@@ -333,6 +346,12 @@ class Campaign:
                     "OUTPUT_PROFILE": self.config.get("output_profile", "evaluation"),
                     "OUTPUT_INTERVAL": str(self.config.get("output_interval", 3600)),
                     "HICAR_DISABLE_SX": "1" if self.config.get("disable_sx", False) else "0",
+                    "HICAR_ALLOW_INPUT_SUPERSET": (
+                        "1" if self.full_season_input_lists else "0"
+                    ),
+                    "HICAR_ACC_SYNCHRONOUS": (
+                        "1" if self.config.get("acc_synchronous", False) else "0"
+                    ),
                 }
                 job = submit(
                     self.repo / "case_studies/swiss_200m/scripts/run_rea_l_stream_chunk_balfrin.sbatch",

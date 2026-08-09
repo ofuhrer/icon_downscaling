@@ -43,6 +43,8 @@ profile=${OUTPUT_PROFILE:-evaluation}
 output_interval=${OUTPUT_INTERVAL:-3600}
 model_debug=${HICAR_MODEL_DEBUG:-0}
 disable_sx=${HICAR_DISABLE_SX:-0}
+allow_input_superset=${HICAR_ALLOW_INPUT_SUPERSET:-0}
+acc_synchronous=${HICAR_ACC_SYNCHRONOUS:-0}
 cfl_reduction=${HICAR_CFL_REDUCTION_FACTOR:-1.6}
 renderer="$repo_root/case_studies/swiss_200m/scripts/render_hicar_namelist.py"
 wrapper="$repo_root/case_studies/swiss_200m/scripts/gpu_rank_wrapper.sh"
@@ -94,6 +96,10 @@ sx_args=()
 if [[ "$disable_sx" == 1 ]]; then
   sx_args=(--disable-sx)
 fi
+input_validation_args=()
+if [[ "$allow_input_superset" == 1 ]]; then
+  input_validation_args=(--allow-input-superset)
+fi
 
 "$python" "$renderer" \
   --static-file "$static" \
@@ -122,6 +128,11 @@ export MPICH_GPU_SUPPORT_ENABLED=0
 export MPICH_GPU_MANAGED_MEMORY_SUPPORT_ENABLED=0
 export HICAR_WIND_ADJOINT_PROJECTION=1
 export HICAR_WIND_RECYCLE_DIM=0
+if [[ "$acc_synchronous" == 1 ]]; then
+  export NVCOMPILER_ACC_SYNCHRONOUS=1
+else
+  unset NVCOMPILER_ACC_SYNCHRONOUS
+fi
 
 child=
 terminate() {
@@ -146,6 +157,7 @@ test -s "$restart" || { echo "missing terminal restart: $restart" >&2; exit 1; }
   --restart-time "$end" \
   --output-interval "$output_interval" --forcing-list "$forcing_list" \
   --boundary-list "$lbc_list" "${validation_restart_args[@]}" \
+  "${input_validation_args[@]}" \
   >"$run/segment_validation.json"
 
 "$python" - "$run/segment.json" "$start" "$end" "$model_end" "$static" "$exe" "$restart" <<'PY'

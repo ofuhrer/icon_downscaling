@@ -106,6 +106,11 @@ def main() -> int:
     parser.add_argument("--output-interval", type=int, required=True)
     parser.add_argument("--forcing-list", type=Path, required=True)
     parser.add_argument("--boundary-list", type=Path, required=True)
+    parser.add_argument(
+        "--allow-input-superset",
+        action="store_true",
+        help="accept one ordered campaign-wide list that brackets this segment",
+    )
     parser.add_argument("--continued", action="store_true")
     args = parser.parse_args()
 
@@ -174,7 +179,13 @@ def main() -> int:
     forcing = [line.strip().strip('"') for line in args.forcing_list.read_text().splitlines() if line.strip()]
     boundaries = [line.strip().strip('"') for line in args.boundary_list.read_text().splitlines() if line.strip()]
     expected_inputs = math.ceil((end - start).total_seconds() / 3600) + 1
-    if len(forcing) != expected_inputs or len(boundaries) != expected_inputs:
+    if len(forcing) != len(boundaries):
+        raise SystemExit("forcing and LBC lists have different record counts")
+    if args.allow_input_superset:
+        valid_count = len(forcing) >= expected_inputs
+    else:
+        valid_count = len(forcing) == expected_inputs
+    if not valid_count:
         raise SystemExit("forcing/LBC lists do not contain every integrated hourly endpoint")
 
     print(json.dumps({
@@ -186,6 +197,7 @@ def main() -> int:
         "restart": str(args.restart),
         "forcing_records": len(forcing),
         "boundary_records": len(boundaries),
+        "input_list_policy": "bracketing_superset" if args.allow_input_superset else "exact_segment",
     }, indent=2, sort_keys=True))
     return 0
 
