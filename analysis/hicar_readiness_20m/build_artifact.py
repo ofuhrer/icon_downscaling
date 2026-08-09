@@ -29,6 +29,7 @@ TITLE = "HICAR 20 m national four-season readiness assessment"
 SEASON_ORDER = "CASE season WHEN 'DJF' THEN 1 WHEN 'MAM' THEN 2 WHEN 'JJA' THEN 3 ELSE 4 END"
 QUERIES = {
     "seasonal_metrics": f"SELECT * FROM seasonal ORDER BY {SEASON_ORDER}, metric_order",
+    "seasonal_population_sensitivity": f"SELECT * FROM seasonal_sensitivity ORDER BY {SEASON_ORDER}, metric_order, population_order",
     "lead_metrics": f"SELECT * FROM lead ORDER BY {SEASON_ORDER}, metric_order, lead_hour",
     "station_wind": f"SELECT * FROM station ORDER BY {SEASON_ORDER}, metric_order, station_elevation_m, station_key",
     "elevation_counts": f"SELECT * FROM elevation ORDER BY {SEASON_ORDER}, metric_order, elevation_class, terrain_class",
@@ -147,8 +148,8 @@ def scalar_stats(row, label, prefix):
             "rea_l_bias": number(row, label, prefix + "rea_l_bias"),
             "hicar_model_mean": number(row, label, prefix + "hicar_model_mean"),
             "rea_l_model_mean": number(row, label, prefix + "rea_l_model_mean"),
-            "hicar_observation_mean": number(row, label, prefix + "hicar_observation_mean", prefix + "observation_mean"),
-            "rea_l_observation_mean": number(row, label, prefix + "rea_l_observation_mean", prefix + "observation_mean"),
+            "hicar_observation_mean": number(row, label, prefix + "hicar_observation_mean", prefix + "observation_mean", prefix + "observation"),
+            "rea_l_observation_mean": number(row, label, prefix + "rea_l_observation_mean", prefix + "observation_mean", prefix + "observation"),
         }
     return {
         "hicar_bias": number(row, label, "hicar_bias"),
@@ -163,24 +164,41 @@ def scalar_stats(row, label, prefix):
 def derive_datasets(evidence):
     national = evidence["national_summary"]
     seasonal = []
+    seasonal_sensitivity = []
     for row in national["equal_station_summaries"]:
         metric = row["metric"]
-        if row["subset"] != "national_four_season_intersection" or row["stratum"] != "all_sites" or metric not in METRICS:
+        if row["subset"] not in {"national", "national_four_season_intersection"} or row["stratum"] != "all_sites" or metric not in METRICS:
             continue
         hicar = float(row["equal_station_mean_hicar_rmse"])
         rea_l = float(row["equal_station_mean_rea_l_rmse"])
+        pooled_hicar = float(row["network_pooled_hicar_rmse"])
+        pooled_rea_l = float(row["network_pooled_rea_l_rmse"])
+        population = ("All season-available stations" if row["subset"] == "national"
+                      else "Four-season station intersection")
         item = {"season": row["season"], "metric": metric, "metric_label": METRICS[metric][0],
                 "unit": METRICS[metric][1], "metric_order": list(METRICS).index(metric),
+                "population": population, "population_order": 0 if row["subset"] == "national" else 1,
                 "paired_station_count": int(row["paired_station_count"]),
                 "hicar_rmse": hicar, "rea_l_rmse": rea_l,
-                "rmse_delta": hicar - rea_l, "normalized_rmse_difference": normalized_difference(hicar, rea_l)}
+                "rmse_delta": hicar - rea_l,
+                "normalized_rmse_difference": normalized_difference(hicar, rea_l),
+                "network_pooled_hicar_rmse": pooled_hicar,
+                "network_pooled_rea_l_rmse": pooled_rea_l,
+                "network_pooled_rmse_delta": pooled_hicar - pooled_rea_l,
+                "network_pooled_normalized_rmse_difference": normalized_difference(pooled_hicar, pooled_rea_l)}
         if metric in SCALAR_STATS:
             item.update(scalar_stats(row, f"seasonal {row['season']}/{metric}", "equal_station_mean_"))
-        seasonal.append(item)
+        seasonal_sensitivity.append(item)
+        if row["subset"] == "national":
+            seasonal.append(item)
     if {(row["season"], row["metric"]) for row in seasonal} != {
         (season, metric) for season in SEASONS for metric in METRICS
     }:
-        raise ValueError("seasonal summaries must contain all five headline metrics in all four seasons")
+        raise ValueError("national seasonal summaries must contain all five headline metrics in all four seasons")
+    if {(row["season"], row["metric"], row["population_order"]) for row in seasonal_sensitivity} != {
+        (season, metric, population) for season in SEASONS for metric in METRICS for population in (0, 1)
+    }:
+        raise ValueError("seasonal population sensitivity requires national and four-season-intersection summaries")
 
     lead = []
     for season in SEASONS:
@@ -198,12 +216,11 @@ def derive_datasets(evidence):
                 item.update(scalar_stats(row, f"lead {season}/{item['lead_hour']}/{metric}", ""))
             lead.append(item)
     for season in SEASONS:
-        present = {row["metric"] for row in lead if row["season"] == season}
-        if present != set(METRICS):
-            raise ValueError(f"{season} lead-time results must contain all five headline metrics")
-        counts = {metric: sum(row["season"] == season and row["metric"] == metric for row in lead) for metric in METRICS}
-        if any(counts[metric] < 8 for metric in METRICS if metric != "precipitation_interval_kg_m2") or counts["precipitation_interval_kg_m2"] < 7:
-            raise ValueError(f"{season} lead-time results are too sparse: {counts}")
+        for metric in METRICS:
+            hours = [row["lead_hour"] for row in lead if row["season"] == season and row["metric"] == metric]
+            expected = set(range(1, 25)) if metric == "precipitation_interval_kg_m2" else set(range(25))
+            if len(hours) != len(expected) or set(hours) != expected:
+                raise ValueError(f"{season}/{metric} lead hours must be exactly {sorted(expected)}; got {sorted(hours)}")
 
     station = []
     for row in evidence["station_rows"]:
@@ -214,6 +231,9 @@ def derive_datasets(evidence):
         station.append({"season": row["season"], "metric": metric, "metric_label": METRICS[metric][0],
             "unit": METRICS[metric][1], "metric_order": list(METRICS).index(metric),
             "station_key": row["station_key"], "station_elevation_m": float(row["station_elevation_m"]),
+            "hicar_elevation_m": float(row["hicar_elevation_m"]),
+            "hicar_minus_station_elevation_m": float(row["hicar_elevation_m"]) - float(row["station_elevation_m"]),
+            "nearest_cell_distance_km": float(row["nearest_cell_distance_km"]),
             "elevation_class": row["elevation_class"], "terrain_class": row["terrain_class"],
             "terrain_relative_elevation_m": float(row["terrain_relative_elevation_m"]),
             "pair_count": int(float(row["pair_count"])), "hicar_rmse": hicar, "rea_l_rmse": rea_l,
@@ -258,9 +278,11 @@ def derive_datasets(evidence):
                     "actual_cell_count": int(geometry["actual_cell_count"])})
     if len(footprint) < 8:
         raise ValueError("footprint results are too sparse")
-    tables = {"seasonal_metrics": "seasonal", "lead_metrics": "lead", "station_wind": "station",
+    tables = {"seasonal_metrics": "seasonal", "seasonal_population_sensitivity": "seasonal_sensitivity",
+              "lead_metrics": "lead", "station_wind": "station",
               "elevation_counts": "elevation", "footprint_wind": "footprint"}
-    rows = {"seasonal_metrics": seasonal, "lead_metrics": lead, "station_wind": station,
+    rows = {"seasonal_metrics": seasonal, "seasonal_population_sensitivity": seasonal_sensitivity,
+            "lead_metrics": lead, "station_wind": station,
             "elevation_counts": elevation, "footprint_wind": footprint}
     return {name: query_rows(tables[name], rows[name], QUERIES[name]) for name in rows}
 
@@ -286,6 +308,7 @@ def build_artifact(evidence):
                 f"{season} footprint diagnostic", season) for season in SEASONS]
     used = {
         "seasonal_metrics": ["national_summary.json#equal_station_summaries"],
+        "seasonal_population_sensitivity": ["national_summary.json#equal_station_summaries"],
         "lead_metrics": ["national_summary.json#lead_hour_tables"],
         "station_wind": ["station_season_metrics.csv"],
         "elevation_counts": ["station_season_metrics.csv"],
@@ -338,6 +361,8 @@ def build_artifact(evidence):
              "facet": encoding("metric_label", "Wind metric", "nominal"),
              "label": encoding("station_key", "Station", "text"),
              "tooltip": [encoding("pair_count", "Paired observations"),
+                         encoding("hicar_minus_station_elevation_m", "HICAR minus station elevation", unit="m"),
+                         encoding("nearest_cell_distance_km", "Nearest-cell distance", unit="km"),
                          encoding("terrain_class", "Terrain class", "text"),
                          encoding("terrain_relative_elevation_m", "Terrain-relative elevation", unit="m")]}},
         {"id": "footprint_wind", "title": "Selected-site nearest-cell and footprint-mean vector RMSE",
@@ -367,6 +392,18 @@ def build_artifact(evidence):
              ("rea_l_model_mean", "REA-L mean"),
              ("hicar_observation_mean", "Obs mean (HICAR pairs)"),
              ("rea_l_observation_mean", "Obs mean (REA-L pairs)"))},
+        {"id": "population_table", "title": "Seasonal station-population sensitivity",
+         "subtitle": "Primary all-available results alongside the exact four-season key intersection",
+         "dataset": "seasonal_population_sensitivity", "sourceId": "seasonal_population_sensitivity_query", "density": "compact",
+         "defaultSort": {"field": "season", "direction": "asc"},
+         "columns": columns(("season", "Season"), ("metric_label", "Metric"),
+             ("population", "Station population"), ("paired_station_count", "Paired stations"),
+             ("hicar_rmse", "Equal-station HICAR RMSE"),
+             ("rea_l_rmse", "Equal-station REA-L RMSE"),
+             ("normalized_rmse_difference", "Equal-station normalized difference"),
+             ("network_pooled_hicar_rmse", "Pooled-pair HICAR RMSE"),
+             ("network_pooled_rea_l_rmse", "Pooled-pair REA-L RMSE"),
+             ("network_pooled_normalized_rmse_difference", "Pooled-pair normalized difference"))},
         {"id": "elevation_table", "title": "Wind eligibility and skill by elevation and terrain stratum",
          "subtitle": "Station counts and valid-pair totals are shown separately for wind speed and vector",
          "dataset": "elevation_counts", "sourceId": "elevation_counts_query", "density": "compact",
@@ -397,6 +434,7 @@ def build_artifact(evidence):
         finding("seasonal_skill", "national_file"),
         {"id": "seasonal_chart", "type": "chart", "chartId": "seasonal_metrics"},
         {"id": "seasonal_table_block", "type": "table", "tableId": "seasonal_table"},
+        {"id": "population_table_block", "type": "table", "tableId": "population_table"},
         finding("lead_time", "national_file"),
         {"id": "lead_chart", "type": "chart", "chartId": "lead_metrics"},
         finding("elevation_wind", "station_file"),
@@ -407,7 +445,7 @@ def build_artifact(evidence):
         {"id": "footprint_table_block", "type": "table", "tableId": "footprint_table"},
         finding("inputs_and_grid"), finding("restart", "restart_file"),
         {"id": "scope", "type": "markdown", "sourceId": "national_file",
-         "body": f"## Scope, comparison basis, and definitions\n\nThe four reports contain {coverage['station_key_union_count']} distinct SwissMetNet keys, but eligibility is metric- and season-specific; every result therefore carries its own paired-station or paired-observation count. Seasonal summaries use the exact four-season key intersection before metric eligibility. Normalized RMSE difference is (HICAR - REA-L)/(HICAR + REA-L); negative values favor HICAR."},
+         "body": f"## Scope, comparison basis, and definitions\n\nThe four reports contain {coverage['station_key_union_count']} distinct SwissMetNet keys, but eligibility is metric- and season-specific; every result therefore carries its own paired-station or paired-observation count. Primary seasonal summaries use every eligible station available in that season. The exact four-season key intersection is reported separately as a station-population sensitivity. Normalized RMSE difference is (HICAR - REA-L)/(HICAR + REA-L); negative values favor HICAR."},
         {"id": "methods", "type": "markdown", "sourceId": "national_file",
          "body": f"## Validation and aggregation design\n\n**Station grain.** {assessment_method['station_grain']}.\n\n**Pairing.** {assessment_method['pairing_rule']}\n\n**Aggregation.** {assessment_method['aggregation']}\n\n**Lead hours.** {assessment_method['lead_hour_aggregation']} The first precipitation interval may be absent because accumulated precipitation needs a preceding model output. Lead hour remains confounded with valid time, diurnal phase, and event evolution.\n\nFootprint means diagnose point-to-grid sensitivity and do not replace the nearest-cell score."},
         {"id": "limitations", "type": "markdown", "sourceId": "assessment_file",

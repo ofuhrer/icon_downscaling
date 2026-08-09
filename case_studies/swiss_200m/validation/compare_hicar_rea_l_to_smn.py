@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import json
@@ -30,6 +31,19 @@ OBSERVATION_PARAMETERS = (
     "dkl010h0",
     "gre000h0",
     "htoauths",
+)
+PAIR_METRICS = (
+    "temperature_2m_raw_k",
+    "temperature_2m_height_adjusted_k",
+    "relative_humidity_2m_percent",
+    "surface_pressure_raw_pa",
+    "surface_pressure_height_adjusted_pa",
+    "u_wind_10m_m_s",
+    "v_wind_10m_m_s",
+    "wind_speed_10m_m_s",
+    "global_shortwave_radiation_w_m2",
+    "snow_height_m",
+    "precipitation_interval_kg_m2",
 )
 
 
@@ -523,23 +537,10 @@ def class_memberships(
 
 
 def create_accumulators(classes: dict[str, np.ndarray]) -> dict:
-    metrics = (
-        "temperature_2m_raw_k",
-        "temperature_2m_height_adjusted_k",
-        "relative_humidity_2m_percent",
-        "surface_pressure_raw_pa",
-        "surface_pressure_height_adjusted_pa",
-        "u_wind_10m_m_s",
-        "v_wind_10m_m_s",
-        "wind_speed_10m_m_s",
-        "global_shortwave_radiation_w_m2",
-        "snow_height_m",
-        "precipitation_interval_kg_m2",
-    )
     return {
         source: {
             class_name: {
-                "pairs": {metric: PairStatistics() for metric in metrics},
+                "pairs": {metric: PairStatistics() for metric in PAIR_METRICS},
                 "wind_direction": CircularStatistics(),
                 "wind_vector_squared_error_sum": 0.0,
                 "wind_vector_pair_count": 0,
@@ -573,42 +574,128 @@ def accumulator_results(accumulators: dict) -> dict:
     return metric_results
 
 
-def add_site_values(
+def finite_values(
+    values: dict[str, float], names: tuple[str, ...]
+) -> tuple[float, ...] | None:
+    try:
+        result = tuple(float(values[name]) for name in names)
+    except (KeyError, TypeError, ValueError):
+        return None
+    return result if all(math.isfinite(value) for value in result) else None
+
+
+def select_common_site_values(
+    hicar: dict[str, float],
+    rea_l: dict[str, float],
+    observation: dict[str, float],
+    accounting: dict[str, Counter],
+) -> dict:
+    """Select exact finite observation/HICAR/REA-L metric triplets once."""
+
+    def select(
+        metric: str,
+        names: tuple[str, ...],
+        require_noncalm: bool = False,
+    ) -> tuple[tuple[float, ...], tuple[float, ...], tuple[float, ...]] | None:
+        counts = accounting.setdefault(metric, Counter())
+        counts["candidate_station_time_count"] += 1
+        observed = finite_values(observation, names)
+        hicar_values = finite_values(hicar, names)
+        rea_l_values = finite_values(rea_l, names)
+        if observed is None:
+            reason = "observation_missing_or_nonfinite"
+        elif hicar_values is None and rea_l_values is None:
+            reason = "both_models_missing_or_nonfinite"
+        elif hicar_values is None:
+            reason = "hicar_missing_or_nonfinite"
+        elif rea_l_values is None:
+            reason = "rea_l_missing_or_nonfinite"
+        elif require_noncalm and min(
+            observed[1], hicar_values[1], rea_l_values[1]
+        ) < CALM_WIND_THRESHOLD_M_S:
+            reason = "calm_wind_direction_mask"
+        else:
+            counts["accepted_common_triplet_count"] += 1
+            return hicar_values, rea_l_values, observed
+        counts[reason] += 1
+        return None
+
+    pairs = {
+        metric: selected
+        for metric in PAIR_METRICS
+        if (selected := select(metric, (metric,))) is not None
+    }
+    return {
+        "pairs": pairs,
+        "wind_vector": select(
+            "wind_vector", ("u_wind_10m_m_s", "v_wind_10m_m_s")
+        ),
+        "wind_direction": select(
+            "wind_direction",
+            ("wind_direction_degrees", "wind_speed_10m_m_s"),
+            require_noncalm=True,
+        ),
+    }
+
+
+def add_common_site_values(
     accumulators: dict,
     classes: dict[str, np.ndarray],
-    source: str,
     site_index: int,
-    model: dict[str, float],
-    observation: dict[str, float],
+    common: dict,
 ) -> None:
     for class_name, membership in classes.items():
         if not membership[site_index]:
             continue
-        target = accumulators[source][class_name]
-        for metric, observed in observation.items():
-            if metric in target["pairs"] and metric in model:
-                target["pairs"][metric].add(model[metric], observed)
-        if all(
-            key in model and key in observation
-            for key in ("u_wind_10m_m_s", "v_wind_10m_m_s")
-        ):
-            du = model["u_wind_10m_m_s"] - observation["u_wind_10m_m_s"]
-            dv = model["v_wind_10m_m_s"] - observation["v_wind_10m_m_s"]
-            if math.isfinite(du) and math.isfinite(dv):
+        hicar_target = accumulators["hicar"][class_name]
+        rea_l_target = accumulators["rea_l"][class_name]
+        for metric, (hicar, rea_l, observed) in common["pairs"].items():
+            hicar_target["pairs"][metric].add(hicar[0], observed[0])
+            rea_l_target["pairs"][metric].add(rea_l[0], observed[0])
+        vector = common["wind_vector"]
+        if vector is not None:
+            hicar, rea_l, observed = vector
+            for target, model in (
+                (hicar_target, hicar),
+                (rea_l_target, rea_l),
+            ):
+                du = model[0] - observed[0]
+                dv = model[1] - observed[1]
                 target["wind_vector_squared_error_sum"] += du * du + dv * dv
                 target["wind_vector_pair_count"] += 1
-        if (
-            "wind_direction_degrees" in model
-            and "wind_direction_degrees" in observation
-            and model.get("wind_speed_10m_m_s", 0.0)
-            >= CALM_WIND_THRESHOLD_M_S
-            and observation.get("wind_speed_10m_m_s", 0.0)
-            >= CALM_WIND_THRESHOLD_M_S
-        ):
-            target["wind_direction"].add(
-                model["wind_direction_degrees"],
-                observation["wind_direction_degrees"],
-            )
+        direction = common["wind_direction"]
+        if direction is not None:
+            hicar, rea_l, observed = direction
+            hicar_target["wind_direction"].add(hicar[0], observed[0])
+            rea_l_target["wind_direction"].add(rea_l[0], observed[0])
+
+
+def common_triplet_accounting_results(accounting: dict[str, Counter]) -> dict:
+    return {
+        metric: {
+            "candidate_station_time_count": counts[
+                "candidate_station_time_count"
+            ],
+            "accepted_common_triplet_count": counts[
+                "accepted_common_triplet_count"
+            ],
+            "excluded_station_time_count": (
+                counts["candidate_station_time_count"]
+                - counts["accepted_common_triplet_count"]
+            ),
+            "exclusions": {
+                name: count
+                for name, count in sorted(counts.items())
+                if name
+                not in {
+                    "candidate_station_time_count",
+                    "accepted_common_triplet_count",
+                }
+                and count
+            },
+        }
+        for metric, counts in sorted(accounting.items())
+    }
 
 
 def observation_values(
@@ -705,6 +792,7 @@ def main() -> int:
     site_accumulators = {
         site.key: create_accumulators(single_site_classes) for site in sites
     }
+    common_triplet_accounting: dict[str, Counter] = {}
 
     model_records: dict[datetime, tuple[netCDF4.Dataset, int]] = {}
     overlap_times: list[datetime] = []
@@ -928,58 +1016,36 @@ def main() -> int:
                     name: float(values[site_index])
                     for name, values in reference_fields.items()
                 }
-                add_site_values(
-                    accumulators,
-                    classes,
-                    "hicar",
-                    site_index,
+                common = select_common_site_values(
                     hicar_site_fields,
-                    observed,
-                )
-                add_site_values(
-                    seasonal_accumulators[climatological_season(valid)],
-                    classes,
-                    "hicar",
-                    site_index,
-                    hicar_site_fields,
-                    observed,
-                )
-                add_site_values(
-                    accumulators,
-                    classes,
-                    "rea_l",
-                    site_index,
                     reference_site_fields,
                     observed,
+                    common_triplet_accounting,
                 )
-                add_site_values(
+                add_common_site_values(
+                    accumulators,
+                    classes,
+                    site_index,
+                    common,
+                )
+                add_common_site_values(
                     seasonal_accumulators[climatological_season(valid)],
                     classes,
-                    "rea_l",
                     site_index,
-                    reference_site_fields,
-                    observed,
+                    common,
                 )
-                for source, model_values in (
-                    ("hicar", hicar_site_fields),
-                    ("rea_l", reference_site_fields),
-                ):
-                    add_site_values(
-                        lead_accumulator,
-                        classes,
-                        source,
-                        site_index,
-                        model_values,
-                        observed,
-                    )
-                    add_site_values(
-                        site_accumulators[site.key],
-                        single_site_classes,
-                        source,
-                        0,
-                        model_values,
-                        observed,
-                    )
+                add_common_site_values(
+                    lead_accumulator,
+                    classes,
+                    site_index,
+                    common,
+                )
+                add_common_site_values(
+                    site_accumulators[site.key],
+                    single_site_classes,
+                    0,
+                    common,
+                )
             previous_model_precipitation = hicar_precipitation
             previous_model_time = valid
             matched_times.append(valid)
@@ -1030,6 +1096,10 @@ def main() -> int:
             "quality_filter": (
                 "DWH query and reader require data-quality category >=4"
             ),
+            "pairing": (
+                "Each metric uses exact common finite observation/HICAR/REA-L "
+                "station-time triplets; neither model receives an unpaired sample."
+            ),
             "terrain_exposure": (
                 "HICAR-cell elevation minus median terrain in a 5 km "
                 "half-width square; valley/ridge thresholds are -/+150 m"
@@ -1038,6 +1108,16 @@ def main() -> int:
             "calm_direction_mask_threshold_m_s": CALM_WIND_THRESHOLD_M_S,
         },
         "observation_inventory": observation_inventory,
+        "common_triplet_accounting": {
+            "interpretation": (
+                "Counts are evaluated once per metric and station-time before "
+                "aggregation into overlapping spatial, seasonal, lead-time, and "
+                "single-site classes. Exclusion reasons are mutually exclusive."
+            ),
+            "metrics": common_triplet_accounting_results(
+                common_triplet_accounting
+            ),
+        },
         "observation_file": str(args.observations.resolve()),
         "rea_l_reference": str(
             (args.native_reference_csv or args.reference_list).resolve()

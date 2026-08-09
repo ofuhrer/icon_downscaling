@@ -2,9 +2,10 @@
 """Summarize four national SwissMetNet HICAR/REA-L evaluator reports.
 
 The evaluator reports contain aggregate errors at each station and lead hour.
-Consequently, this program can make equal-station comparisons without opening
-large HICAR files.  It deliberately excludes a station/metric when HICAR and
-REA-L do not have the same positive pair count.
+Consequently, this program can make both equal-station comparisons and
+pair-count-weighted network-pooled RMSE reconstructions without opening large
+HICAR files.  It deliberately excludes a station/metric when HICAR and REA-L
+do not have the same positive pair count.
 
 Footprint sensitivity cannot be reconstructed from evaluator aggregates.  The
 output JSON therefore records the exact row-level/model-file contract needed by
@@ -45,9 +46,7 @@ FOOTPRINT_INPUT_CONTRACT = {
         "events": {
             "<season>": {
                 "evaluator_report": "path to the evaluator JSON used here",
-                "hicar_output_files": [
-                    "time-ordered NetCDF files containing time, u10m, and v10m"
-                ],
+                "hicar_output_files": ["time-ordered NetCDF files containing time, u10m, and v10m"],
                 "observed_wind_pairs_csv": (
                     "CSV with unique (valid_time, station_key) rows and finite "
                     "observed_u10_m_s, observed_v10_m_s"
@@ -158,17 +157,15 @@ def comparison_row(
         return None, "missing_or_nonfinite_rmse"
     delta = h_rmse - r_rmse
     outcome = (
-        "improved"
-        if delta < -TIE_TOLERANCE
-        else "degraded"
-        if delta > TIE_TOLERANCE
-        else "tied"
+        "improved" if delta < -TIE_TOLERANCE else "degraded" if delta > TIE_TOLERANCE else "tied"
     )
     moments: dict[str, float | None] = {
         "hicar_bias": None,
         "rea_l_bias": None,
         "hicar_model_mean": None,
         "rea_l_model_mean": None,
+        "hicar_observation_mean": None,
+        "rea_l_observation_mean": None,
         "observation_mean": None,
     }
     try:
@@ -200,9 +197,12 @@ def comparison_row(
                 "rea_l_bias": rea_l_bias,
                 "hicar_model_mean": hicar_model_mean,
                 "rea_l_model_mean": rea_l_model_mean,
-                "observation_mean": (
-                    hicar_observation_mean + rea_l_observation_mean
-                ) / 2.0,
+                "hicar_observation_mean": hicar_observation_mean,
+                "rea_l_observation_mean": rea_l_observation_mean,
+                # Backward-compatible shared-observation alias. The explicit
+                # model-pair names above make the field naming consistent with
+                # the corresponding model means.
+                "observation_mean": (hicar_observation_mean + rea_l_observation_mean) / 2.0,
             }
     return {
         "pair_count": h_count,
@@ -284,9 +284,7 @@ def load_common_keys(
             ),
         }
     if len(keys) != expected_count:
-        raise ValueError(
-            f"common-site definition has {len(keys)} keys, expected {expected_count}"
-        )
+        raise ValueError(f"common-site definition has {len(keys)} keys, expected {expected_count}")
     provenance.update({"available": True, "site_count": len(keys)})
     return keys, provenance
 
@@ -303,7 +301,9 @@ def station_season_rows(
         path, report = reports[season]
         metadata = station_metadata(report, path)
         available_metrics = metric_names(report["site_metrics"])
-        metrics = available_metrics if selected_metrics is None else available_metrics & selected_metrics
+        metrics = (
+            available_metrics if selected_metrics is None else available_metrics & selected_metrics
+        )
         for key, site_values in sorted(report["site_metrics"].items()):
             site = metadata[key]
             canonical = {
@@ -359,12 +359,24 @@ def station_season_rows(
 
 def summarize_group(rows: list[dict]) -> dict:
     deltas = [row["rmse_delta_hicar_minus_rea_l"] for row in rows]
+    pair_count_total = sum(row["pair_count"] for row in rows)
+    network_pooled_hicar_rmse = math.sqrt(
+        sum(row["pair_count"] * row["hicar_rmse"] ** 2 for row in rows) / pair_count_total
+    )
+    network_pooled_rea_l_rmse = math.sqrt(
+        sum(row["pair_count"] * row["rea_l_rmse"] ** 2 for row in rows) / pair_count_total
+    )
     result = {
         "paired_station_count": len(rows),
-        "pair_count_total": sum(row["pair_count"] for row in rows),
+        "pair_count_total": pair_count_total,
         "equal_station_mean_hicar_rmse": mean(row["hicar_rmse"] for row in rows),
         "equal_station_mean_rea_l_rmse": mean(row["rea_l_rmse"] for row in rows),
         "equal_station_mean_rmse_delta_hicar_minus_rea_l": mean(deltas),
+        "network_pooled_hicar_rmse": network_pooled_hicar_rmse,
+        "network_pooled_rea_l_rmse": network_pooled_rea_l_rmse,
+        "network_pooled_rmse_delta_hicar_minus_rea_l": (
+            network_pooled_hicar_rmse - network_pooled_rea_l_rmse
+        ),
         "median_station_rmse_delta_hicar_minus_rea_l": median(deltas),
         "improved_station_count": sum(row["outcome"] == "improved" for row in rows),
         "degraded_station_count": sum(row["outcome"] == "degraded" for row in rows),
@@ -375,12 +387,12 @@ def summarize_group(rows: list[dict]) -> dict:
         "rea_l_bias",
         "hicar_model_mean",
         "rea_l_model_mean",
+        "hicar_observation_mean",
+        "rea_l_observation_mean",
         "observation_mean",
     )
     moment_rows = [
-        row
-        for row in rows
-        if all(row.get(field) is not None for field in moment_fields)
+        row for row in rows if all(row.get(field) is not None for field in moment_fields)
     ]
     if moment_rows:
         result["mean_bias_paired_station_count"] = len(moment_rows)
@@ -389,12 +401,19 @@ def summarize_group(rows: list[dict]) -> dict:
             "rea_l_bias": "equal_station_mean_rea_l_bias",
             "hicar_model_mean": "equal_station_mean_hicar_model_mean",
             "rea_l_model_mean": "equal_station_mean_rea_l_model_mean",
-            "observation_mean": "equal_station_mean_observation",
+            "hicar_observation_mean": "equal_station_mean_hicar_observation_mean",
+            "rea_l_observation_mean": "equal_station_mean_rea_l_observation_mean",
+            "observation_mean": "equal_station_mean_observation_mean",
         }
-        result.update({
-            output_field: mean(row[input_field] for row in moment_rows)
-            for input_field, output_field in summary_fields.items()
-        })
+        result.update(
+            {
+                output_field: mean(row[input_field] for row in moment_rows)
+                for input_field, output_field in summary_fields.items()
+            }
+        )
+        # Preserve the original public field while exposing the consistently
+        # composed ``equal_station_mean_`` + ``observation_mean`` name.
+        result["equal_station_mean_observation"] = result["equal_station_mean_observation_mean"]
     return result
 
 
@@ -447,16 +466,12 @@ def lead_hour_tables(
                 if comparison is None:
                     exclusions[f"{reason}:{season}:{raw_hour}:{metric}"] += 1
                     continue
-                season_rows.append(
-                    {"lead_hour": int(raw_hour), "metric": metric, **comparison}
-                )
+                season_rows.append({"lead_hour": int(raw_hour), "metric": metric, **comparison})
         output[season] = season_rows
     return output, dict(sorted(exclusions.items()))
 
 
-def selected_site_listings(
-    rows: list[dict], metadata: dict[str, dict], worst_count: int
-) -> dict:
+def selected_site_listings(rows: list[dict], metadata: dict[str, dict], worst_count: int) -> dict:
     wind_metrics = {"wind_speed_10m_m_s", "wind_vector"}
     wind_rows = [row for row in rows if row["metric"] in wind_metrics]
 
@@ -466,9 +481,7 @@ def selected_site_listings(
             {
                 **metadata[key],
                 "station_season_wind_metrics": [
-                    row
-                    for row in wind_rows
-                    if row["station_key"] == key
+                    row for row in wind_rows if row["station_key"] == key
                 ],
             }
             for key in keys
@@ -499,9 +512,7 @@ def selected_site_listings(
 
 def atomic_write_json(path: Path, value: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with NamedTemporaryFile(
-        mode="w", encoding="utf-8", dir=path.parent, delete=False
-    ) as stream:
+    with NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, delete=False) as stream:
         json.dump(value, stream, indent=2, sort_keys=True, allow_nan=False)
         stream.write("\n")
         temporary = Path(stream.name)
@@ -578,9 +589,7 @@ def run(args: argparse.Namespace) -> dict:
                 )
 
     selected_metrics = set(args.metric) if args.metric else None
-    rows, station_exclusions, metadata = station_season_rows(
-        reports, common_keys, selected_metrics
-    )
+    rows, station_exclusions, metadata = station_season_rows(reports, common_keys, selected_metrics)
     if not rows:
         raise ValueError("no valid paired station-season RMSE rows")
     lead_tables, lead_exclusions = lead_hour_tables(reports, selected_metrics)
@@ -621,8 +630,10 @@ def run(args: argparse.Namespace) -> dict:
                 "observation mean for that station aggregate."
             ),
             "aggregation": (
-                "Arithmetic means of station RMSEs: each station has equal weight; "
-                "pair-count-pooled RMSE is intentionally not reconstructed from aggregates."
+                "Equal-station mean RMSE is the arithmetic mean of station RMSEs. "
+                "Network-pooled RMSE is reconstructed separately as "
+                "sqrt(sum(n_i * RMSE_i^2) / sum(n_i)), where n_i is the eligible "
+                "paired count for station i."
             ),
             "national_four_season_intersection": (
                 "The exact station-key intersection of the four national reports, "
@@ -633,7 +644,10 @@ def run(args: argparse.Namespace) -> dict:
                 "they are not equal-station averages."
             ),
             "rmse_delta_sign": "negative improves on REA-L; positive degrades",
-            "terrain_ridge_definition": "HICAR terrain > 5-km-window median by 150 m",
+            "terrain_ridge_definition": (
+                "HICAR terrain exceeds the median in an approximately 10-km-wide "
+                "square (5-km half-width) by 150 m"
+            ),
         },
         "inputs": [
             {
@@ -665,9 +679,7 @@ def run(args: argparse.Namespace) -> dict:
             "site_keys": sorted(national_four_season_keys),
         },
         "common_65": common_provenance,
-        "selected_site_listings": selected_site_listings(
-            rows, metadata, args.worst_count
-        ),
+        "selected_site_listings": selected_site_listings(rows, metadata, args.worst_count),
         "footprint_sensitivity": FOOTPRINT_INPUT_CONTRACT,
     }
     atomic_write_csv(args.output_csv, rows)

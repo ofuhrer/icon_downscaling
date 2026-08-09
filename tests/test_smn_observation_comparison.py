@@ -153,6 +153,79 @@ def test_circular_error_wraps_at_north():
     assert abs(result["circular_bias_degrees"]) < 1.0e-12
 
 
+def test_common_triplets_exclude_both_models_when_either_is_nonfinite():
+    classes = {"all_sites": np.array([True])}
+    accumulators = MODULE.create_accumulators(classes)
+    accounting = {}
+    direction = float(
+        MODULE.wind_direction_from(np.array([3.0]), np.array([4.0]))[0]
+    )
+    observation = {
+        "temperature_2m_height_adjusted_k": 280.0,
+        "u_wind_10m_m_s": 3.0,
+        "v_wind_10m_m_s": 4.0,
+        "wind_speed_10m_m_s": 5.0,
+        "wind_direction_degrees": direction,
+        "precipitation_interval_kg_m2": 1.0,
+    }
+    hicar = {
+        "temperature_2m_height_adjusted_k": 281.0,
+        "u_wind_10m_m_s": 3.0,
+        "v_wind_10m_m_s": 4.0,
+        "wind_speed_10m_m_s": 5.0,
+        "wind_direction_degrees": direction,
+        "precipitation_interval_kg_m2": 2.0,
+    }
+    rea_l = {
+        "temperature_2m_height_adjusted_k": 282.0,
+        "u_wind_10m_m_s": 6.0,
+        "v_wind_10m_m_s": 8.0,
+        "wind_speed_10m_m_s": 10.0,
+        "wind_direction_degrees": direction,
+        "precipitation_interval_kg_m2": 3.0,
+    }
+    common = MODULE.select_common_site_values(
+        hicar, rea_l, observation, accounting
+    )
+    MODULE.add_common_site_values(accumulators, classes, 0, common)
+
+    hicar_bad = dict(hicar)
+    hicar_bad["temperature_2m_height_adjusted_k"] = math.nan
+    rea_l_bad = dict(rea_l)
+    rea_l_bad["u_wind_10m_m_s"] = math.nan
+    rea_l_bad["wind_speed_10m_m_s"] = math.nan
+    rea_l_bad["precipitation_interval_kg_m2"] = math.nan
+    common = MODULE.select_common_site_values(
+        hicar_bad, rea_l_bad, observation, accounting
+    )
+    MODULE.add_common_site_values(accumulators, classes, 0, common)
+
+    results = MODULE.accumulator_results(accumulators)
+    for source in ("hicar", "rea_l"):
+        assert results[source]["all_sites"][
+            "temperature_2m_height_adjusted_k"
+        ]["count"] == 1
+        assert results[source]["all_sites"]["wind_speed_10m_m_s"]["count"] == 1
+        assert results[source]["all_sites"]["wind_vector"]["count"] == 1
+        assert results[source]["all_sites"][
+            "precipitation_interval_kg_m2"
+        ]["count"] == 1
+    counts = MODULE.common_triplet_accounting_results(accounting)
+    assert counts["temperature_2m_height_adjusted_k"]["exclusions"] == {
+        "hicar_missing_or_nonfinite": 1
+    }
+    for metric in (
+        "wind_speed_10m_m_s",
+        "wind_vector",
+        "precipitation_interval_kg_m2",
+    ):
+        assert counts[metric]["candidate_station_time_count"] == 2
+        assert counts[metric]["accepted_common_triplet_count"] == 1
+        assert counts[metric]["exclusions"] == {
+            "rea_l_missing_or_nonfinite": 1
+        }
+
+
 def test_full_station_comparison_reports_exact_synthetic_match(tmp_path):
     static = tmp_path / "static.nc"
     output = tmp_path / "output.nc"
@@ -346,3 +419,20 @@ def test_full_station_comparison_reports_exact_synthetic_match(tmp_path):
         0.0,
         abs_tol=1e-5,
     )
+    accounting = payload["common_triplet_accounting"]["metrics"]
+    assert accounting["temperature_2m_height_adjusted_k"] == {
+        "candidate_station_time_count": 2,
+        "accepted_common_triplet_count": 2,
+        "excluded_station_time_count": 0,
+        "exclusions": {},
+    }
+    assert accounting["wind_speed_10m_m_s"][
+        "accepted_common_triplet_count"
+    ] == 2
+    assert accounting["wind_vector"]["accepted_common_triplet_count"] == 2
+    assert accounting["precipitation_interval_kg_m2"] == {
+        "candidate_station_time_count": 2,
+        "accepted_common_triplet_count": 1,
+        "excluded_station_time_count": 1,
+        "exclusions": {"observation_missing_or_nonfinite": 1},
+    }

@@ -53,19 +53,23 @@ def fixture(tmp_path):
         for metric_index, metric in enumerate(MODULE.METRICS):
             hicar = 1 + metric_index / 2 + season_index / 10
             rea_l = hicar + 0.2
-            summary = {"subset": "national_four_season_intersection", "season": season,
-                "stratum": "all_sites", "metric": metric, "paired_station_count": 12,
-                "equal_station_mean_hicar_rmse": hicar,
-                "equal_station_mean_rea_l_rmse": rea_l}
-            if metric in MODULE.SCALAR_STATS:
-                summary.update({"equal_station_mean_hicar_bias": -0.1,
-                    "equal_station_mean_rea_l_bias": 0.1,
-                    "equal_station_mean_hicar_model_mean": 10 + metric_index,
-                    "equal_station_mean_rea_l_model_mean": 10.2 + metric_index,
-                    "equal_station_mean_observation_mean": 10.1 + metric_index})
-            summaries.append(summary)
-            first_hour = 2 if metric == "precipitation_interval_kg_m2" else 1
-            for hour in range(first_hour, 9):
+            for subset, station_count in (("national", 12), ("national_four_season_intersection", 10)):
+                summary = {"subset": subset, "season": season,
+                    "stratum": "all_sites", "metric": metric,
+                    "paired_station_count": station_count,
+                    "equal_station_mean_hicar_rmse": hicar,
+                    "equal_station_mean_rea_l_rmse": rea_l,
+                    "network_pooled_hicar_rmse": hicar + 0.05,
+                    "network_pooled_rea_l_rmse": rea_l + 0.05}
+                if metric in MODULE.SCALAR_STATS:
+                    summary.update({"equal_station_mean_hicar_bias": -0.1,
+                        "equal_station_mean_rea_l_bias": 0.1,
+                        "equal_station_mean_hicar_model_mean": 10 + metric_index,
+                        "equal_station_mean_rea_l_model_mean": 10.2 + metric_index,
+                        "equal_station_mean_observation": 10.1 + metric_index})
+                summaries.append(summary)
+            first_hour = 1 if metric == "precipitation_interval_kg_m2" else 0
+            for hour in range(first_hour, 25):
                 lead = {"lead_hour": hour, "metric": metric, "pair_count": 96,
                     "hicar_rmse": hicar + hour / 50, "rea_l_rmse": rea_l + hour / 100}
                 if metric in MODULE.SCALAR_STATS:
@@ -81,6 +85,8 @@ def fixture(tmp_path):
                 group = station_index % 3
                 stations.append({"season": season, "station_key": f"S{station_index}:1",
                     "station_elevation_m": 400 + 200 * station_index,
+                    "hicar_elevation_m": 420 + 210 * station_index,
+                    "nearest_cell_distance_km": 0.05 + station_index / 100,
                     "elevation_class": ("low", "middle", "high")[group],
                     "terrain_relative_elevation_m": -200 + 200 * group,
                     "terrain_class": ("valley", "neutral", "ridge")[group],
@@ -148,17 +154,36 @@ def test_artifact_is_deterministic_and_canonical(tmp_path):
     assert first["surface"] == first["manifest"]["surface"] == "report"
     assert first["snapshot"]["status"] == "ready"
     assert {name: len(rows) for name, rows in first["snapshot"]["datasets"].items()} == {
-        "seasonal_metrics": 20, "lead_metrics": 156, "station_wind": 96,
+        "seasonal_metrics": 20, "seasonal_population_sensitivity": 40,
+        "lead_metrics": 496, "station_wind": 96,
         "elevation_counts": 24, "footprint_wind": 8}
     seasonal = first["snapshot"]["datasets"]["seasonal_metrics"]
     assert {row["metric"] for row in seasonal} == set(MODULE.METRICS)
     assert all(row["paired_station_count"] == 12 for row in seasonal)
+    assert all(row["network_pooled_hicar_rmse"] > row["hicar_rmse"] for row in seasonal)
     assert all(row["hicar_bias"] is not None for row in seasonal
         if row["metric"] in MODULE.SCALAR_STATS)
+    sensitivity = first["snapshot"]["datasets"]["seasonal_population_sensitivity"]
+    assert {row["population"] for row in sensitivity} == {
+        "All season-available stations", "Four-season station intersection"}
+    assert {row["paired_station_count"] for row in sensitivity} == {10, 12}
+    station = first["snapshot"]["datasets"]["station_wind"][0]
+    assert station["hicar_minus_station_elevation_m"] == pytest.approx(
+        station["hicar_elevation_m"] - station["station_elevation_m"]
+    )
     assert all(not item["path"].startswith("/") for item in first["sources"])
 
     national_path = tmp_path / "results" / "national.json"
     national = json.loads(national_path.read_text())
+    incomplete = json.loads(json.dumps(national))
+    incomplete["lead_hour_tables"]["DJF"] = [
+        row for row in incomplete["lead_hour_tables"]["DJF"]
+        if not (row["metric"] == "temperature_2m_height_adjusted_k" and row["lead_hour"] == 0)
+    ]
+    dump(national_path, incomplete)
+    with pytest.raises(ValueError, match="lead hours must be exactly"):
+        MODULE.derive_datasets(MODULE.load_evidence(tmp_path / "inputs.json"))
+
     national["equal_station_summaries"] = [
         row for row in national["equal_station_summaries"] if row["metric"] == "wind_vector"
     ]
