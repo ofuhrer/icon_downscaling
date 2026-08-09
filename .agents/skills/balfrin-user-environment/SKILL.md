@@ -76,8 +76,12 @@ global `pp-short` array, normally capped at eight active jobs rather than
 multiplying producers by the number of model chains. The CPU nodes are
 shared, and Balfrin does not enforce job memory limits: reserve at least four
 CPUs per task as the memory-placement proxy. The measured campaign-worker
-peak is about 3.8 GB, while four CPUs represent about 7 GB on the current
-256-CPU/456704-MB nodes. Treat `--mem` as documentation, not protection.
+peak for the older small case was about 3.8 GB, but national 2061x1431
+hicarprep workers reached 53--59 GB each. The current six-worker national cap
+therefore represents roughly 360 GB before auxiliary jobs on the
+256-CPU/456704-MB nodes. Treat `--mem` as documentation, not protection, and
+recheck measured RSS before increasing that cap or co-locating other
+memory-heavy work.
 NetCDF assessment code must bound simultaneously open datasets: the wind
 spin-up assessor exceeded 32 GB when it retained all 156 HDF5-backed files,
 but stabilized near 2 GB with one candidate and one reference open at a time.
@@ -89,6 +93,14 @@ larger reservations of 4, 8, then 16 CPUs. Pre-emptible campaign plans must deri
 count from the node budget and per-attempt node count, use a shared
 valid-time forcing cache, and interleave input with lifecycle tasks so idle
 GPU slots are not caused by CPU-pipeline starvation.
+
+For multi-gigabyte forcing/LBC migrations on the parallel filesystem, avoid
+Python `shutil.copyfile`'s Linux fast-copy path. It reproducibly produced a
+same-sized but checksum-different copy for one 1.46 GB sparse-LBC file while
+a buffered read/write copy was byte-identical and the source checksum and
+metadata remained stable. Copy through a bounded user-space buffer, flush and
+fsync, then require source/copy SHA-256 equality before modifying or publishing
+the copy.
 
 For long, expensive, shared, or pre-emptible campaigns, use a checksum-bound
 runtime, a bounded controller, `make balfrin-preflight CHECK_FDB=1`, and the
