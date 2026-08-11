@@ -17,13 +17,17 @@ termination.
 - RK3, third-order horizontal and vertical advection, flux correction;
 - discretely adjoint variational wind, `alpha_const=1`, 2500 iterations;
 - Sx on with 500 m smoothing and density advection on;
-- Morrison microphysics, YSU PBL, Noah-MP, revised MM5 surface, RRTMGP;
+- Morrison microphysics, YSU PBL, Noah-MP, revised MM5 surface, RRTMGP every
+  600 s with `rrtmgp_block_N=256` (one block per compute rank for the selected
+  national 48-rank decomposition);
 - four-layer depth-varying soil texture with SMI land initialization;
 - terrain radiation off.
 
 Atmospheric forcing is hicarprep P/T/U/V/QV/QC/QI in dry-air mixing ratios.
 Set `qv_is_spec_humidity=.False.`, `wvar=''`, and
 `relax_filters=.False.`. Sparse target-grid LBC is the lateral boundary path.
+The RRTMGP block setting is topology-specific: recompute the local block count
+and requalify reproducibility if the domain or compute decomposition changes.
 
 ## Required interpretation checks
 

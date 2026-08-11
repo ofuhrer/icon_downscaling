@@ -2,23 +2,28 @@
 
 ## Current conclusion
 
-**The replacement national 20 m / 12 m setup is not campaign-ready.** Four
-successively narrower interventions against the RRTMGP/OpenACC LW mapping stack
-(`7729e124`, `fb4d811b`, `bc9dc1ac`, and `6071058f`) plus globally synchronous
-execution all failed normal-cadence one-hour A/A repeatability. The final
-candidate still differed at 60 minutes in 19 evaluation fields, with `lwtr`
-again directly affected. The launch was therefore withheld: no daylight
-restart proof, four-season integration, or new all-station skill claim was
-made. A final call-level discriminator changed the fault classification without
-changing that stopping decision. At the first differing LW call, raw HICAR
-inputs were bit-identical while RRTMGP outputs differed on exactly one
-32-column GPU-lane block per affected rank. A 32-column snapshot replayed 100
-times in a standalone one-GPU RRTMGP driver was bit-stable both compactly and
-after reconstructing the original rank width; CUDA memcheck and racecheck found
-no errors or hazards. The defect is therefore most likely in HICAR's OpenACC
-data ownership/lifetime or caller--RRTMGP handoff, not standalone RRTMGP
-numerics. This stopping conclusion supersedes the historical investigation
-detail below.
+**GPU repeatability is resolved for the selected national configuration by
+using one RRTMGP block per compute rank.** Clean HICAR `8a019da8`, normal
+600-second radiation, the 12-node/48-compute-rank decomposition, and
+`rrtmgp_block_N=256` produced four independent one-hour replicas that were
+bit-exact pairwise at all seven output times and across all 196 terminal
+model-core restart variables. An independent 00--08 UTC control and 00--04 +
+04--08 restart chain were also bit-exact at all nine hourly output times and
+across all 196 variables in both the 04 UTC and 08 UTC checkpoints. This proof
+crosses sunrise: `rsds` becomes nonzero at 06 UTC and reaches a domain maximum
+of 419.6 W m-2 at 08 UTC in both trajectories. The default `150` setting
+creates two blocks per rank for this decomposition and remains unqualified.
+
+The bounded causal conclusion is that repeated multi-block RRTMGP object
+allocation/finalization exposes the nondeterministic OpenACC path; it is not a
+proof of the defective source line. Upstream main uses the same RRTMGP v1.9.2
+execution path and its historical reproducibility evidence was a small
+one-block case, so further downstream mapping patches or a broad git bisect are
+not efficient. The selected workaround has no measured radiation-time or
+memory penalty in the one-hour controls. It is topology-specific: domain or
+decomposition changes must preserve one block per rank and be rechecked. Stop
+the mapping investigation here; the multi-block path is not a campaign
+runtime.
 
 The repository is now oriented around one R&D path. The first direct-input
 pilot found an unstable cached RBF stencil that created isolated 320 m s-1
@@ -144,13 +149,11 @@ runs therefore used supported Noah-MP MOST option 1, as confirmed by the nearly
 identical first-hour flux fields when option 1 is written explicitly.
 Coordinator `f283aef` pins that existing effective choice to remove the
 ambiguity; this is configuration provenance, not a physics intervention. Its
-clean NVHPC/NCCL build is complete. The first corrected-runtime repeatability
-job completed one replicate and was then pre-empted during the second; the
-other discriminators were canceled when a forcing-geometry defect was found.
-They therefore establish neither failure nor exactness and must be rerun with
-the repaired campaign inputs. No national seasonal model chain may launch
-until the repaired-input A/A and continuous-versus-segmented controls pass. No
-national added-value result or national restart-equivalence claim is yet
+clean NVHPC/NCCL build is complete. Early corrected-runtime tests were
+interrupted by pre-emption and a forcing-geometry defect, but the repaired
+inputs were subsequently used for the successful one-block A/A and daylight
+restart proofs summarized above. National restart equivalence is established
+for that selected runtime; no replacement-national added-value result is yet
 established.
 
 The active path is:
@@ -179,7 +182,7 @@ and restart completeness.
 | Moisture | Dry-air mixing ratios; QI explicitly zero only because source is absent; W diagnosed by HICAR | Explicit and interpretable; W remains a sensitivity |
 | LBC | Hourly sparse hicarprep states, 10 km shoulder | Usable provisional choice; width is not closed |
 | Land initialization | Native TERRA soil state plus ICON SWE/depth/density and bulk `T_SNOW` transferred to NoahMP | Integrated starting point; glacier snow is preserved and sourced vegetation climatologies are wired, but the winter response and any supplied climatology still need controlled tests |
-| Radiation | RRTMGP, 600 s update; terrain radiation off | Blocked: the 12-node NVHPC/OpenACC path is not A/A repeatable; snapshot replay points to HICAR-side data lifetime/handoff rather than standalone RRTMGP numerics, and no campaign baseline is selected |
+| Radiation | RRTMGP, 600 s update, `rrtmgp_block_N=256`; terrain radiation off | Selected for the 12-node/48-compute-rank national layout: one block per rank passed four-replica A/A and 00--08 UTC daylight restart equivalence; the default two-block path remains unqualified |
 
 The forcing renderer now accepts only this configuration plus three output
 profiles. It requires one static domain, four soil layers, matching hourly
@@ -522,25 +525,43 @@ that 200 m HICAR already adds wind skill over REA-L-CH1.
 
 ## Decision sequence
 
-1. Stop the current campaign path. Do not resume input preparation or launch
-   the national seasonal integrations with the tested NVHPC/OpenACC RRTMGP
-   runtime.
-2. Resume only after an explicit new decision to investigate the remaining
-   HICAR/OpenACC caller--RRTMGP data-lifetime defect or to qualify a
-   scientifically acceptable alternative radiation/runtime path. Any
-   replacement must first pass the
-   same normal-cadence one-hour A/A test and then the 00--08 UTC daylight
-   continuous/segmented restart proof.
-3. Only after those proofs should the already-defined all-station seasonal,
-   ridge/elevation, and lead/valid-time analyses be reconsidered. Do not test
-   100 m or plan a 20-year run on the present evidence.
+1. Use clean HICAR `8a019da8` with `rrtmgp_block_N=256` on the selected
+   12-node/48-compute-rank national layout. This is the reproducible GPU
+   runtime for the next national experiment.
+2. Stop source-level RRTMGP/OpenACC mapping work. The one-block intervention
+   resolves the practical requirement; the multi-block path remains
+   unqualified and is not worth a deeper R&D debugging branch now.
+3. If the domain or compute decomposition changes, verify that every rank
+   still has one RRTMGP block and repeat the bounded A/A proof. Do not treat
+   the literal block-size value as topology-independent.
+4. The reproducibility prerequisite no longer blocks completing the remaining
+   seasonal inputs and reconsidering the all-station, ridge/elevation, and
+   lead/valid-time analyses. The existing 24-hour evidence still does not
+   justify a 100 m or 20-year production choice.
 
 ## Verification status
 
+- Selected national GPU runtime: clean HICAR `8a019da8`, executable SHA-256
+  `08a35f20...9836e39`, 12 nodes/48 compute ranks, normal 600-second radiation,
+  and `rrtmgp_block_N=256`. Four independent one-hour jobs were exact for all
+  eight stored output variables at seven times and all 196 terminal restart
+  variables. The 00--08 UTC continuous control and 00--04 + 04--08 restart
+  chain were exact for the same eight variables at all nine hourly times and
+  all 196 variables at both 04 and 08 UTC. Shortwave was zero through 05 UTC,
+  then nonzero over 2,928,375 cells at 06--08 UTC with maxima 62.6, 238.9, and
+  419.6 W m-2. Evidence is under
+  `$SCRATCH/icon_hicar/rd/swiss_all_stations_20m/diagnostics/rrtmgp_oneblock_8a019da8_60m_aaa`
+  and `rrtmgp_oneblock_8a019da8_daylight_restart`; the compact durable reports
+  and provenance are under
+  `/store_new/mch/msopr/olifu/icon_downscaling/rd/national_oneblock_repro_8a019da8`.
+  The serialized NetCDF time
+  is nominal time plus 0.432 s because `output_obj.F90` deliberately adds
+  `5d-6` days; the integrator clips and snaps to the exact event time, so this
+  is not an extra physics timestep.
 - Coordinator tests: 136 passed.
 - Repository syntax/policy checks: passed.
-- The remaining 12-node GPU nondeterminism is isolated to the HICAR/OpenACC
-  context around repeated RRTMGP execution, not restart I/O, the LBC endpoint,
+- The default two-block 12-node GPU nondeterminism was isolated to the
+  HICAR/OpenACC context around repeated RRTMGP execution, not restart I/O, the LBC endpoint,
   or the standalone RRTMGP calculation. Diagnostic HICAR `44d434da` hashed all
   raw LW inputs and broadband outputs per rank and call. In a clean replica
   pair, the first difference was call 3 at 10 minutes on global ranks 1, 17,
@@ -556,8 +577,8 @@ that 200 m HICAR already adds wind skill over REA-L-CH1.
   `rrtmgp_snapshot_44d434da_rank17_c3_cols97_128`, and the two
   `rrtmgp_replay_44d434da_rank17_c3_cols97_128_*` directories. This is strong
   evidence for HICAR-side mapping/alias lifetime or handoff sensitivity; it is
-  not evidence for a self-contained RRTMGP/NVHPC reproducer. Experiments stop
-  here.
+  not evidence for a self-contained RRTMGP/NVHPC reproducer. That diagnostic
+  branch stopped here.
   With normal 600-second
   radiation, replicas first differ after two to four radiation updates in
   exactly 32 contiguous `lwtr` cells corresponding to one flattened GPU warp;
@@ -594,9 +615,9 @@ that 200 m HICAR already adds wind skill over REA-L-CH1.
   difference 0.7407), with a maximum cross-field absolute difference of
   1121.93. The identified duplicate-mapping stack is therefore not the root
   fix; removing it only delayed the same failure. Normal-cadence 12-node GPU
-  RRTMGP is not repeatable enough for scientific attribution, so the daylight
-  proof and seasonal campaign were not launched. Per the explicit stopping
-  decision, no further source discriminator is planned. Compact durable
+  two-block RRTMGP path is not repeatable enough for scientific attribution,
+  so its daylight proof and seasonal campaign were not launched. Per that
+  stopping decision, no further source discriminator is planned. Compact durable
   evidence is under
   `/store_new/mch/msopr/olifu/icon_downscaling/rd/national_20m_rrtmgp_stop_6071058f`:
   the terminal A--B comparison, clean-build provenance, exact HICAR source

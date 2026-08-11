@@ -89,6 +89,7 @@ def test_renderer_has_one_explicit_hicarprep_configuration(tmp_path: Path) -> No
         "Sx = .True.", "advect_density = .True.", "alpha_const = 1.0",
         "terrain_shading = .False.", "height_lowest_level = 20.0",
         "cfl_reduction_factor = 1.6", "update_interval_rad = 600.0",
+        "rrtmgp_block_N = 256",
     ):
         assert setting in text
     assert str(boundary_list.resolve()) in text

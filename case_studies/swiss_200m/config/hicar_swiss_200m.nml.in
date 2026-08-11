@@ -105,6 +105,9 @@
   ! Explicitly freeze the previously effective RRTMGP defaults. Terrain
   ! radiation remains off unless a causal profile is selected explicitly.
   update_interval_rad = @RADIATION_UPDATE_INTERVAL@
+  ! The selected 48-compute-rank national layout is reproducible with one
+  ! RRTMGP block per rank; the default block size creates two and is not.
+  rrtmgp_block_N = 256
   ! Simulation and forcing timestamps are UTC.
   tzone = 0.0
   icloud = 3
