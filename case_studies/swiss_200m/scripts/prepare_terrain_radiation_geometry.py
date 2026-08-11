@@ -53,6 +53,19 @@ def publish_ready(path: Path) -> str:
     return digest
 
 
+def require_ready(path: Path) -> str:
+    ready = Path(f"{path}.ready")
+    if not path.is_file() or not ready.is_file():
+        raise ValueError(f"published artifact is incomplete: {path}")
+    fields = ready.read_text(encoding="utf-8").split()
+    if len(fields) < 2 or fields[0] != "sha256":
+        raise ValueError(f"ready marker has invalid syntax: {ready}")
+    actual = sha256(path)
+    if fields[1] != actual:
+        raise ValueError(f"ready-marker checksum does not match {path}")
+    return actual
+
+
 def spacing(values: np.ndarray, name: str) -> float:
     delta = np.diff(np.asarray(values, dtype=np.float64))
     if delta.size == 0 or not np.all(np.isfinite(delta)) or np.any(delta <= 0.0):
@@ -236,6 +249,74 @@ def prepare_extended_dem(
     }
 
 
+def validate_extended_dem_reuse(
+    extended_dem: Path,
+    base_static: Path,
+    driving_topography: Path,
+    search_distance_km: float,
+    max_edge_mismatch_m: float,
+) -> dict:
+    digest = require_ready(extended_dem)
+    target = require_target_static(base_static)
+    base_digest = sha256(base_static)
+    driving_digest = sha256(driving_topography)
+    with netCDF4.Dataset(extended_dem) as dataset:
+        missing = sorted({"x", "y", "lat", "lon", "topo"} - set(dataset.variables))
+        if missing:
+            raise ValueError("reused extended DEM lacks variables: " + ", ".join(missing))
+        if str(getattr(dataset, "target_static_sha256", "")) != base_digest:
+            raise ValueError("reused extended DEM was built from a different base static")
+        if str(getattr(dataset, "driving_topography_sha256", "")) != driving_digest:
+            raise ValueError("reused extended DEM was built from different driving terrain")
+        if not np.isclose(float(dataset.search_distance_km), search_distance_km):
+            raise ValueError("reused extended DEM has a different horizon search distance")
+        if float(dataset.actual_extension_km) < search_distance_km + EXPECTED_DX_M / 1000.0:
+            raise ValueError("reused extended DEM lacks the complete outer mesh cell")
+        if float(dataset.edge_mismatch_max_m) > max_edge_mismatch_m:
+            raise ValueError("reused extended DEM exceeds the driving-terrain edge limit")
+        y_start = int(dataset.target_y_start)
+        x_start = int(dataset.target_x_start)
+        target_ny = int(dataset.target_ny)
+        target_nx = int(dataset.target_nx)
+        if (target_ny, target_nx) != EXPECTED_TARGET_SHAPE:
+            raise ValueError("reused extended DEM target shape is not the selected Swiss grid")
+        x = np.asarray(dataset.variables["x"][:], dtype=np.float64)
+        y = np.asarray(dataset.variables["y"][:], dtype=np.float64)
+        if not np.isclose(spacing(x, "reused extended x"), EXPECTED_DX_M) or not np.isclose(
+            spacing(y, "reused extended y"), EXPECTED_DX_M
+        ):
+            raise ValueError("reused extended DEM spacing is not 200 m")
+        if x_start < 1 or y_start < 1 or x_start + target_nx >= x.size or y_start + target_ny >= y.size:
+            raise ValueError("reused extended DEM target slice lacks a terrain-mesh halo")
+        target_slice = (
+            slice(y_start, y_start + target_ny),
+            slice(x_start, x_start + target_nx),
+        )
+        embedded_topo = np.asarray(dataset.variables["topo"][target_slice], dtype=np.float32)
+        if not np.array_equal(embedded_topo, target["topo"]):
+            raise ValueError("reused extended DEM does not embed base topo bit-for-bit")
+        with netCDF4.Dataset(base_static) as base:
+            for name in ("lat", "lon"):
+                embedded = np.asarray(dataset.variables[name][target_slice], dtype=np.float64)
+                selected = np.asarray(base.variables[name][:], dtype=np.float64)
+                if not np.all(np.isfinite(embedded)) or np.max(np.abs(embedded - selected)) > 5.0e-5:
+                    raise ValueError(f"reused extended DEM {name} does not align with the base static")
+        for name in ("lat", "lon", "topo"):
+            values = np.ma.asarray(dataset.variables[name][:]).filled(np.nan)
+            if not np.all(np.isfinite(values)):
+                raise ValueError(f"reused extended DEM {name} contains non-finite values")
+        shape = dataset.variables["topo"].shape
+        actual_extension_km = float(dataset.actual_extension_km)
+    return {
+        "path": str(extended_dem.resolve()),
+        "sha256": digest,
+        "shape_yx": list(shape),
+        "actual_extension_km": actual_extension_km,
+        "reused": True,
+        "validated_against_current_sources": True,
+    }
+
+
 def egm2008_to_ellipsoidal(
     longitude: np.ndarray,
     latitude: np.ndarray,
@@ -274,12 +355,82 @@ def egm2008_to_ellipsoidal(
     return result
 
 
+def run_horayzon_v121(
+    hray,
+    vertices: np.ndarray,
+    dem_shape: tuple[int, int],
+    vec_norm_enu: np.ndarray,
+    vec_north_enu: np.ndarray,
+    y_start: int,
+    x_start: int,
+    target_x: np.ndarray,
+    target_y_north_to_south: np.ndarray,
+    search_distance_km: float,
+    temporary_directory: Path,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Run the pinned HORAYZON v1.2.1 file-output API and verify its schema."""
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=".horayzon-horizon.", suffix=".nc", dir=temporary_directory
+    )
+    os.close(descriptor)
+    horizon_path = Path(temporary_name)
+    try:
+        hray.horizon.horizon_gridded(
+            vertices,
+            dem_shape[0],
+            dem_shape[1],
+            vec_norm_enu,
+            vec_north_enu,
+            y_start,
+            x_start,
+            file_out=str(horizon_path),
+            x_axis_val=np.asarray(target_x, dtype=np.float32),
+            y_axis_val=np.asarray(target_y_north_to_south, dtype=np.float32),
+            x_axis_name="x",
+            y_axis_name="y",
+            units="m",
+            dist_search=search_distance_km,
+            azim_num=90,
+        )
+        with netCDF4.Dataset(horizon_path) as dataset:
+            missing = sorted({"x", "y", "azim", "horizon"} - set(dataset.variables))
+            if missing:
+                raise ValueError("HORAYZON horizon file lacks variables: " + ", ".join(missing))
+            horizon_variable = dataset.variables["horizon"]
+            if horizon_variable.dimensions != ("y", "x", "azim"):
+                raise ValueError(
+                    "HORAYZON v1.2.1 horizon dimensions must be (y,x,azim), got "
+                    + str(horizon_variable.dimensions)
+                )
+            expected_shape = (vec_norm_enu.shape[0], vec_norm_enu.shape[1], 90)
+            if horizon_variable.shape != expected_shape:
+                raise ValueError(
+                    f"HORAYZON horizon shape must be {expected_shape}, got {horizon_variable.shape}"
+                )
+            written_x = np.asarray(dataset.variables["x"][:], dtype=np.float32)
+            written_y = np.asarray(dataset.variables["y"][:], dtype=np.float32)
+            if not np.array_equal(written_x, np.asarray(target_x, dtype=np.float32)):
+                raise ValueError("HORAYZON horizon x axis does not match the target slice")
+            if not np.array_equal(
+                written_y, np.asarray(target_y_north_to_south, dtype=np.float32)
+            ):
+                raise ValueError("HORAYZON horizon y axis does not match north-to-south target rows")
+            horizon = np.ma.asarray(horizon_variable[:]).filled(np.nan).astype(np.float32)
+            azimuth = np.asarray(dataset.variables["azim"][:], dtype=np.float32)
+        if not np.all(np.isfinite(horizon)):
+            raise ValueError("HORAYZON horizon contains non-finite values")
+        return horizon, azimuth
+    finally:
+        horizon_path.unlink(missing_ok=True)
+
+
 def compute_geometry(extended_dem: Path, output: Path, egm2008_grid: Path) -> dict:
     try:
         import horayzon as hray  # noqa: PLC0415
     except ImportError as exc:
         raise ValueError("HORAYZON is not installed in the selected Python environment") from exc
 
+    output.parent.mkdir(parents=True, exist_ok=True)
     with netCDF4.Dataset(extended_dem) as dataset:
         x = np.asarray(dataset.variables["x"][:], dtype=np.float64)
         y = np.asarray(dataset.variables["y"][:], dtype=np.float64)
@@ -329,16 +480,20 @@ def compute_geometry(extended_dem: Path, output: Path, egm2008_grid: Path) -> di
     del vec_norm_ecef, vec_north_ecef
 
     vertices = hray.auxiliary.rearrange_pad_buffer(x_enu, y_enu, z_enu)
-    horizon, azimuth = hray.horizon.horizon_gridded(
+    target_x = x[x_start : x_start + target_nx]
+    target_y_north_to_south = y[y_start : y_start + target_ny][::-1]
+    horizon, azimuth = run_horayzon_v121(
+        hray,
         vertices,
-        elevation.shape[0],
-        elevation.shape[1],
+        elevation.shape,
         vec_norm_enu,
         vec_north_enu,
         y_start,
         x_start,
-        dist_search=search_distance_km,
-        azim_num=90,
+        target_x,
+        target_y_north_to_south,
+        search_distance_km,
+        output.parent,
     )
     azimuth_degrees = np.mod(np.rad2deg(azimuth), 360.0)
     if azimuth_degrees.shape != (90,) or not np.allclose(
@@ -453,6 +608,61 @@ def compute_geometry(extended_dem: Path, output: Path, egm2008_grid: Path) -> di
         temporary.unlink(missing_ok=True)
     digest = publish_ready(output)
     return {"path": str(output.resolve()), "sha256": digest, "ranges": ranges}
+
+
+def validate_geometry_reuse(geometry: Path, extended_dem: Path) -> dict:
+    digest = require_ready(geometry)
+    source_digest = sha256(extended_dem)
+    ranges: dict[str, list[float]] = {}
+    with netCDF4.Dataset(geometry) as dataset:
+        missing = sorted(
+            {"azimuth", "hlm", "svf", "slope_rad", "aspect_rad"} - set(dataset.variables)
+        )
+        if missing:
+            raise ValueError("reused geometry lacks variables: " + ", ".join(missing))
+        if str(getattr(dataset, "source_dem_sha256", "")) != source_digest:
+            raise ValueError("reused geometry was built from a different extended DEM")
+        if str(getattr(dataset, "horizon_convention", "")) != "hlm_zenith_angle_degrees_flat_90":
+            raise ValueError("reused geometry has the wrong horizon convention")
+        azimuth = np.asarray(dataset.variables["azimuth"][:], dtype=np.float64)
+        if not np.allclose(azimuth, AZIMUTH_DEGREES, atol=1.0e-5, rtol=0.0):
+            raise ValueError("reused geometry has the wrong azimuth convention")
+        expected_shapes = {
+            "hlm": (90, *EXPECTED_TARGET_SHAPE),
+            "svf": EXPECTED_TARGET_SHAPE,
+            "slope_rad": EXPECTED_TARGET_SHAPE,
+            "aspect_rad": EXPECTED_TARGET_SHAPE,
+        }
+        bounds = {
+            "hlm": (0.0, 90.0),
+            "svf": (0.0, 1.0),
+            "slope_rad": (0.0, np.pi / 2.0),
+            "aspect_rad": (0.0, 2.0 * np.pi),
+        }
+        for name, expected_shape in expected_shapes.items():
+            variable = dataset.variables[name]
+            if variable.shape != expected_shape:
+                raise ValueError(f"reused geometry {name} shape is invalid")
+            minimum = np.inf
+            maximum = -np.inf
+            slabs = (variable[index] for index in range(90)) if variable.ndim == 3 else (variable[:],)
+            for slab in slabs:
+                values = np.ma.asarray(slab).filled(np.nan)
+                if not np.all(np.isfinite(values)):
+                    raise ValueError(f"reused geometry {name} contains non-finite values")
+                minimum = min(minimum, float(np.min(values)))
+                maximum = max(maximum, float(np.max(values)))
+            lower, upper = bounds[name]
+            if minimum < lower - 1.0e-6 or maximum > upper + 1.0e-6:
+                raise ValueError(f"reused geometry {name} range is invalid")
+            ranges[name] = [minimum, maximum]
+    return {
+        "path": str(geometry.resolve()),
+        "sha256": digest,
+        "ranges": ranges,
+        "reused": True,
+        "validated_against_current_extended_dem": True,
+    }
 
 
 def validate_arrays(
@@ -572,11 +782,13 @@ def main() -> int:
             raise SystemExit(f"missing {label}: {path}")
     try:
         if args.extended_dem.is_file() and Path(f"{args.extended_dem}.ready").is_file():
-            extended = {
-                "path": str(args.extended_dem.resolve()),
-                "sha256": sha256(args.extended_dem),
-                "reused": True,
-            }
+            extended = validate_extended_dem_reuse(
+                args.extended_dem,
+                args.base_static,
+                args.driving_topography,
+                args.search_distance_km,
+                args.max_edge_mismatch_m,
+            )
         else:
             extended = prepare_extended_dem(
                 args.base_static,
@@ -589,11 +801,7 @@ def main() -> int:
                 args.max_edge_mismatch_m,
             )
         if args.geometry.is_file() and Path(f"{args.geometry}.ready").is_file():
-            geometry = {
-                "path": str(args.geometry.resolve()),
-                "sha256": sha256(args.geometry),
-                "reused": True,
-            }
+            geometry = validate_geometry_reuse(args.geometry, args.extended_dem)
         else:
             geometry = compute_geometry(args.extended_dem, args.geometry, args.egm2008_grid)
         final_static = merge_static(args.base_static, args.geometry, args.output_static)

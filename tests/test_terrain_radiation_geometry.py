@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import netCDF4
+from pyproj import CRS, Transformer
 import pytest
 
 
@@ -73,8 +74,15 @@ def test_extended_dem_contains_exact_target_and_real_outer_band(
         dataset.createDimension("y", 3)
         dataset.createVariable("x", "f4", ("x",))[:] = [0, 200, 400, 600]
         dataset.createVariable("y", "f4", ("y",))[:] = [0, 200, 400]
-        dataset.createVariable("lat", "f4", ("y", "x"))[:] = 46.8
-        dataset.createVariable("lon", "f4", ("y", "x"))[:] = 8.2
+        xx, yy = np.meshgrid([0, 200, 400, 600], [0, 200, 400])
+        to_geo = Transformer.from_crs(
+            CRS.from_proj4("+proj=aeqd +lat_0=46.8 +lon_0=8.2 +datum=WGS84 +units=m"),
+            "EPSG:4326",
+            always_xy=True,
+        )
+        lon, lat = to_geo.transform(xx, yy)
+        dataset.createVariable("lat", "f4", ("y", "x"))[:] = lat
+        dataset.createVariable("lon", "f4", ("y", "x"))[:] = lon
         topo = np.zeros((3, 4), dtype=np.float32)
         topo[1, 1:3] = 100.0
         dataset.createVariable("topo", "f4", ("y", "x"))[:] = topo
@@ -103,3 +111,80 @@ def test_extended_dem_contains_exact_target_and_real_outer_band(
         np.testing.assert_array_equal(dataset.variables["topo"][2:5, 2:6], topo)
         assert np.count_nonzero(dataset.variables["topo"][:]) == 2
     assert Path(f"{output}.ready").is_file()
+    reused = MODULE.validate_extended_dem_reuse(
+        output, base, driving_source, 0.2, 0.01
+    )
+    assert reused["validated_against_current_sources"] is True
+
+
+def test_pinned_horayzon_v121_file_api_and_axes(tmp_path: Path) -> None:
+    calls = {}
+
+    class FakeHorizon:
+        @staticmethod
+        def horizon_gridded(
+            vertices,
+            dem_ny,
+            dem_nx,
+            vec_norm,
+            vec_north,
+            y_start,
+            x_start,
+            *,
+            file_out,
+            x_axis_val,
+            y_axis_val,
+            x_axis_name,
+            y_axis_name,
+            units,
+            dist_search,
+            azim_num,
+        ):
+            calls.update(
+                dem_shape=(dem_ny, dem_nx),
+                offsets=(y_start, x_start),
+                x=x_axis_val.copy(),
+                y=y_axis_val.copy(),
+                names=(x_axis_name, y_axis_name, units),
+                search=dist_search,
+                azim_num=azim_num,
+            )
+            with netCDF4.Dataset(file_out, "w") as dataset:
+                dataset.createDimension("y", vec_norm.shape[0])
+                dataset.createDimension("x", vec_norm.shape[1])
+                dataset.createDimension("azim", azim_num)
+                dataset.createVariable("x", "f4", ("x",))[:] = x_axis_val
+                dataset.createVariable("y", "f4", ("y",))[:] = y_axis_val
+                dataset.createVariable("azim", "f4", ("azim",))[:] = np.deg2rad(
+                    MODULE.AZIMUTH_DEGREES
+                )
+                horizon = dataset.createVariable("horizon", "f4", ("y", "x", "azim"))
+                horizon[:] = np.arange(vec_norm.shape[0], dtype=np.float32)[:, None, None]
+
+    class FakeHorayzon:
+        horizon = FakeHorizon()
+
+    normals = np.zeros((2, 3, 3), dtype=np.float32)
+    horizon, azimuth = MODULE.run_horayzon_v121(
+        FakeHorayzon(),
+        np.zeros(60, dtype=np.float32),
+        (4, 5),
+        normals,
+        normals,
+        1,
+        1,
+        np.array([0.0, 200.0, 400.0]),
+        np.array([200.0, 0.0]),
+        20.0,
+        tmp_path,
+    )
+    assert calls["dem_shape"] == (4, 5)
+    assert calls["offsets"] == (1, 1)
+    np.testing.assert_array_equal(calls["x"], [0.0, 200.0, 400.0])
+    np.testing.assert_array_equal(calls["y"], [200.0, 0.0])
+    assert calls["names"] == ("x", "y", "m")
+    assert calls["search"] == 20.0
+    assert calls["azim_num"] == 90
+    assert horizon.shape == (2, 3, 90)
+    np.testing.assert_array_equal(horizon[:, 0, 0], [0.0, 1.0])
+    np.testing.assert_allclose(np.rad2deg(azimuth), MODULE.AZIMUTH_DEGREES, atol=2.0e-5)
