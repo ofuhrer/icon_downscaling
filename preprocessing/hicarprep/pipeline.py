@@ -177,6 +177,18 @@ def write_hicar_forcing_record(
     valid_time = str(diagnostics.get("valid_time", ""))
     if not valid_time or valid_time == "unknown":
         raise ValueError("HICAR forcing record requires an unambiguous valid_time")
+    target_w_vertical_coordinate = str(
+        diagnostics.get("target_w_vertical_coordinate", "")
+    )
+    if target_w_vertical_coordinate != "authoritative_static_HFL":
+        raise ValueError("HICAR forcing W must use the authoritative target HFL")
+    target_w_terrain_wind_basis = str(
+        diagnostics.get("target_w_terrain_wind_basis", "")
+    )
+    if target_w_terrain_wind_basis != "HICAR_grid_relative":
+        raise ValueError(
+            "terrain-adjusted HICAR forcing W must use grid-relative winds"
+        )
     when = _normalized_time(valid_time)
     lat = np.asarray(state["lat"], dtype=np.float64)
     lon = np.asarray(state["lon"], dtype=np.float64)
@@ -242,6 +254,41 @@ def write_hicar_forcing_record(
         target_land=target_land,
         static_digest=static_digest,
     )
+    with netCDF4.Dataset(target_sst_path) as target_sst:
+        sst_remap_policy = str(getattr(target_sst, "remap_policy", ""))
+        sst_native_source_sha256 = str(
+            getattr(target_sst, "source_sha256", "")
+        )
+        sst_water_cell_count = int(
+            getattr(target_sst, "water_cell_count", -1)
+        )
+        sst_water_local_fallback_count = int(
+            getattr(target_sst, "water_local_fallback_count", -1)
+        )
+        sst_water_global_fallback_count = int(
+            getattr(target_sst, "water_global_fallback_count", -1)
+        )
+        sst_maximum_fallback_distance_km = float(
+            getattr(target_sst, "maximum_fallback_distance_km", np.nan)
+        )
+    expected_water_cells = int(np.sum(~target_land))
+    if sst_remap_policy != "same-surface water support; RBF baseline on land":
+        raise ValueError("SST input lacks the same-surface remapping contract")
+    if not sst_native_source_sha256:
+        raise ValueError("SST input lacks native-source provenance")
+    if sst_water_cell_count != expected_water_cells:
+        raise ValueError("SST water-cell diagnostics disagree with the runtime domain")
+    if not (
+        0
+        <= sst_water_global_fallback_count
+        <= sst_water_local_fallback_count
+        <= sst_water_cell_count
+    ):
+        raise ValueError("SST fallback counts are inconsistent")
+    if not np.isfinite(sst_maximum_fallback_distance_km) or (
+        sst_maximum_fallback_distance_km < 0.0
+    ):
+        raise ValueError("SST fallback distance is missing or invalid")
     serialized_hhl, serialized_hfl = forcing_geometry_for_serialization(hhl, hfl)
 
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -302,11 +349,25 @@ def write_hicar_forcing_record(
                 "earth-relative U/V and terrain-adjusted W on exact target HFL mass levels; "
                 "HICAR performs final grid rotation and variational projection"
             )
+            dataset.target_w_vertical_coordinate = target_w_vertical_coordinate
+            dataset.target_w_terrain_wind_basis = target_w_terrain_wind_basis
             dataset.lateral_relaxation_authority = "hicarprep sparse_lbc_file_list"
             dataset.source_path = str(source_path)
             dataset.source_sha256 = sha256(source_path)
             dataset.static_sha256 = static_digest
             dataset.sst_source_sha256 = sha256(target_sst_path)
+            dataset.sst_native_source_sha256 = sst_native_source_sha256
+            dataset.sst_remap_policy = sst_remap_policy
+            dataset.sst_water_cell_count = sst_water_cell_count
+            dataset.sst_water_local_fallback_count = (
+                sst_water_local_fallback_count
+            )
+            dataset.sst_water_global_fallback_count = (
+                sst_water_global_fallback_count
+            )
+            dataset.sst_maximum_fallback_distance_km = (
+                sst_maximum_fallback_distance_km
+            )
             dataset.target_grid_fingerprint = grid_fingerprint(lat, lon)
             dataset.geometry_serialization = "static_sleve_with_one_ulp_top_cover"
         os.replace(temporary, path)

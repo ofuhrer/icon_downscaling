@@ -101,6 +101,33 @@ def main() -> int:
             raise SystemExit("SST lies outside 180..350 K on water cells")
         if not str(getattr(forcing, "sst_source_sha256", "")):
             raise SystemExit("forcing lacks exact valid-time SST provenance")
+        if not str(getattr(forcing, "sst_native_source_sha256", "")):
+            raise SystemExit("forcing lacks native SST-source provenance")
+        if str(getattr(forcing, "sst_remap_policy", "")) != (
+            "same-surface water support; RBF baseline on land"
+        ):
+            raise SystemExit("forcing lacks the same-surface SST remapping contract")
+        water_cell_count = int(getattr(forcing, "sst_water_cell_count", -1))
+        local_fallback_count = int(
+            getattr(forcing, "sst_water_local_fallback_count", -1)
+        )
+        global_fallback_count = int(
+            getattr(forcing, "sst_water_global_fallback_count", -1)
+        )
+        fallback_distance = float(
+            getattr(forcing, "sst_maximum_fallback_distance_km", np.nan)
+        )
+        if water_cell_count != int(np.sum(water)):
+            raise SystemExit("SST water-cell diagnostics disagree with the runtime domain")
+        if not (
+            0
+            <= global_fallback_count
+            <= local_fallback_count
+            <= water_cell_count
+        ):
+            raise SystemExit("SST fallback counts are inconsistent")
+        if not np.isfinite(fallback_distance) or fallback_distance < 0.0:
+            raise SystemExit("SST fallback distance is missing or invalid")
         hhl = np.asarray(forcing["HHL"][:])
         hfl = np.asarray(forcing["HFL"][:])
         if np.any(np.diff(hhl, axis=0) <= 0.0) or np.any(np.diff(hfl, axis=0) <= 0.0):

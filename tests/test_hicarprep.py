@@ -726,6 +726,14 @@ class ProductPipelineTests(unittest.TestCase):
                 dataset.valid_time = "2020-02-10T01:00:00Z"
                 dataset.static_sha256 = sha256(static)
                 dataset.target_grid_fingerprint = grid_fingerprint(lat, lon)
+                dataset.source_sha256 = "synthetic-native-sst"
+                dataset.remap_policy = (
+                    "same-surface water support; RBF baseline on land"
+                )
+                dataset.water_cell_count = 1
+                dataset.water_local_fallback_count = 0
+                dataset.water_global_fallback_count = 0
+                dataset.maximum_fallback_distance_km = 0.0
             state = {
                 "T": np.full((levels, ny, nx), 280.0),
                 "P": np.full((levels, ny, nx), 90_000.0),
@@ -749,7 +757,11 @@ class ProductPipelineTests(unittest.TestCase):
             write_hicar_forcing_record(
                 output,
                 state,
-                {"valid_time": "2020-02-10T01:00:00Z"},
+                {
+                    "valid_time": "2020-02-10T01:00:00Z",
+                    "target_w_vertical_coordinate": "authoritative_static_HFL",
+                    "target_w_terrain_wind_basis": "HICAR_grid_relative",
+                },
                 static_path=static,
                 source_path=source,
                 target_sst_path=target_sst,
@@ -772,8 +784,19 @@ class ProductPipelineTests(unittest.TestCase):
                 np.testing.assert_allclose(dataset["V"][0, 0, :, 0], [0.5, 1.5])
                 self.assertEqual(dataset["W"].dimensions, ("time", "z", "y_1", "x_1"))
                 np.testing.assert_allclose(dataset["W"][:], 0.25)
+                self.assertEqual(
+                    dataset.target_w_vertical_coordinate,
+                    "authoritative_static_HFL",
+                )
+                self.assertEqual(
+                    dataset.target_w_terrain_wind_basis,
+                    "HICAR_grid_relative",
+                )
                 self.assertEqual(dataset["SST"].dimensions, ("time", "y_1", "x_1"))
                 np.testing.assert_allclose(dataset["SST"][:], 277.0)
+                self.assertEqual(dataset.sst_water_cell_count, 1)
+                self.assertEqual(dataset.sst_water_global_fallback_count, 0)
+                self.assertEqual(dataset.sst_maximum_fallback_distance_km, 0.0)
                 valid = netCDF4.num2date(
                     dataset["time"][0], dataset["time"].units, dataset["time"].calendar
                 )
