@@ -53,6 +53,7 @@
   uvar = 'U'
   vvar = 'V'
   wvar = 'W'
+  sst_var = 'SST'
   hgtvar = 'HSURF'
   zvar = 'HFL'
   latvar = 'lat_1'

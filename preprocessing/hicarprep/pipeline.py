@@ -20,6 +20,7 @@ from .remap import (
     coordinates_in_degrees,
     grid_fingerprint,
 )
+from .sst import load_target_sst
 from .vertical import (
     adjust_vertical_velocity,
     interpolate_interface_w_to_hfl,
@@ -158,6 +159,7 @@ def write_hicar_forcing_record(
     *,
     static_path: Path,
     source_path: Path,
+    target_sst_path: Path,
 ) -> None:
     """Write one target-grid HICAR forcing/clock record from a hicarprep state.
 
@@ -219,12 +221,26 @@ def write_hicar_forcing_record(
             static["land_fraction"][:] if "land_fraction" in static.variables else static["landmask"][:],
             dtype=np.float64,
         )
+        target_land = np.asarray(
+            static["landmask"][:] if "landmask" in static.variables else land_fraction,
+            dtype=np.float64,
+        ) >= 0.5
     if not np.array_equal(lat, static_lat) or not np.array_equal(lon, static_lon):
         raise ValueError("forcing state and static horizontal grids do not match exactly")
     if not np.array_equal(hhl, static_hhl) or not np.array_equal(hfl, static_hfl):
         raise ValueError("forcing state must use the authoritative static HHL/HFL geometry")
     if terrain.shape != (ny, nx) or land_fraction.shape != (ny, nx):
         raise ValueError("static terrain/land fraction shape does not match forcing grid")
+    static_digest = sha256(static_path)
+    sst = load_target_sst(
+        target_sst_path,
+        static_path=static_path,
+        valid_time=valid_time,
+        target_lat=lat,
+        target_lon=lon,
+        target_land=target_land,
+        static_digest=static_digest,
+    )
     serialized_hhl, serialized_hfl = forcing_geometry_for_serialization(hhl, hfl)
 
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -252,6 +268,12 @@ def write_hicar_forcing_record(
             )
             dataset.createVariable("HSURF", "f4", ("y_1", "x_1"), zlib=True)[:] = terrain
             dataset.createVariable("FR_LAND", "f4", ("y_1", "x_1"), zlib=True)[:] = land_fraction
+            sst_variable = dataset.createVariable(
+                "SST", "f4", ("time", "y_1", "x_1"), zlib=True
+            )
+            sst_variable[0] = sst
+            sst_variable.units = "K"
+            sst_variable.hicar_support = "water cells"
             for name, values in payloads.items():
                 variable = dataset.createVariable(
                     name, "f4", ("time", "z", "y_1", "x_1"), zlib=True
@@ -282,7 +304,8 @@ def write_hicar_forcing_record(
             dataset.lateral_relaxation_authority = "hicarprep sparse_lbc_file_list"
             dataset.source_path = str(source_path)
             dataset.source_sha256 = sha256(source_path)
-            dataset.static_sha256 = sha256(static_path)
+            dataset.static_sha256 = static_digest
+            dataset.sst_source_sha256 = sha256(target_sst_path)
             dataset.target_grid_fingerprint = grid_fingerprint(lat, lon)
             dataset.geometry_serialization = "static_sleve_with_one_ulp_top_cover"
         os.replace(temporary, path)

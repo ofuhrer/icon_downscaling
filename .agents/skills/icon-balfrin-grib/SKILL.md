@@ -79,8 +79,10 @@ Validate message counts, vertical-level coverage, reference/valid times, grid po
   also available at ten-minute steps. Always use cycle time plus `step` as
   the valid timestamp, not a daily timestamp.
 - Retrieve geometry (`HSURF`, `FR_LAND`, `HHL`) at step 0. Retrieve the
-  requested atmospheric full levels and `W` at the requested step. `HSURF`
-  uses `type=cf,levtype=sfc`; `HHL` requires an explicit `levelist`.
+  requested atmospheric full levels, `W`, and `SKT=502336` at the requested
+  step. `HSURF` and `SKT` use `type=cf,levtype=sfc`; `HHL` requires an explicit
+  `levelist`. The forcing-time `SKT` is distinct from the step-0 land cold-start
+  state even though it uses the same REA-L variable.
 - Keep MARS/FDB requests narrow by date/time/parameter/level and validate a one-record retrieval before scaling.
 
 ### Verified REA-L surface fields

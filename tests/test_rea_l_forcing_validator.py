@@ -29,6 +29,9 @@ def files(root: Path, invalid_hfl: bool = False) -> tuple[Path, Path, Path]:
         hfl = np.array([50.0, 200.0])[:, None, None] * np.ones((1, 2, 2))
         dataset.createVariable("HHL", "f8", ("half_level", "y", "x"))[:] = hhl
         dataset.createVariable("HFL", "f8", ("level", "y", "x"))[:] = hfl
+        dataset.createVariable("landmask", "i1", ("y", "x"))[:] = np.array(
+            [[1, 0], [1, 1]]
+        )
     with netCDF4.Dataset(forcing, "w") as dataset:
         for name, size in (("time", 1), ("z", 2), ("z_hl", 3), ("y_1", 2), ("x_1", 2)):
             dataset.createDimension(name, size)
@@ -49,7 +52,13 @@ def files(root: Path, invalid_hfl: bool = False) -> tuple[Path, Path, Path]:
         dataset.createVariable("HHL", "f4", ("z_hl", "y_1", "x_1"))[:] = hhl
         dataset.createVariable("HFL", "f4", ("z", "y_1", "x_1"))[:] = hfl
         dataset.createVariable("HSURF", "f4", ("y_1", "x_1"))[:] = 0.0
-        dataset.createVariable("FR_LAND", "f4", ("y_1", "x_1"))[:] = 1.0
+        dataset.createVariable("FR_LAND", "f4", ("y_1", "x_1"))[:] = np.array(
+            [[1.0, 0.0], [1.0, 1.0]]
+        )
+        sst = dataset.createVariable("SST", "f4", ("time", "y_1", "x_1"))
+        sst[:] = 277.0
+        sst.units = "K"
+        dataset.sst_source_sha256 = "synthetic-target-sst"
         dataset.geometry_serialization = "static_sleve_with_one_ulp_top_cover"
     with netCDF4.Dataset(boundary, "w") as dataset:
         for name, size in (
@@ -99,6 +108,21 @@ def test_inconsistent_height_fails(tmp_path: Path) -> None:
     )
     assert result.returncode != 0
     assert "forcing HHL/HFL differ" in result.stderr
+
+
+def test_implausible_water_sst_fails(tmp_path: Path) -> None:
+    forcing, static, boundary = files(tmp_path)
+    with netCDF4.Dataset(forcing, "a") as dataset:
+        dataset["SST"][0, 0, 1] = 150.0
+    with netCDF4.Dataset(boundary, "a") as dataset:
+        dataset.initial_condition_sha256 = sha256(forcing)
+    result = subprocess.run(
+        [sys.executable, str(VALIDATOR), "--forcing-file", str(forcing),
+         "--boundary-file", str(boundary), "--static-file", str(static)],
+        text=True, capture_output=True,
+    )
+    assert result.returncode != 0
+    assert "SST lies outside" in result.stderr
 
 
 def test_mismatched_boundary_pair_fails(tmp_path: Path) -> None:

@@ -30,6 +30,9 @@ def test_repair_replaces_only_geometry_and_rebinds_boundary(tmp_path: Path) -> N
         dataset.createVariable("lon", "f8", ("y", "x"))[:] = lon
         dataset.createVariable("HHL", "f8", ("half_level", "y", "x"))[:] = hhl
         dataset.createVariable("HFL", "f8", ("level", "y", "x"))[:] = hfl
+        dataset.createVariable("landmask", "i1", ("y", "x"))[:] = np.array(
+            [[1, 0], [1, 1]]
+        )
     static_sha = sha256(static)
 
     payload = np.arange(8, dtype=np.float32).reshape(1, 2, 2, 2)
@@ -62,7 +65,13 @@ def test_repair_replaces_only_geometry_and_rebinds_boundary(tmp_path: Path) -> N
             hhl[:-1] + hhl[1:]
         )
         dataset.createVariable("HSURF", "f4", ("y_1", "x_1"))[:] = 0.0
-        dataset.createVariable("FR_LAND", "f4", ("y_1", "x_1"))[:] = 1.0
+        dataset.createVariable("FR_LAND", "f4", ("y_1", "x_1"))[:] = np.array(
+            [[1.0, 0.0], [1.0, 1.0]]
+        )
+        sst = dataset.createVariable("SST", "f4", ("time", "y_1", "x_1"))
+        sst[:] = 277.0
+        sst.units = "K"
+        dataset.sst_source_sha256 = "synthetic-target-sst"
     original_payload = sha256(forcing)
 
     with netCDF4.Dataset(boundary, "w") as dataset:

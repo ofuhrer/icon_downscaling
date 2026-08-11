@@ -33,6 +33,7 @@ from preprocessing.hicarprep.products import (
     validate_hicar_runtime_domain,
     validate_product_lifetimes,
     validate_product_set,
+    sha256,
 )
 from preprocessing.hicarprep.registry import FieldLifetime, FieldRegistry
 from preprocessing.hicarprep.remap import (
@@ -588,6 +589,7 @@ class ProductPipelineTests(unittest.TestCase):
             root = Path(directory)
             static = root / "static.nc"
             source = root / "icon.nc"
+            target_sst = root / "target_sst.nc"
             output = root / "forcing.nc"
             levels, ny, nx = 2, 2, 3
             lat = np.broadcast_to(np.linspace(46.0, 46.1, ny)[:, None], (ny, nx)).copy()
@@ -601,12 +603,29 @@ class ProductPipelineTests(unittest.TestCase):
                 dataset.createVariable("lat", "f8", ("y", "x"))[:] = lat
                 dataset.createVariable("lon", "f8", ("y", "x"))[:] = lon
                 dataset.createVariable("topo", "f8", ("y", "x"))[:] = terrain
-                dataset.createVariable("landmask", "i2", ("y", "x"))[:] = 1
+                landmask = np.ones((ny, nx), dtype=np.int16)
+                landmask[0, 1] = 0
+                dataset.createVariable("landmask", "i2", ("y", "x"))[:] = landmask
                 hhl = np.stack((terrain, terrain + 100.0, terrain + 300.0))
                 hfl = np.stack((terrain + 47.0, terrain + 188.0))
                 dataset.createVariable("HHL", "f8", ("half_level", "y", "x"))[:] = hhl
                 dataset.createVariable("HFL", "f8", ("level", "y", "x"))[:] = hfl
             source.write_bytes(b"native-icon-provenance")
+            with netCDF4.Dataset(target_sst, "w") as dataset:
+                dataset.createDimension("y", ny)
+                dataset.createDimension("x", nx)
+                dataset.createVariable("lat", "f8", ("y", "x"))[:] = lat
+                dataset.createVariable("lon", "f8", ("y", "x"))[:] = lon
+                variable = dataset.createVariable("SST", "f4", ("y", "x"))
+                variable[:] = 277.0
+                variable.units = "K"
+                dataset.createVariable("water_mask", "i1", ("y", "x"))[:] = (
+                    landmask < 0.5
+                )
+                dataset.product_type = "hicarprep_target_water_temperature"
+                dataset.valid_time = "2020-02-10T01:00:00Z"
+                dataset.static_sha256 = sha256(static)
+                dataset.target_grid_fingerprint = grid_fingerprint(lat, lon)
             state = {
                 "T": np.full((levels, ny, nx), 280.0),
                 "P": np.full((levels, ny, nx), 90_000.0),
@@ -633,6 +652,7 @@ class ProductPipelineTests(unittest.TestCase):
                 {"valid_time": "2020-02-10T01:00:00Z"},
                 static_path=static,
                 source_path=source,
+                target_sst_path=target_sst,
             )
             with netCDF4.Dataset(output) as dataset:
                 self.assertEqual(dataset.product_type, "hicarprep_target_forcing_record")
@@ -652,6 +672,8 @@ class ProductPipelineTests(unittest.TestCase):
                 np.testing.assert_allclose(dataset["V"][0, 0, :, 0], [0.5, 1.5])
                 self.assertEqual(dataset["W"].dimensions, ("time", "z", "y_1", "x_1"))
                 np.testing.assert_allclose(dataset["W"][:], 0.25)
+                self.assertEqual(dataset["SST"].dimensions, ("time", "y_1", "x_1"))
+                np.testing.assert_allclose(dataset["SST"][:], 277.0)
                 valid = netCDF4.num2date(
                     dataset["time"][0], dataset["time"].units, dataset["time"].calendar
                 )

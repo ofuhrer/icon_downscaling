@@ -12,7 +12,9 @@ Use `hicarprep`; there is no maintained fieldextra atmospheric path.
 - REA-L has one 00 UTC cycle per day. For a valid hour, use that date's cycle
   and `step=hour`; at midnight use the new cycle's step 0.
 - Retrieve P, T, VN/U/V, QV, QC on 80 full levels, W and HHL on 81 half
-  levels, plus HSURF and FR_LAND.
+  levels, plus HSURF and FR_LAND. Retrieve `SKT=502336` at every requested
+  forcing step for valid-time lake/water temperature; do not reuse the 00 UTC
+  land-initialization field throughout the day.
 - QI is absent in operational REA-L. Use `source-absent-zero` and keep that
   policy visible in the decoded product.
 - Native GRIB and the decoded unstructured state may remain job-local.
@@ -28,7 +30,10 @@ Water variables are converted jointly from moist-air mass fractions to
 dry-air mixing ratios. HICAR reads P/T/QV/QC/QI/U/V/W and HFL/HHL. Source W is
 terrain-adjusted and interpolated to the exact target HFL mass levels before
 the variational projection. Sparse LBC contains only T/P/QV/QC/QI and mass-grid
-geometry; it never inserts winds. Set `relax_filters=.False.`.
+geometry; it never inserts winds. REA-L SKT is remapped separately with
+same-surface water support and written as hourly regular-forcing `SST`; require
+exact time, target grid, static checksum, and water mask. Set
+`relax_filters=.False.`.
 
 Scalar RBF caches must come from the conditioned builder: each stencil solve
 has condition number at most `1e10` after the smallest needed diagonal nugget,
@@ -41,6 +46,7 @@ clipped to the local donor component range; it must not create new wind extrema.
 - exact target latitude/longitude equality with the runtime domain;
 - 80 full and 81 half levels in bottom-to-top order;
 - finite fields and plausible P/T/QV/wind ranges;
+- finite hourly SST and 180--350 K on every static-domain water cell;
 - target horizontal-wind speed no greater than the gross `200 m s-1` guard;
 - dry-air moisture representation;
 - identical sparse schema, point indices, geometry, and relaxation weights;

@@ -83,6 +83,7 @@ def test_renderer_has_one_explicit_hicarprep_configuration(tmp_path: Path) -> No
     text = namelist.read_text()
     for setting in (
         "debug = .False.", "qcvar = 'QC'", "qivar = 'QI'", "wvar = 'W'",
+        "sst_var = 'SST'",
         "qv_is_spec_humidity = .False.", "relax_filters = .False.",
         "soiltexture_var = 'soil_type_layer'", "nmp_opt_sfc = 1",
         "nmp_opt_soil = 2",

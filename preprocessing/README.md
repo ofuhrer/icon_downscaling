@@ -22,9 +22,14 @@ python scripts/hicarprep.py decode-icon-atmosphere \
 
 python scripts/hicarprep.py prepare-hicar-forcing \
   --icon-state native.nc --static runtime_domain.nc \
-  --weights rbf.nc --vector-weights vector_rbf.nc \
+  --weights rbf.nc --vector-weights vector_rbf.nc --target-sst target_sst.nc \
   --output forcing.nc --boundary forcing.lbc.nc
 ```
+
+`target_sst.nc` is produced for the same exact valid time from REA-L `SKT`.
+Its water cells use same-surface source support; its static-domain checksum,
+grid fingerprint, water mask, and valid time must all match the atmospheric
+record. HICAR reads this field as `SST` from every hourly regular record.
 
 The regular record initializes HICAR and advances its forcing clock. Sparse
 LBC is the sole lateral relaxation path; the namelist disables the old regular

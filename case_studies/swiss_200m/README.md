@@ -5,8 +5,11 @@ The selected baseline is explicit in `config/hicar_swiss_200m.nml.in`:
 - 80 levels, nominal 20 m lowest layer, 12 km top, SLEVE 2/6; terrain may
   compress layers to 12 m but the static builder and renderer reject anything
   thinner;
-- native hicarprep P/T/U/V/QV/QC/QI forcing in dry-air mixing ratios;
-- W diagnosed by HICAR and sparse target-grid lateral relaxation;
+- native hicarprep P/T/U/V/W/QV/QC/QI forcing in dry-air mixing ratios,
+  including terrain-adjusted W on the exact HFL mass levels;
+- hourly valid-time REA-L SKT as water-only `SST` in regular forcing;
+- sparse scalar T/P/QV/QC/QI target-grid lateral relaxation, with no sparse
+  wind insertion;
 - variational wind, Sx on, density advection, `alpha_const=1`;
 - Noah-MP with SMI initialization and four depth-varying soil textures;
 - ICON SWE, snow depth/density, and bulk snow temperature on cold starts;
@@ -17,9 +20,9 @@ The one-block setting is qualified only for this domain and decomposition.
 Recheck the block count and repeatability if either changes; HICAR's global
 default remains unchanged.
 
-The atmospheric forcing file keeps mass-grid U/V for HICAR's normal
-initialization interpolation. The paired sparse LBC explicitly carries U and V
-on separate `(nx+1, ny)` and `(nx, ny+1)` face supports; both products are
+The atmospheric forcing file keeps mass-grid U/V and W for HICAR's normal
+initialization and wind-projection path. The paired sparse LBC contains only
+scalar mass-grid fields and matching HHL/HFL support; both products are
 validated before their ready markers are created.
 
 The maintained scripts build HICAR, prepare atmospheric and land input, render

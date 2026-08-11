@@ -20,7 +20,10 @@ from preprocessing.hicarprep.pipeline import forcing_geometry_for_serialization
 from preprocessing.hicarprep.products import sha256
 
 
-REQUIRED = ("P", "T", "QV", "QC", "QI", "U", "V", "W", "HFL", "HHL", "HSURF", "FR_LAND")
+REQUIRED = (
+    "P", "T", "QV", "QC", "QI", "U", "V", "W", "SST",
+    "HFL", "HHL", "HSURF", "FR_LAND",
+)
 
 
 def main() -> int:
@@ -76,6 +79,20 @@ def main() -> int:
             raise SystemExit("vertical-wind magnitude exceeds 100 m s-1")
         if forcing["W"].dimensions != ("time", "z", "y_1", "x_1"):
             raise SystemExit("W must be defined on target HFL mass levels")
+        if forcing["SST"].dimensions != ("time", "y_1", "x_1"):
+            raise SystemExit("SST must be a two-dimensional time-dependent target field")
+        if str(getattr(forcing["SST"], "units", "")).strip().lower() not in {"k", "kelvin"}:
+            raise SystemExit("SST units must be kelvin")
+        if "landmask" not in static.variables:
+            raise SystemExit("runtime domain lacks landmask required for water-only SST validation")
+        water = np.asarray(static["landmask"][:]) < 0.5
+        if not np.any(water):
+            raise SystemExit("runtime domain has no water cells for SST forcing")
+        sst = np.asarray(forcing["SST"][0])
+        if np.any((sst[water] < 180.0) | (sst[water] > 350.0)):
+            raise SystemExit("SST lies outside 180..350 K on water cells")
+        if not str(getattr(forcing, "sst_source_sha256", "")):
+            raise SystemExit("forcing lacks exact valid-time SST provenance")
         hhl = np.asarray(forcing["HHL"][:])
         hfl = np.asarray(forcing["HFL"][:])
         if np.any(np.diff(hhl, axis=0) <= 0.0) or np.any(np.diff(hfl, axis=0) <= 0.0):

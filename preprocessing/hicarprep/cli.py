@@ -236,6 +236,7 @@ def _prepare_hicar_forcing(args: argparse.Namespace) -> int:
         diagnostics,
         static_path=args.static,
         source_path=args.icon_state,
+        target_sst_path=args.target_sst,
     )
     with netCDF4.Dataset(args.static) as static:
         x = np.asarray(static["x"][:], dtype=np.float64)
@@ -256,6 +257,10 @@ def _prepare_hicar_forcing(args: argparse.Namespace) -> int:
         "valid_time": str(diagnostics["valid_time"]).replace("Z", ""),
         "source": {"path": str(args.icon_state), "sha256": sha256(args.icon_state)},
         "static": {"path": str(args.static), "sha256": sha256(args.static)},
+        "target_sst": {
+            "path": str(args.target_sst),
+            "sha256": sha256(args.target_sst),
+        },
         "weights": {"path": str(args.weights), "sha256": sha256(args.weights)},
         "output": {"path": str(args.output), "sha256": sha256(args.output)},
         "forcing_file": str(args.output),
@@ -463,6 +468,7 @@ def parser() -> argparse.ArgumentParser:
     )
     forcing.add_argument("--icon-state", type=Path, required=True)
     forcing.add_argument("--static", type=Path, required=True)
+    forcing.add_argument("--target-sst", type=Path, required=True)
     forcing.add_argument("--weights", type=Path, required=True)
     forcing.add_argument("--vector-weights", type=Path)
     forcing.add_argument("--output", type=Path, required=True)
