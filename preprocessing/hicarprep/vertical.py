@@ -6,6 +6,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .rotation import earth_to_grid_wind
+
 
 GRAVITY = 9.80665
 RD = 287.05
@@ -38,14 +40,18 @@ def adjust_vertical_velocity(
     interpolated_w_ms: np.ndarray,
     u_ms: np.ndarray,
     v_ms: np.ndarray,
+    grid_sintheta: np.ndarray,
+    grid_costheta: np.ndarray,
     x_m: np.ndarray,
     y_m: np.ndarray,
     blend_depth_m: float = 4_000.0,
 ) -> np.ndarray:
-    """Blend W toward ``u dh/dx + v dh/dy`` and impose a quiet model top.
+    """Blend W toward ``u_grid dh/dx + v_grid dh/dy`` and quiet the top.
 
     This follows int2lm's terrain-following blend and ICON's explicit top
-    boundary damping. Arrays use HICAR's bottom-to-top vertical ordering.
+    boundary damping. Input U/V remain earth-relative in the serialized
+    forcing; only this slope dot product uses HICAR-compatible grid components.
+    Arrays use HICAR's bottom-to-top vertical ordering.
     """
     hhl = np.asarray(target_hhl_m, dtype=np.float64)
     w = np.asarray(interpolated_w_ms, dtype=np.float64).copy()
@@ -60,14 +66,15 @@ def adjust_vertical_velocity(
     if x.size < 2 or y.size < 2 or np.any(np.diff(x) <= 0.0) or np.any(np.diff(y) <= 0.0):
         raise ValueError("terrain-W adjustment requires increasing x/y coordinates")
 
+    u_grid, v_grid = earth_to_grid_wind(u, v, grid_sintheta, grid_costheta)
     mass_z = 0.5 * (hhl[:-1] + hhl[1:])
     u_interface = np.empty_like(hhl)
     v_interface = np.empty_like(hhl)
-    u_interface[0], u_interface[-1] = u[0], u[-1]
-    v_interface[0], v_interface[-1] = v[0], v[-1]
+    u_interface[0], u_interface[-1] = u_grid[0], u_grid[-1]
+    v_interface[0], v_interface[-1] = v_grid[0], v_grid[-1]
     fraction = (hhl[1:-1] - mass_z[:-1]) / (mass_z[1:] - mass_z[:-1])
-    u_interface[1:-1] = u[:-1] + fraction * (u[1:] - u[:-1])
-    v_interface[1:-1] = v[:-1] + fraction * (v[1:] - v[:-1])
+    u_interface[1:-1] = u_grid[:-1] + fraction * (u_grid[1:] - u_grid[:-1])
+    v_interface[1:-1] = v_grid[:-1] + fraction * (v_grid[1:] - v_grid[:-1])
 
     w_terrain = np.empty_like(hhl)
     edge_order = 2 if min(x.size, y.size) >= 3 else 1

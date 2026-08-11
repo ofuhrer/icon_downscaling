@@ -44,6 +44,11 @@ from preprocessing.hicarprep.remap import (
     grid_fingerprint,
     reconstruct_vector_from_normals,
 )
+from preprocessing.hicarprep.rotation import (
+    earth_to_grid_wind,
+    grid_to_earth_wind,
+    hicar_grid_rotation,
+)
 from preprocessing.hicarprep.vertical import (
     adjust_vertical_velocity,
     interpolate_interface_w_to_hfl,
@@ -513,12 +518,42 @@ class VerticalTransformTests(unittest.TestCase):
             interpolated_w_ms=np.full_like(hhl, 2.0),
             u_ms=u,
             v_ms=v,
+            grid_sintheta=np.zeros((3, 3)),
+            grid_costheta=np.ones((3, 3)),
             x_m=x,
             y_m=y,
         )
         np.testing.assert_allclose(adjusted[0], 1.0, atol=1.0e-12)
         self.assertTrue(np.all(adjusted[1] > 1.0))
         np.testing.assert_allclose(adjusted[-1], 0.0)
+
+    def test_w_slope_uses_grid_relative_not_earth_relative_wind(self) -> None:
+        x = np.array([0.0, 200.0, 400.0])
+        y = np.array([0.0, 200.0, 400.0])
+        terrain = 0.1 * np.meshgrid(x, y)[0]
+        hhl = np.stack([terrain, terrain + 500.0, terrain + 5_000.0])
+        angle = np.deg2rad(30.0)
+        sine = np.full((3, 3), -np.sin(angle))
+        cosine = np.full((3, 3), np.cos(angle))
+        # This earth-relative vector is exactly 10 m/s along target-grid x.
+        u_east, v_north = grid_to_earth_wind(
+            np.full((2, 3, 3), 10.0), np.zeros((2, 3, 3)), sine, cosine
+        )
+        u_before = u_east.copy()
+        v_before = v_north.copy()
+        adjusted = adjust_vertical_velocity(
+            target_hhl_m=hhl,
+            interpolated_w_ms=np.zeros_like(hhl),
+            u_ms=u_east,
+            v_ms=v_north,
+            grid_sintheta=sine,
+            grid_costheta=cosine,
+            x_m=x,
+            y_m=y,
+        )
+        np.testing.assert_allclose(adjusted[0], 1.0, atol=1.0e-12)
+        np.testing.assert_array_equal(u_east, u_before)
+        np.testing.assert_array_equal(v_north, v_before)
 
     def test_interface_w_uses_authoritative_hfl_not_arithmetic_midpoints(self) -> None:
         hhl = np.array([0.0, 100.0, 300.0])[:, None, None]
@@ -571,6 +606,71 @@ class VerticalTransformTests(unittest.TestCase):
                 u_ms=np.ones_like(t),
                 v_ms=np.ones_like(t),
             )
+
+
+class GridRotationTests(unittest.TestCase):
+    def test_zero_angle_leaves_winds_unchanged(self) -> None:
+        latitude = np.broadcast_to(np.array([46.0, 46.0, 46.0]), (3, 3))
+        longitude = np.broadcast_to(np.array([7.0, 7.1, 7.2]), (3, 3))
+        sine, cosine = hicar_grid_rotation(latitude, longitude, dx_m=1_000.0)
+        np.testing.assert_allclose(sine, 0.0, atol=0.0)
+        np.testing.assert_allclose(cosine, 1.0, atol=1.0e-15)
+        u = np.arange(18, dtype=np.float64).reshape(2, 3, 3)
+        v = -u
+        actual_u, actual_v = earth_to_grid_wind(u, v, sine, cosine)
+        np.testing.assert_allclose(actual_u, u)
+        np.testing.assert_allclose(actual_v, v)
+
+    def test_sign_and_inverse_match_hicar_convention(self) -> None:
+        longitude = np.broadcast_to(np.array([7.0, 7.1, 7.2]), (3, 3))
+        latitude = 46.0 + 0.02 * np.broadcast_to(np.arange(3), (3, 3))
+        sine, cosine = hicar_grid_rotation(
+            latitude, longitude, dx_m=2_000.0, smoothing_distance_m=0.0
+        )
+        self.assertTrue(np.all(sine < 0.0))
+        self.assertTrue(np.all(cosine > 0.0))
+        u_grid, v_grid = earth_to_grid_wind(
+            np.zeros((3, 3)), np.full((3, 3), 10.0), sine, cosine
+        )
+        self.assertTrue(np.all(u_grid > 0.0))
+        u_east, v_north = grid_to_earth_wind(u_grid, v_grid, sine, cosine)
+        np.testing.assert_allclose(u_east, 0.0, atol=1.0e-14)
+        np.testing.assert_allclose(v_north, 10.0, atol=1.0e-14)
+
+    def test_smoothing_matches_hicar_truncated_windows(self) -> None:
+        y, x = np.meshgrid(np.arange(6), np.arange(7), indexing="ij")
+        latitude = 46.0 + 0.003 * x + 0.0004 * x * y
+        longitude = 7.0 + 0.004 * x
+        actual_sine, actual_cosine = hicar_grid_rotation(
+            latitude,
+            longitude,
+            dx_m=500.0,
+            smoothing_distance_m=1_000.0,
+            smoothing_half_width_cells=1,
+        )
+
+        left = np.maximum(np.arange(7) - 2, 0)
+        right = np.minimum(np.arange(7) + 2, 6)
+        dlat = latitude[:, right] - latitude[:, left]
+        dlon = (longitude[:, right] - longitude[:, left]) * np.cos(
+            np.deg2rad(latitude)
+        )
+        distance = np.hypot(dlat, dlon)
+        expected_sine = -dlat / distance
+        expected_cosine = np.abs(dlon / distance)
+        for _ in range(2):
+            for field in (expected_sine, expected_cosine):
+                source = field.copy()
+                for row in range(6):
+                    for column in range(7):
+                        field[row, column] = np.mean(
+                            source[
+                                max(row - 1, 0) : min(row + 2, 6),
+                                max(column - 1, 0) : min(column + 2, 7),
+                            ]
+                        )
+        np.testing.assert_allclose(actual_sine, expected_sine, atol=1.0e-15)
+        np.testing.assert_allclose(actual_cosine, expected_cosine, atol=1.0e-15)
 
 
 class ProductPipelineTests(unittest.TestCase):

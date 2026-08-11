@@ -20,6 +20,7 @@ from .remap import (
     coordinates_in_degrees,
     grid_fingerprint,
 )
+from .rotation import hicar_grid_rotation
 from .sst import load_target_sst
 from .vertical import (
     adjust_vertical_velocity,
@@ -700,11 +701,26 @@ def transform_icon_state(
             buried_count += diagnostics.buried_source_level_count
             cases[diagnostics.terrain_case] += 1
 
+    dx_m = float(np.median(np.diff(x)))
+    dy_m = float(np.median(np.diff(y)))
+    if (
+        not np.allclose(np.diff(x), dx_m, rtol=0.0, atol=1.0e-8)
+        or not np.allclose(np.diff(y), dy_m, rtol=0.0, atol=1.0e-8)
+        or not np.isclose(dx_m, dy_m, rtol=0.0, atol=1.0e-8)
+    ):
+        raise ValueError(
+            "HICAR target x/y spacing must be uniform and equal for grid-wind rotation"
+        )
+    grid_sintheta, grid_costheta = hicar_grid_rotation(
+        target_lat, target_lon, dx_m=dx_m
+    )
     target_w = adjust_vertical_velocity(
         target_hhl_m=target_hhl,
         interpolated_w_ms=target_w,
         u_ms=state["U"],
         v_ms=state["V"],
+        grid_sintheta=grid_sintheta,
+        grid_costheta=grid_costheta,
         x_m=x,
         y_m=y,
     )
@@ -740,6 +756,7 @@ def transform_icon_state(
         "below_source_target_levels": below_count,
         "buried_source_levels_removed": buried_count,
         "target_w_vertical_coordinate": "authoritative_static_HFL",
+        "target_w_terrain_wind_basis": "HICAR_grid_relative",
         "terrain_columns_lower": cases["lower"],
         "terrain_columns_matched": cases["matched"],
         "terrain_columns_higher": cases["higher"],
