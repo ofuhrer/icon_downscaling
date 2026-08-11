@@ -5,28 +5,36 @@ description: Choose and validate HICAR namelist, vertical grid, terrain coordina
 
 # HICAR Alpine configuration
 
-Treat configuration choices as scientific hypotheses. Change one mechanism at
-a time on the smallest representative case and inspect fields, not just model
-termination.
+Define an internally coherent untuned reference from published HICAR practice
+before tuning individual mechanisms. Inspect physical fields and observations,
+not just model termination. Use bounded A/B tests only after the reference
+result identifies a specific scientific ambiguity.
 
 ## Selected Swiss 200 m baseline
 
-- 80 levels, 12 km model top, 20 m lowest layer, stretch 0.65, with a 12 m
-  hard minimum after terrain compression;
+- 80 levels, 15 km ASL model top, 20 m lowest layer, stretch 0.65, with a 12 m
+  hard minimum after terrain compression and no value below 10 m;
 - SLEVE decay 2/6, terrain smoothing radius 5 for 10 cycles;
-- RK3, third-order horizontal and vertical advection, flux correction;
-- discretely adjoint variational wind, `alpha_const=1`, 2500 iterations;
-- Sx on with 500 m smoothing and density advection on;
-- Morrison microphysics, YSU PBL, Noah-MP, revised MM5 surface, RRTMGP every
+- RK3/CFL 1.6, third-order horizontal and vertical advection, FCT option 1,
+  and density advection;
+- discretely adjoint variational wind, dynamic `alpha_const=-1` bounded by
+  0.1--1, two passes and a 2500-iteration cap;
+- Sx on with 600 m search, 30 degree scale and 500 m smoothing; TPI search
+  4 km and scale 200;
+- Morrison microphysics, YSU PBL, Noah-MP with restored revised-MM5 surface
+  resistance option 3, prescribed simple-water SST, and RRTMGP every
   600 s with `rrtmgp_block_N=256` (one block per compute rank for the selected
   national 48-rank decomposition);
 - four-layer depth-varying soil texture with SMI land initialization;
-- terrain radiation off.
+- direct, diffuse and reflected shortwave terrain corrections and terrain
+  longwave on, using validated HLM/SVF/slope/aspect geometry.
 
-Atmospheric forcing is hicarprep P/T/U/V/QV/QC/QI in dry-air mixing ratios.
-Terrain-adjusted W is supplied on the authoritative target HFL levels. Set
-`qv_is_spec_humidity=.False.`, `wvar='W'`, and
-`relax_filters=.False.`. Sparse target-grid LBC is the lateral boundary path.
+Atmospheric forcing is hicarprep P/T/U/V/W/QV/QC/QI plus SST in dry-air mixing
+ratios. W is supplied on the authoritative target HFL levels and SST is hourly
+REA-L skin temperature over water support. Set `qv_is_spec_humidity=.False.`,
+`wvar='W'`, `sst_var='SST'`, and `relax_filters=.False.`. Sparse target-grid
+LBC contains mass-grid T/P/QV/QC/QI only; do not insert sparse U/V/W after wind
+projection.
 The RRTMGP block setting is topology-specific: recompute the local block count
 and requalify reproducibility if the domain or compute decomposition changes.
 
@@ -47,12 +55,11 @@ hypotheses.
 
 ## Terrain radiation
 
-Keep it off in the seasonal baseline. The current source had two independent
-problems: restart cadence state and a reflected-shortwave component that was
-recomputed only on full-radiation steps but removed from total SW between
-updates. A source fix now preserves the cached reflected component between
-updates, but the feature still needs a focused cadence test and segmented
-restart comparison before use in science runs.
+The reference uses all terrain-radiation components after HLM/SVF/slope/aspect
+are generated from the exact static terrain and validated. The source fix that
+caches reflected shortwave between 600 s radiation updates is required. Before
+seasonal launch, a daylight continuous-versus-segmented proof must exercise
+repeated radiation calls and show exact restart/output equivalence.
 
 ## Useful references
 
