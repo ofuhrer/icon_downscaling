@@ -22,7 +22,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from preprocessing.hicarprep import grid_to_earth_wind, hicar_grid_rotation
+from preprocessing.hicarprep import (  # noqa: E402
+    grid_to_earth_wind,
+    hicar_grid_rotation,
+)
 
 
 EPSILON = 0.622
