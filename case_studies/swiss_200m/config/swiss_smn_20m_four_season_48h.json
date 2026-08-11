@@ -12,7 +12,7 @@
   "acc_synchronous": false,
   "max_attempts": 4,
   "input_partitions": ["pp-long"],
-  "max_active_inputs": 6,
+  "max_active_inputs": 32,
   "input_cpus": 4,
   "input_memory": "128G",
   "input_time": "06:00:00",
