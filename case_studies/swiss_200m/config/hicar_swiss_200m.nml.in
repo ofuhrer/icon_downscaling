@@ -26,6 +26,10 @@
   soil_vwc_var = 'soil_vwc'
   swe_var = 'swe'
   snowh_var = 'snow_height'
+  hlm_var = 'hlm'
+  svf_var = 'svf'
+  slope_angle_var = 'slope_rad'
+  aspect_angle_var = 'aspect_rad'
 @SNOW_TEMPERATURE_LINE@
 @LAND_CLIMATOLOGY_LINES@
   use_map_factors = .True.

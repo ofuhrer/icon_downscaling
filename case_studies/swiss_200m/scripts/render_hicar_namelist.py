@@ -111,7 +111,8 @@ def main() -> int:
         missing = sorted(
             {
                 "lat", "lon", "topo", "HHL", "HFL", "landmask", "landuse",
-                "soil_type_layer", "swe", "snow_height",
+                "soil_type_layer", "swe", "snow_height", "hlm", "svf",
+                "slope_rad", "aspect_rad",
             }
             - set(static.variables)
         )
@@ -121,6 +122,12 @@ def main() -> int:
         if soil.ndim != 3 or soil.shape[0] != 4:
             raise SystemExit("soil_type_layer must contain four Noah-MP layers")
         horizontal = static["lat"].shape
+        if static["hlm"].shape != (90, *horizontal):
+            raise SystemExit("hlm must contain 90 azimuths on the target y,x grid")
+        for name in ("svf", "slope_rad", "aspect_rad"):
+            values = np.asarray(static[name][:], dtype=np.float64)
+            if values.shape != horizontal or not np.isfinite(values).all():
+                raise SystemExit(f"{name} must be finite on the target y,x grid")
         if "snow_temperature_initial" in static.variables:
             snow_temperature = np.asarray(
                 static["snow_temperature_initial"][:], dtype=np.float64

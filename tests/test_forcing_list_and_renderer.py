@@ -17,11 +17,16 @@ def static_file(path: Path, *, land_climatology: bool = False) -> None:
         dataset.createDimension("soil_layer", 4)
         dataset.createDimension("level", 80)
         dataset.createDimension("half_level", 81)
+        dataset.createDimension("azimuth", 90)
         dataset.createDimension("y", 1)
         dataset.createDimension("x", 1)
         for name in ("lat", "lon", "topo", "landmask", "landuse", "swe", "snow_height"):
             dataset.createVariable(name, "f4", ("y", "x"))[:] = 0.0
         dataset.createVariable("soil_type_layer", "i2", ("soil_layer", "y", "x"))[:] = 6
+        dataset.createVariable("hlm", "f4", ("azimuth", "y", "x"))[:] = 90.0
+        dataset.createVariable("svf", "f4", ("y", "x"))[:] = 1.0
+        dataset.createVariable("slope_rad", "f4", ("y", "x"))[:] = 0.0
+        dataset.createVariable("aspect_rad", "f4", ("y", "x"))[:] = 0.0
         if land_climatology:
             dataset.createDimension("month", 12)
             dataset.createVariable("VEGFRA", "f4", ("month", "y", "x"))[:] = 50.0
