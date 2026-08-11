@@ -61,6 +61,8 @@ def build_target_sst_product(
 
     baseline = weights.apply(source_skt, monotone=True)
     fallback_distances_km: list[float] = []
+    global_fallback_masks: list[np.ndarray] = []
+    global_fallback_distance_fields_km: list[np.ndarray] = []
     supported, local_fallbacks, global_fallbacks = _supported_remap(
         weights,
         source_skt,
@@ -73,7 +75,17 @@ def build_target_sst_product(
         required_target=~target_land,
         monotone=True,
         fallback_distances_km=fallback_distances_km,
+        global_fallback_masks=global_fallback_masks,
+        global_fallback_distance_fields_km=global_fallback_distance_fields_km,
     )
+    if len(global_fallback_masks) != 1 or len(global_fallback_distance_fields_km) != 1:
+        raise RuntimeError("scalar SST remap did not produce one fallback provenance field")
+    global_fallback_mask = global_fallback_masks[0]
+    global_fallback_distance_km = global_fallback_distance_fields_km[0]
+    if int(np.count_nonzero(global_fallback_mask)) != global_fallbacks:
+        raise RuntimeError("SST global fallback count disagrees with its target mask")
+    if np.any(global_fallback_mask & target_land):
+        raise RuntimeError("SST global fallback unexpectedly modified a target land cell")
     sst = np.where(target_land, baseline, supported)
     if not np.isfinite(sst).all() or np.any(
         (sst[~target_land] < 180.0) | (sst[~target_land] > 350.0)
@@ -88,6 +100,11 @@ def build_target_sst_product(
         "water_global_fallback_count": int(global_fallbacks),
         "maximum_fallback_distance_km": (
             float(max(fallback_distances_km)) if fallback_distances_km else 0.0
+        ),
+        "maximum_global_fallback_distance_km": (
+            float(np.nanmax(global_fallback_distance_km))
+            if global_fallbacks
+            else 0.0
         ),
     }
 
@@ -110,6 +127,23 @@ def build_target_sst_product(
             variable.hicar_support = "water cells; land values are finite placeholders"
             dataset.createVariable("water_mask", "i1", ("y", "x"), zlib=True)[:] = (
                 ~target_land
+            )
+            fallback_mask_variable = dataset.createVariable(
+                "global_fallback_mask", "i1", ("y", "x"), zlib=True
+            )
+            fallback_mask_variable[:] = global_fallback_mask
+            fallback_mask_variable.long_name = (
+                "target cells filled from nearest finite same-surface source outside "
+                "the compact RBF stencil"
+            )
+            fallback_distance_variable = dataset.createVariable(
+                "global_fallback_distance_km", "f8", ("y", "x"), zlib=True
+            )
+            fallback_distance_variable[:] = global_fallback_distance_km
+            fallback_distance_variable.units = "km"
+            fallback_distance_variable.long_name = (
+                "great-circle distance to global same-surface fallback source; "
+                "NaN where no global fallback was used"
             )
             dataset.product_type = "hicarprep_target_water_temperature"
             dataset.valid_time = diagnostics["valid_time"]

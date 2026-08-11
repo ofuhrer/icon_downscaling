@@ -1011,6 +1011,37 @@ class ProductPipelineTests(unittest.TestCase):
 
 
 class SurfaceStateTests(unittest.TestCase):
+    def test_global_fallback_provenance_is_exact_per_target(self) -> None:
+        weights = RBFWeights(
+            donor_index=np.array([[0, 2], [1, 0]]),
+            weight=np.array([[0.75, 0.25], [0.75, 0.25]]),
+            target_shape=(1, 2),
+            source_fingerprint="source",
+            target_fingerprint="target",
+        )
+        masks: list[np.ndarray] = []
+        distances: list[np.ndarray] = []
+        mapped, fallback_count, global_fallback_count = _supported_remap(
+            weights,
+            np.array([280.0, 279.0, 282.0]),
+            np.array([True, False, True]),
+            np.array([[False, False]]),
+            source_lat=np.array([46.0, 46.02, 46.04]),
+            source_lon=np.array([8.0, 8.02, 8.04]),
+            target_lat=np.array([[46.001, 46.021]]),
+            target_lon=np.array([[8.001, 8.021]]),
+            global_fallback_masks=masks,
+            global_fallback_distance_fields_km=distances,
+        )
+        np.testing.assert_allclose(mapped, [[279.0, 279.0]])
+        self.assertEqual(fallback_count, 1)
+        self.assertEqual(global_fallback_count, 1)
+        self.assertEqual(len(masks), 1)
+        self.assertEqual(len(distances), 1)
+        np.testing.assert_array_equal(masks[0], [[True, False]])
+        self.assertTrue(np.isfinite(distances[0][0, 0]))
+        self.assertTrue(np.isnan(distances[0][0, 1]))
+
     def test_same_surface_fallback_never_crosses_land_water_boundary(self) -> None:
         weights = RBFWeights(
             donor_index=np.array([[0, 1]]),

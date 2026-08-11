@@ -256,8 +256,15 @@ def _supported_remap(
     allow_cross_surface_in_stencil: bool = False,
     cross_surface_fallback_counts: list[int] | None = None,
     fallback_distances_km: list[float] | None = None,
+    global_fallback_masks: list[np.ndarray] | None = None,
+    global_fallback_distance_fields_km: list[np.ndarray] | None = None,
 ) -> tuple[np.ndarray, int, int]:
-    """Apply RBF weights after finite, same-surface support normalization."""
+    """Apply finite same-surface RBF support, optionally recording global fallback.
+
+    Each optional provenance list receives one target-shaped field per leading
+    source field. Distances are NaN wherever the global fallback was not used.
+    The established three-value return contract is unchanged.
+    """
     source = np.asarray(source, dtype=np.float64)
     flat = source.reshape((-1, source.shape[-1]))
     output = np.empty((flat.shape[0], *weights.target_shape), dtype=np.float64)
@@ -273,6 +280,8 @@ def _supported_remap(
         raise ValueError("required target support disagrees with interpolation target")
     source_land = np.asarray(source_land, dtype=bool).ravel()
     for field_index, field in enumerate(flat):
+        field_global_fallback = np.zeros_like(target_flat, dtype=bool)
+        field_global_distance_km = np.full(target_flat.shape, np.nan, dtype=np.float64)
         donors = np.take(field, weights.donor_index, axis=-1)
         donor_land = source_land[weights.donor_index]
         eligible = np.isfinite(donors) & (donor_land == target_flat[:, None])
@@ -387,15 +396,24 @@ def _supported_remap(
                 chord, nearest = tree.query(target_xyz, k=1)
                 remapped[target_missing] = field[finite_indices[nearest]]
                 global_fallback_count += int(np.sum(target_missing))
+                distance_km = (
+                    2.0
+                    * 6371.0
+                    * np.arcsin(np.clip(np.asarray(chord) / 2.0, 0.0, 1.0))
+                ).ravel()
+                field_global_fallback[target_missing] = True
+                field_global_distance_km[target_missing] = distance_km
                 if fallback_distances_km is not None:
-                    fallback_distances_km.extend(
-                        (
-                            2.0
-                            * 6371.0
-                            * np.arcsin(np.clip(np.asarray(chord) / 2.0, 0.0, 1.0))
-                        ).ravel().tolist()
-                    )
+                    fallback_distances_km.extend(distance_km.tolist())
         output[field_index] = remapped.reshape(weights.target_shape)
+        if global_fallback_masks is not None:
+            global_fallback_masks.append(
+                field_global_fallback.reshape(weights.target_shape).copy()
+            )
+        if global_fallback_distance_fields_km is not None:
+            global_fallback_distance_fields_km.append(
+                field_global_distance_km.reshape(weights.target_shape).copy()
+            )
     return (
         output.reshape((*source.shape[:-1], *weights.target_shape)),
         fallback_count,

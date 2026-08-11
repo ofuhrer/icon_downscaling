@@ -66,6 +66,42 @@ def test_target_sst_uses_same_surface_water_and_exact_contract(tmp_path: Path) -
         assert dataset.source_variable == "SKT"
 
 
+def test_target_sst_persists_exact_global_fallback_provenance(tmp_path: Path) -> None:
+    static, source, original_weights, lat, lon, land = inputs(tmp_path)
+    output = tmp_path / "target_sst_global_fallback.nc"
+    donor_index = original_weights.donor_index.copy()
+    donor_index[[1, 3]] = np.array([0, 2])
+    weights = RBFWeights(
+        donor_index=donor_index,
+        weight=original_weights.weight,
+        target_shape=original_weights.target_shape,
+        source_fingerprint=original_weights.source_fingerprint,
+        target_fingerprint=original_weights.target_fingerprint,
+    )
+    diagnostics = build_target_sst_product(
+        output,
+        source_skt=np.array([290.0, 280.0, 292.0, 282.0]),
+        source_lat=lat.ravel(),
+        source_lon=lon.ravel(),
+        source_land=land.ravel(),
+        static_path=static,
+        weights=weights,
+        valid_time="2020-02-10T01:00:00Z",
+        source_path=source,
+    )
+
+    assert diagnostics["water_global_fallback_count"] == 2
+    assert diagnostics["maximum_global_fallback_distance_km"] == 0.0
+    with netCDF4.Dataset(output) as dataset:
+        mask = np.asarray(dataset["global_fallback_mask"][:], dtype=bool)
+        distance = np.asarray(dataset["global_fallback_distance_km"][:])
+        np.testing.assert_array_equal(mask, ~land)
+        np.testing.assert_allclose(distance[~land], 0.0, atol=1.0e-12)
+        assert np.isnan(distance[land]).all()
+        assert dataset.water_global_fallback_count == 2
+        assert dataset.maximum_global_fallback_distance_km == 0.0
+
+
 def test_target_sst_rejects_time_and_mask_mismatch(tmp_path: Path) -> None:
     static, source, weights, lat, lon, land = inputs(tmp_path)
     output = tmp_path / "target_sst.nc"
