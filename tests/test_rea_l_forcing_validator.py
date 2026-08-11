@@ -60,6 +60,8 @@ def files(root: Path, invalid_hfl: bool = False) -> tuple[Path, Path, Path]:
         sst.units = "K"
         dataset.sst_source_sha256 = "synthetic-target-sst"
         dataset.geometry_serialization = "static_sleve_with_one_ulp_top_cover"
+        dataset.target_w_vertical_coordinate = "authoritative_static_HFL"
+        dataset.target_w_terrain_wind_basis = "HICAR_grid_relative"
     with netCDF4.Dataset(boundary, "w") as dataset:
         for name, size in (
             ("boundary_point", 2), ("level", 2), ("half_level", 3),
@@ -123,6 +125,21 @@ def test_implausible_water_sst_fails(tmp_path: Path) -> None:
     )
     assert result.returncode != 0
     assert "SST lies outside" in result.stderr
+
+
+def test_earth_relative_terrain_w_contract_fails(tmp_path: Path) -> None:
+    forcing, static, boundary = files(tmp_path)
+    with netCDF4.Dataset(forcing, "a") as dataset:
+        dataset.target_w_terrain_wind_basis = "earth_relative"
+    with netCDF4.Dataset(boundary, "a") as dataset:
+        dataset.initial_condition_sha256 = sha256(forcing)
+    result = subprocess.run(
+        [sys.executable, str(VALIDATOR), "--forcing-file", str(forcing),
+         "--boundary-file", str(boundary), "--static-file", str(static)],
+        text=True, capture_output=True,
+    )
+    assert result.returncode != 0
+    assert "grid-relative winds" in result.stderr
 
 
 def test_mismatched_boundary_pair_fails(tmp_path: Path) -> None:

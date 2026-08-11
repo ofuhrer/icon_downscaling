@@ -79,6 +79,14 @@ def main() -> int:
             raise SystemExit("vertical-wind magnitude exceeds 100 m s-1")
         if forcing["W"].dimensions != ("time", "z", "y_1", "x_1"):
             raise SystemExit("W must be defined on target HFL mass levels")
+        if str(getattr(forcing, "target_w_vertical_coordinate", "")) != (
+            "authoritative_static_HFL"
+        ):
+            raise SystemExit("W lacks the authoritative target-HFL coordinate contract")
+        if str(getattr(forcing, "target_w_terrain_wind_basis", "")) != (
+            "HICAR_grid_relative"
+        ):
+            raise SystemExit("terrain-adjusted W was not built from HICAR grid-relative winds")
         if forcing["SST"].dimensions != ("time", "y_1", "x_1"):
             raise SystemExit("SST must be a two-dimensional time-dependent target field")
         if str(getattr(forcing["SST"], "units", "")).strip().lower() not in {"k", "kelvin"}:
