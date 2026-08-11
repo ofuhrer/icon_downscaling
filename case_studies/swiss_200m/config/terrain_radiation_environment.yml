@@ -1,0 +1,20 @@
+name: hicar-terrain-radiation
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - embree=3.13.0
+  - tbb-devel=2023.0.0
+  - cython=0.29
+  - numpy=1.26
+  - scipy=1.12
+  - geographiclib
+  - libnetcdf
+  - netcdf-cxx4=4.3.1
+  - netcdf4
+  - pyproj
+  - requests
+  - setuptools
+  - tqdm
+  - xarray
+  - pip

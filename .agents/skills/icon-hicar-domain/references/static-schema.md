@@ -73,12 +73,12 @@ runtime contract is:
   positive search distance, and horizon convention.
 
 Use
-`case_studies/swiss_200m/fixed_parameters/publish_terrain_radiation_static.py`
-to merge validated geometry into a published base static file. It copies HLM
-one azimuth slab at a time, writes a checksum-bound manifest, atomically
-renames, and publishes ready markers last. Never enable a terrain-radiation
-profile against an ad hoc static file; the national renderer requires the
-publisher's audited global attributes.
+`case_studies/swiss_200m/scripts/prepare_terrain_radiation_geometry.py` for
+the national 200 m case. It computes curved-Earth HORAYZON geometry from the
+exact final target `topo` plus a 20.2 km REA-L terrain band, converts EGM2008
+orthometric height with the checksum-pinned PROJ grid, and copies HLM one
+azimuth slab at a time into the final static. Never enable a terrain-radiation
+profile against a static file lacking the generator's provenance attributes.
 
 ## Frozen reference case
 
