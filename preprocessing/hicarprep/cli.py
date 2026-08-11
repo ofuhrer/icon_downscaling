@@ -249,7 +249,6 @@ def _prepare_hicar_forcing(args: argparse.Namespace) -> int:
         initial_condition_path=args.output,
         valid_time=str(diagnostics["valid_time"]),
         water_representation="dry-air mixing ratio",
-        include_lateral_w=args.lbc_w_policy == "relax",
     )
     manifest = {
         "schema": "hicarprep-target-forcing-manifest-v1",
@@ -469,7 +468,6 @@ def parser() -> argparse.ArgumentParser:
     forcing.add_argument("--output", type=Path, required=True)
     forcing.add_argument("--boundary", type=Path, required=True)
     forcing.add_argument("--boundary-width-m", type=float, default=10_000.0)
-    forcing.add_argument("--lbc-w-policy", choices=("diagnose", "relax"), default="diagnose")
     forcing.add_argument("--manifest", type=Path)
     forcing.set_defaults(func=_prepare_hicar_forcing)
 

@@ -621,30 +621,16 @@ class ProductPipelineTests(unittest.TestCase):
             def write(path: Path, valid_time: str) -> None:
                 with netCDF4.Dataset(path, "w") as dataset:
                     dataset.createDimension("boundary_point", 2)
-                    dataset.createDimension("u_boundary_point", 2)
-                    dataset.createDimension("v_boundary_point", 2)
                     dataset.createDimension("level", 1)
                     dataset.createDimension("half_level", 2)
                     dataset.createVariable("row", "i4", ("boundary_point",))[:] = [0, 0]
                     dataset.createVariable("column", "i4", ("boundary_point",))[:] = [0, 1]
-                    dataset.createVariable("u_row", "i4", ("u_boundary_point",))[:] = [0, 0]
-                    dataset.createVariable("u_column", "i4", ("u_boundary_point",))[:] = [0, 2]
-                    dataset.createVariable("v_row", "i4", ("v_boundary_point",))[:] = [0, 1]
-                    dataset.createVariable("v_column", "i4", ("v_boundary_point",))[:] = [0, 0]
                     dataset.createVariable(
                         "relaxation_weight", "f8", ("boundary_point",)
                     )[:] = [1.0, 0.5]
-                    dataset.createVariable(
-                        "u_relaxation_weight", "f8", ("u_boundary_point",)
-                    )[:] = [1.0, 1.0]
-                    dataset.createVariable(
-                        "v_relaxation_weight", "f8", ("v_boundary_point",)
-                    )[:] = [1.0, 1.0]
                     for name in ("T", "P", "QV", "QC", "QI", "HFL"):
                         dataset.createVariable(name, "f8", ("level", "boundary_point"))[:] = 1.0
                     dataset.createVariable("HHL", "f8", ("half_level", "boundary_point"))[:] = 1.0
-                    dataset.createVariable("U", "f8", ("level", "u_boundary_point"))[:] = 1.0
-                    dataset.createVariable("V", "f8", ("level", "v_boundary_point"))[:] = 1.0
                     dataset.product_type = "hicar_lateral_boundary_state"
                     dataset.valid_time = valid_time
                     dataset.domain_nx = 2
@@ -816,16 +802,13 @@ class ProductPipelineTests(unittest.TestCase):
                 initial_t = np.asarray(initial["T"][:])
                 np.testing.assert_allclose(boundary["T"][:], initial_t[:, rows, cols])
                 self.assertEqual(boundary.dimensions["boundary_point"].size, 8)
-                self.assertEqual(boundary["U"].dimensions, ("level", "u_boundary_point"))
-                self.assertEqual(boundary["V"].dimensions, ("level", "v_boundary_point"))
                 self.assertEqual(
-                    boundary.dimensions["u_boundary_point"].size,
-                    boundary["u_row"].size,
+                    set(boundary.variables),
+                    {"row", "column", "relaxation_weight", "T", "P", "QV", "QC", "QI", "HFL", "HHL"},
                 )
-                self.assertEqual(
-                    boundary.dimensions["v_boundary_point"].size,
-                    boundary["v_row"].size,
-                )
+                self.assertNotIn("U", boundary.variables)
+                self.assertNotIn("V", boundary.variables)
+                self.assertNotIn("W", boundary.variables)
                 self.assertEqual(boundary.valid_time, "2020-01-01T00:00:00Z")
                 self.assertEqual(initial.wind_balance, "SOURCE_NATIVE_REMAPPED")
                 self.assertEqual(

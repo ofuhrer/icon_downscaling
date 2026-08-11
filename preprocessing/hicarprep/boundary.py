@@ -65,6 +65,25 @@ def validate_boundary_sequence(
                 name: (tuple(variable.dimensions), tuple(variable.shape))
                 for name, variable in dataset.variables.items()
             }
+            exact_variables = {
+                "row",
+                "column",
+                "relaxation_weight",
+                "T",
+                "P",
+                "QV",
+                "QC",
+                "QI",
+                "HFL",
+                "HHL",
+            }
+            if set(schema) != exact_variables:
+                extra = sorted(set(schema) - exact_variables)
+                missing = sorted(exact_variables - set(schema))
+                raise ValueError(
+                    f"{path}: sparse LBC variables differ from the scalar mass-grid contract; "
+                    f"missing={missing}, extra={extra}"
+                )
             required_dimensions = {
                 "T": ("level", "boundary_point"),
                 "P": ("level", "boundary_point"),
@@ -73,8 +92,6 @@ def validate_boundary_sequence(
                 "QI": ("level", "boundary_point"),
                 "HFL": ("level", "boundary_point"),
                 "HHL": ("half_level", "boundary_point"),
-                "U": ("level", "u_boundary_point"),
-                "V": ("level", "v_boundary_point"),
             }
             for name, dimensions in required_dimensions.items():
                 if name not in dataset.variables:
@@ -87,21 +104,19 @@ def validate_boundary_sequence(
             ny = int(getattr(dataset, "domain_ny", 0))
             if nx <= 0 or ny <= 0:
                 raise ValueError(f"{path}: invalid or missing domain_nx/domain_ny")
-            for prefix, imax, jmax in (("", nx - 1, ny - 1), ("u_", nx, ny - 1), ("v_", nx - 1, ny)):
-                point_rows = np.asarray(dataset[f"{prefix}row"][:], dtype=np.int64)
-                point_columns = np.asarray(dataset[f"{prefix}column"][:], dtype=np.int64)
-                if np.any((point_rows < 0) | (point_rows > jmax)) or np.any(
-                    (point_columns < 0) | (point_columns > imax)
-                ):
-                    raise ValueError(f"{path}: {prefix or 'mass_'}point index is out of bounds")
-                if np.unique(np.stack((point_rows, point_columns), axis=1), axis=0).shape[0] != point_rows.size:
-                    raise ValueError(f"{path}: duplicate {prefix or 'mass_'}boundary points")
+            point_rows = np.asarray(dataset["row"][:], dtype=np.int64)
+            point_columns = np.asarray(dataset["column"][:], dtype=np.int64)
+            if np.any((point_rows < 0) | (point_rows >= ny)) or np.any(
+                (point_columns < 0) | (point_columns >= nx)
+            ):
+                raise ValueError(f"{path}: mass-grid point index is out of bounds")
+            if np.unique(np.stack((point_rows, point_columns), axis=1), axis=0).shape[0] != point_rows.size:
+                raise ValueError(f"{path}: duplicate mass-grid boundary points")
             if reference is None:
                 reference = schema
                 reference_points = {
                     name: np.asarray(dataset[name][:], dtype=np.int64)
-                    for name in ("row", "column", "u_row", "u_column", "v_row", "v_column")
-                    if name in dataset.variables
+                    for name in ("row", "column")
                 }
                 reference_contract = tuple(
                     str(getattr(dataset, name, ""))
@@ -148,27 +163,16 @@ def validate_boundary_sequence(
                     if actual != expected:
                         raise ValueError(f"{path}: {name} geometry changed across time")
             for name, variable in dataset.variables.items():
-                if name in {"row", "column", "u_row", "u_column", "v_row", "v_column"}:
+                if name in {"row", "column"}:
                     continue
                 values = np.asarray(np.ma.asarray(variable[:]).filled(np.nan))
                 if values.dtype.kind in {"f", "c"} and not np.isfinite(values).all():
                     raise ValueError(f"{path}: {name} contains non-finite boundary values")
-            for name in (
-                "relaxation_weight",
-                "u_relaxation_weight",
-                "v_relaxation_weight",
-            ):
-                if name not in dataset.variables:
-                    if name == "relaxation_weight" or name.removesuffix(
-                        "_relaxation_weight"
-                    ) + "_row" in dataset.variables:
-                        raise ValueError(f"{path}: missing required {name}")
-                    continue
-                weights = np.asarray(dataset[name][:], dtype=np.float64)
-                if np.any((weights < 0.0) | (weights > 1.0)):
-                    raise ValueError(f"{path}: {name} must lie in [0, 1]")
-                if not np.any(weights == 1.0):
-                    raise ValueError(f"{path}: {name} does not constrain the outer edge")
+            weights = np.asarray(dataset["relaxation_weight"][:], dtype=np.float64)
+            if np.any((weights < 0.0) | (weights > 1.0)):
+                raise ValueError(f"{path}: relaxation_weight must lie in [0, 1]")
+            if not np.any(weights == 1.0):
+                raise ValueError(f"{path}: relaxation_weight does not constrain the outer edge")
             if str(getattr(dataset, "hicar_water_conversion", "")) not in {
                 "APPLIED_JOINT_ALL_WATER_SPECIES",
                 "NOT_APPLIED_RESEARCH_PRODUCT",

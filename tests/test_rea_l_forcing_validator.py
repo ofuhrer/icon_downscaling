@@ -52,23 +52,15 @@ def files(root: Path, invalid_hfl: bool = False) -> tuple[Path, Path, Path]:
         dataset.geometry_serialization = "static_sleve_with_one_ulp_top_cover"
     with netCDF4.Dataset(boundary, "w") as dataset:
         for name, size in (
-            ("boundary_point", 2), ("u_boundary_point", 2),
-            ("v_boundary_point", 2), ("level", 2), ("half_level", 3),
+            ("boundary_point", 2), ("level", 2), ("half_level", 3),
         ):
             dataset.createDimension(name, size)
-        for prefix, rows, columns in (
-            ("", [0, 1], [0, 1]), ("u_", [0, 1], [0, 2]),
-            ("v_", [0, 2], [0, 1]),
-        ):
-            dimension = f"{prefix}boundary_point" if prefix else "boundary_point"
-            dataset.createVariable(f"{prefix}row", "i4", (dimension,))[:] = rows
-            dataset.createVariable(f"{prefix}column", "i4", (dimension,))[:] = columns
-            dataset.createVariable(f"{prefix}relaxation_weight", "f8", (dimension,))[:] = 1.0
+        dataset.createVariable("row", "i4", ("boundary_point",))[:] = [0, 1]
+        dataset.createVariable("column", "i4", ("boundary_point",))[:] = [0, 1]
+        dataset.createVariable("relaxation_weight", "f8", ("boundary_point",))[:] = 1.0
         for name in ("T", "P", "QV", "QC", "QI", "HFL"):
             dataset.createVariable(name, "f8", ("level", "boundary_point"))[:] = 1.0
         dataset.createVariable("HHL", "f8", ("half_level", "boundary_point"))[:] = 1.0
-        dataset.createVariable("U", "f8", ("level", "u_boundary_point"))[:] = 1.0
-        dataset.createVariable("V", "f8", ("level", "v_boundary_point"))[:] = 1.0
         dataset.product_type = "hicar_lateral_boundary_state"
         dataset.valid_time = "2020-01-01T01:00:00Z"
         dataset.domain_nx = 2

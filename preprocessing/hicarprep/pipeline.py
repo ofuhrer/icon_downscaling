@@ -849,17 +849,6 @@ def boundary_relaxation_weights(
     return rows, cols, weights
 
 
-def _face_coordinates(centres: np.ndarray) -> np.ndarray:
-    values = np.asarray(centres, dtype=np.float64)
-    if values.ndim != 1 or values.size < 2 or not np.all(np.diff(values) > 0.0):
-        raise ValueError("staggered boundary extraction requires increasing 1-D coordinates")
-    faces = np.empty(values.size + 1, dtype=np.float64)
-    faces[1:-1] = 0.5 * (values[:-1] + values[1:])
-    faces[0] = values[0] - 0.5 * (values[1] - values[0])
-    faces[-1] = values[-1] + 0.5 * (values[-1] - values[-2])
-    return faces
-
-
 def write_boundary_condition(
     path: Path,
     state: dict[str, np.ndarray],
@@ -870,19 +859,27 @@ def write_boundary_condition(
     initial_condition_path: Path,
     valid_time: str,
     water_representation: str = "ICON tracer mass fraction (specific humidity for QV)",
-    include_lateral_w: bool = False,
 ) -> None:
-    """Extract a sparse physical-distance frame from the identically transformed state."""
+    """Write the scalar mass-grid state relaxed by HICAR's sparse LBC reader.
+
+    Winds deliberately remain under the regular forcing/wind-solver path.  In
+    particular, this product must not contain earth-relative U/V that HICAR
+    would insert into grid-relative face arrays after the wind projection.
+    """
     rows, cols, relaxation_weight = boundary_relaxation_weights(x, y, boundary_width_m)
-    levels, ny, nx = state["T"].shape
-    u_face = _face_grid_wind(state["U"], component="U", target_shape=(ny, nx))
-    v_face = _face_grid_wind(state["V"], component="V", target_shape=(ny, nx))
-    u_rows, u_cols, u_relaxation_weight = boundary_relaxation_weights(
-        _face_coordinates(np.asarray(x)), np.asarray(y), boundary_width_m
-    )
-    v_rows, v_cols, v_relaxation_weight = boundary_relaxation_weights(
-        np.asarray(x), _face_coordinates(np.asarray(y)), boundary_width_m
-    )
+    sparse_fields = ("T", "P", "QV", "QC", "QI")
+    required = {*sparse_fields, "HFL", "HHL"}
+    missing = sorted(required - set(state))
+    if missing:
+        raise ValueError(f"sparse LBC state lacks required mass-grid fields: {missing}")
+    levels, ny, nx = np.asarray(state["T"]).shape
+    if (ny, nx) != (len(y), len(x)):
+        raise ValueError("sparse LBC state and target x/y dimensions differ")
+    for name in (*sparse_fields, "HFL"):
+        if np.asarray(state[name]).shape != (levels, ny, nx):
+            raise ValueError(f"sparse LBC {name} must use the target mass grid")
+    if np.asarray(state["HHL"]).shape != (levels + 1, ny, nx):
+        raise ValueError("sparse LBC HHL must use target mass-grid interfaces")
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=f".{path.name}.", suffix=".partial", dir=path.parent
@@ -901,38 +898,14 @@ def write_boundary_condition(
             )
             mass_weight[:] = relaxation_weight
             mass_weight.long_name = "lateral relaxation coefficient on the mass grid"
-            dataset.createDimension("u_boundary_point", u_rows.size)
-            dataset.createVariable("u_row", "i4", ("u_boundary_point",))[:] = u_rows
-            dataset.createVariable("u_column", "i4", ("u_boundary_point",))[:] = u_cols
-            dataset.createVariable(
-                "u_relaxation_weight", "f8", ("u_boundary_point",)
-            )[:] = u_relaxation_weight
-            dataset.createDimension("v_boundary_point", v_rows.size)
-            dataset.createVariable("v_row", "i4", ("v_boundary_point",))[:] = v_rows
-            dataset.createVariable("v_column", "i4", ("v_boundary_point",))[:] = v_cols
-            dataset.createVariable(
-                "v_relaxation_weight", "f8", ("v_boundary_point",)
-            )[:] = v_relaxation_weight
-            for name, value in state.items():
-                if name == "W" and not include_lateral_w:
-                    continue
-                if name in {"lat", "lon", "terrain_difference"}:
-                    dimensions = ("boundary_point",)
-                    payload = value[rows, cols]
-                elif name == "U":
-                    dimensions = ("level", "u_boundary_point")
-                    payload = u_face[:, u_rows, u_cols]
-                elif name == "V":
-                    dimensions = ("level", "v_boundary_point")
-                    payload = v_face[:, v_rows, v_cols]
-                elif name == "HHL" or (
-                    name == "W" and value.shape[0] != levels
-                ):
-                    dimensions = ("half_level", "boundary_point")
-                    payload = value[:, rows, cols]
-                else:
-                    dimensions = ("level", "boundary_point")
-                    payload = value[:, rows, cols]
+            for name in (*sparse_fields, "HFL", "HHL"):
+                value = np.asarray(state[name], dtype=np.float64)
+                dimensions = (
+                    ("half_level", "boundary_point")
+                    if name == "HHL"
+                    else ("level", "boundary_point")
+                )
+                payload = value[:, rows, cols]
                 dataset.createVariable(name, "f8", dimensions, zlib=True)[:] = payload
             dataset.product_type = "hicar_lateral_boundary_state"
             dataset.hicarprep_product_version = PRODUCT_VERSION
@@ -959,24 +932,20 @@ def write_boundary_condition(
                 "outer edge: exact target assignment; shoulder: "
                 "alpha=1-exp(-relaxation_weight*dt/relaxation_timescale_seconds)"
             )
-            dataset.staggered_frame_definition = (
-                "U and V use their own extrapolated face-coordinate frames and index arrays"
-            )
+            dataset.sparse_field_contract = "T,P,QV,QC,QI on mass-grid boundary points"
             dataset.temporal_semantics = (
                 "instantaneous target-native state; runtime brackets consecutive valid times"
             )
             dataset.hicar_pressure_adjustment = "HICARPREP_HYDROSTATIC_RECONSTRUCTION"
-            dataset.wind_balance = "SOURCE_NATIVE_REMAPPED"
+            dataset.wind_balance = "NO_SPARSE_WIND; regular forcing and HICAR wind solver authoritative"
             dataset.water_representation = water_representation
             dataset.hicar_water_conversion = (
                 "APPLIED_JOINT_ALL_WATER_SPECIES"
                 if water_representation == "dry-air mixing ratio"
                 else "NOT_APPLIED_RESEARCH_PRODUCT"
             )
-            dataset.authoritative_temporal_basis = "T,P,U,V,QV,QC,QI and present QR,QS,QG; dependent diagnostics refreshed after interpolation"
-            dataset.lateral_w_policy = (
-                "relax_projected_native_w" if include_lateral_w else "diagnose_in_hicar"
-            )
+            dataset.authoritative_temporal_basis = "T,P,QV,QC,QI; dependent diagnostics refreshed after interpolation"
+            dataset.lateral_w_policy = "diagnose_in_hicar"
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
