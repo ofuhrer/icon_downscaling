@@ -33,6 +33,7 @@ if [[ ! -x "$ENV_PREFIX/bin/python" ]]; then
 fi
 if ! "$MAMBA" run --prefix "$ENV_PREFIX" python -c 'import horayzon' >/dev/null 2>&1; then
   "$MAMBA" run --prefix "$ENV_PREFIX" python -m pip install \
+    --no-build-isolation \
     'git+https://github.com/ChristianSteger/HORAYZON.git@23212a7da3236d5af11a7e1f7687e6dbff0de741'
 fi
 "$MAMBA" run --prefix "$ENV_PREFIX" python - <<'PY'
