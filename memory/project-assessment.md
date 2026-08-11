@@ -68,9 +68,14 @@ than a claimed optimum.
   SST at 273.15 K, so frozen-lake physics is absent. The first five real SST
   remaps found that 10,773 of 84,346 target water cells (12.77%) lacked water
   support in the compact REA-L stencil and used a global same-surface fallback,
-  with a maximum distance of 55.67 km. Exact fallback masks and distances are
-  now retained in every forcing record; their lake/station geography must be
-  assessed before scaling the campaign.
+  with a maximum distance of 55.67 km. They cover about 431 km2, but the major
+  lakes are well supported: fallback fractions are below 0.6% for the largest
+  Constance-, Maggiore-, Como-, Lucerne- and Thun-like components. Most fallback
+  cells belong to fine rivers or small water-mask fragments. Exact masks and
+  distances are retained in every forcing record and a reproducible geography
+  diagnostic is available. This is acceptable for the event campaign with the
+  frozen-lake and small-water limitations stated explicitly; terrestrial
+  station sampling is separately constrained to land cells.
 - Conditioned local RBF weights are required. An old nearly singular stencil
   produced a 320 m s-1 wind spike and is invalid. Operators with excessive L1
   amplification are rejected and vector bounds are checked.
