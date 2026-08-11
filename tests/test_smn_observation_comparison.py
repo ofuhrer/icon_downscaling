@@ -48,6 +48,26 @@ def test_exact_integral_lead_hour_rejects_sub_hour_and_negative_leads():
             raise AssertionError(f"accepted invalid lead timestamp {valid.isoformat()}")
 
 
+def test_explicit_evaluation_window_keeps_hourly_samples_and_elapsed_leads():
+    start = MODULE.parse_time("20200701000000")
+    records = {
+        start + timedelta(minutes=10 * index): ("dataset", index)
+        for index in range(48 * 6 + 1)
+    }
+
+    selected = MODULE.select_hourly_evaluation_records(
+        records,
+        start,
+        start + timedelta(hours=24),
+        start + timedelta(hours=48),
+    )
+
+    assert len(selected) == 25
+    assert MODULE.exact_integral_lead_hour(min(selected), start) == 24
+    assert MODULE.exact_integral_lead_hour(max(selected), start) == 48
+    assert all(value.minute == 0 for value in selected)
+
+
 def test_pair_statistics_exposes_minimal_error_anatomy():
     statistics = MODULE.PairStatistics()
     for model, observation in ((2.0, 1.0), (4.0, 2.0), (6.0, 3.0)):

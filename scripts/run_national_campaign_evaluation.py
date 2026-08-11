@@ -46,14 +46,30 @@ def stamp(value: datetime) -> str:
     return value.strftime("%Y%m%d_%H%M")
 
 
-def expected_times(start: datetime, end: datetime) -> list[datetime]:
+def expected_times(
+    start: datetime, end: datetime, interval_seconds: int = 3600
+) -> list[datetime]:
+    duration_seconds = int((end - start).total_seconds())
+    if (
+        interval_seconds <= 0
+        or duration_seconds < 0
+        or duration_seconds % interval_seconds
+    ):
+        raise ValueError("output interval must exactly divide the campaign interval")
     return [
-        start + timedelta(hours=hour)
-        for hour in range(int((end - start).total_seconds() // 3600) + 1)
+        start + timedelta(seconds=offset)
+        for offset in range(0, duration_seconds + 1, interval_seconds)
     ]
 
 
-def decode_times(path: Path) -> list[datetime]:
+def decode_times(path: Path) -> list[tuple[datetime, float]]:
+    """Decode output times and normalize HICAR's 0.432 s serialization offset.
+
+    HICAR writes time after adding 5e-6 day in ``output_obj.F90``.  This is a
+    serializer artifact, not an integrated timestep.  Only a timestamp within
+    half a second of an exact second is normalized; the subsequent campaign
+    check still requires that second to be an exact output-cadence slot.
+    """
     import netCDF4
 
     with netCDF4.Dataset(path) as dataset:
@@ -67,7 +83,7 @@ def decode_times(path: Path) -> list[datetime]:
         )
     result = []
     for value in values:
-        decoded = datetime(
+        raw = datetime(
             value.year,
             value.month,
             value.day,
@@ -76,9 +92,14 @@ def decode_times(path: Path) -> list[datetime]:
             value.second,
             value.microsecond,
         )
-        if decoded.microsecond:
-            raise ValueError(f"{path}: non-integral-second output time {decoded.isoformat()}")
-        result.append(decoded)
+        exact_second = raw.replace(microsecond=0)
+        offset = (raw - exact_second).total_seconds()
+        if abs(offset) > 0.5:
+            raise ValueError(
+                f"{path}: output time {raw.isoformat()} is more than 0.5 s "
+                "from an exact second"
+            )
+        result.append((exact_second, offset))
     return result
 
 
@@ -125,19 +146,23 @@ def validate_segment(attempt: Path, start: datetime, end: datetime, static: Path
     if not outputs:
         raise ValueError(f"{attempt}: completed segment has no NetCDF output")
     seen: dict[datetime, Path] = {}
+    serializer_offsets: list[float] = []
     for path in outputs:
-        for valid in decode_times(path):
+        for valid, offset in decode_times(path):
             if valid in seen:
                 raise ValueError(
                     f"duplicate output time {valid.isoformat()} in {seen[valid]} and {path}"
                 )
             seen[valid] = path
+            serializer_offsets.append(offset)
     return {
         "attempt": attempt,
         "report": report_path,
         "restart": restart,
         "outputs": outputs,
         "times": sorted(seen),
+        "time_files": seen,
+        "serializer_offsets_seconds": serializer_offsets,
     }
 
 
@@ -181,6 +206,9 @@ def command_plan(
     campaign_root = Path(config["root"])
     if float(config.get("segment_hours", 0)) != 12.0:
         raise ValueError("national evaluation requires 12-hour campaign segments")
+    output_interval = int(config.get("output_interval", 3600))
+    if output_interval <= 0:
+        raise ValueError("campaign output_interval must be positive")
     scripts = {
         "evaluator": repo_root / "case_studies/swiss_200m/validation/compare_hicar_rea_l_to_smn.py",
         "postprocessor": repo_root / "scripts/national_campaign_postprocess.py",
@@ -196,8 +224,21 @@ def command_plan(
         if label is None or label in seasons:
             raise ValueError(f"invalid or duplicate season {item['name']!r}")
         start, end = parse_time(item["start"]), parse_time(item["end"])
-        if end - start != timedelta(hours=24):
+        evaluation_start = parse_time(item.get("evaluation_start", item["start"]))
+        evaluation_end = parse_time(item.get("evaluation_end", item["end"]))
+        if end <= start or (end - start).total_seconds() % (12 * 3600):
+            raise ValueError(
+                f"{item['name']}: campaign interval is not a positive multiple of 12 hours"
+            )
+        if not start <= evaluation_start < evaluation_end <= end:
+            raise ValueError(f"{item['name']}: evaluation window lies outside the campaign")
+        if evaluation_end - evaluation_start != timedelta(hours=24):
             raise ValueError(f"{item['name']}: evaluation window is not 24 hours")
+        if any(
+            (value - start).total_seconds() % 3600
+            for value in (evaluation_start, evaluation_end)
+        ):
+            raise ValueError(f"{item['name']}: evaluation bounds are not whole-hour leads")
         static = Path(item["static"])
         observation = data_root / "observations" / f"{item['name']}.csv"
         reference = data_root / "reference" / f"{item['name']}.csv"
@@ -205,8 +246,12 @@ def command_plan(
         if missing:
             raise ValueError(f"{item['name']}: required inputs are absent: {missing}")
 
-        midpoint = start + timedelta(hours=12)
-        intervals = ((start, midpoint), (midpoint, end))
+        intervals = []
+        segment_start = start
+        while segment_start < end:
+            segment_end = segment_start + timedelta(hours=12)
+            intervals.append((segment_start, segment_end))
+            segment_start = segment_end
         segments = []
         for index, (segment_start, segment_end) in enumerate(intervals):
             root = (
@@ -215,7 +260,7 @@ def command_plan(
                 / (f"{index:03d}_{stamp(segment_start)}_{stamp(segment_end)}")
             )
             segment = validate_segment(completed_attempt(root), segment_start, segment_end, static)
-            expected = expected_times(segment_start, segment_end)
+            expected = expected_times(segment_start, segment_end, output_interval)
             if index:
                 expected = expected[1:]
             if segment["times"] != expected:
@@ -224,16 +269,35 @@ def command_plan(
                     f"{expected[0].isoformat()}..{expected[-1].isoformat()} ({len(expected)})"
                 )
             segments.append(segment)
-        require_link(segments[0], segments[1])
-        combined = segments[0]["times"] + segments[1]["times"]
-        if combined != expected_times(start, end) or len(set(combined)) != 25:
-            raise ValueError(f"{item['name']}: campaign outputs are not exact unique leads 0..24")
-        outputs = [path for segment in segments for path in segment["outputs"]]
+        for first, second in zip(segments, segments[1:]):
+            require_link(first, second)
+        combined = [value for segment in segments for value in segment["times"]]
+        complete_expected = expected_times(start, end, output_interval)
+        if combined != complete_expected or len(set(combined)) != len(complete_expected):
+            raise ValueError(
+                f"{item['name']}: campaign outputs are not exact unique "
+                f"{output_interval}-second leads"
+            )
+        evaluation_times = expected_times(evaluation_start, evaluation_end, 3600)
+        absent_evaluation_times = sorted(set(evaluation_times) - set(combined))
+        if absent_evaluation_times:
+            raise ValueError(
+                f"{item['name']}: hourly evaluation times are absent from campaign output"
+            )
+        time_files = {
+            valid: path
+            for segment in segments
+            for valid, path in segment["time_files"].items()
+        }
+        outputs = list(dict.fromkeys(time_files[valid] for valid in evaluation_times))
         season_dir = output_root / label
         seasons[label] = {
             "name": item["name"],
             "start": start,
             "end": end,
+            "evaluation_start": evaluation_start,
+            "evaluation_end": evaluation_end,
+            "evaluation_times": evaluation_times,
             "static": static,
             "observation": observation,
             "reference": reference,
@@ -263,6 +327,12 @@ def command_plan(
             str(item["evaluator_report"]),
             "--overlap-policy",
             "error",
+            "--simulation-start",
+            item["start"].isoformat(),
+            "--evaluation-start",
+            item["evaluation_start"].isoformat(),
+            "--evaluation-end",
+            item["evaluation_end"].isoformat(),
         ]
         for path in item["outputs"]:
             command.extend(["--output-file", str(path)])
@@ -302,6 +372,11 @@ def command_plan(
             "name": item["name"],
             "start": item["start"].isoformat(),
             "end": item["end"].isoformat(),
+            "evaluation_start": item["evaluation_start"].isoformat(),
+            "evaluation_end": item["evaluation_end"].isoformat(),
+            "evaluation_times": [
+                value.isoformat() for value in item["evaluation_times"]
+            ],
             "static": file_record(item["static"]),
             "observations": file_record(item["observation"], hashed=True),
             "rea_l_native": file_record(item["reference"], hashed=True),
@@ -312,6 +387,10 @@ def command_plan(
                     "restart": file_record(segment["restart"]),
                     "outputs": [file_record(path) for path in segment["outputs"]],
                     "output_times": [value.isoformat() for value in segment["times"]],
+                    "serializer_time_offset_seconds": {
+                        "minimum": min(segment["serializer_offsets_seconds"]),
+                        "maximum": max(segment["serializer_offsets_seconds"]),
+                    },
                 }
                 for segment in item["segments"]
             ],
@@ -319,6 +398,16 @@ def command_plan(
     return {
         "commands": commands,
         "inputs": inputs,
+        "temporal_validation": {
+            "campaign_output_interval_seconds": output_interval,
+            "evaluation_sample_interval_seconds": 3600,
+            "serializer_time_normalization": (
+                "Raw NetCDF times may carry HICAR output_obj.F90's 5e-6-day "
+                "(0.432 s) serialization offset. The raw signed offset is recorded "
+                "per segment, normalized only within 0.5 s of an exact second, and "
+                "the normalized time must still match an exact campaign cadence slot."
+            ),
+        },
         "outputs": {
             "national_summary": str(national_summary),
             "station_csv": str(station_csv),

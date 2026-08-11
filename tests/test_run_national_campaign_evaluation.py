@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import sys
 
+import netCDF4
 import pytest
 
 
@@ -12,6 +13,30 @@ SPEC = importlib.util.spec_from_file_location("national_evaluation_driver", SCRI
 MODULE = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
+
+
+def write_time_file(path, offset_seconds):
+    with netCDF4.Dataset(path, "w") as dataset:
+        dataset.createDimension("time", 1)
+        time = dataset.createVariable("time", "f8", ("time",))
+        time.units = "seconds since 2020-01-15 00:00:00"
+        time.calendar = "standard"
+        time[:] = [offset_seconds]
+
+
+def test_decode_times_normalizes_only_the_known_subsecond_serializer_offset(tmp_path):
+    accepted = tmp_path / "accepted.nc"
+    write_time_file(accepted, 0.432)
+
+    decoded = MODULE.decode_times(accepted)
+
+    assert decoded[0][0] == MODULE.parse_time("2020-01-15T00:00:00")
+    assert decoded[0][1] == pytest.approx(0.432)
+
+    rejected = tmp_path / "rejected.nc"
+    write_time_file(rejected, 0.6)
+    with pytest.raises(ValueError, match="more than 0.5 s"):
+        MODULE.decode_times(rejected)
 
 
 def build_campaign(tmp_path):
@@ -28,7 +53,8 @@ def build_campaign(tmp_path):
     output_times = {}
     for name, raw_start in seasons:
         start = MODULE.parse_time(raw_start)
-        end = start + MODULE.timedelta(hours=24)
+        end = start + MODULE.timedelta(hours=48)
+        evaluation_start = start + MODULE.timedelta(hours=24)
         static = tmp_path / "static" / f"{name}.nc"
         static.parent.mkdir(exist_ok=True)
         static.write_bytes(b"static")
@@ -37,9 +63,9 @@ def build_campaign(tmp_path):
         (data_root / "observations" / f"{name}.csv").write_text("observations\n")
         (data_root / "reference" / f"{name}.csv").write_text("reference\n")
         previous_restart = None
-        for index, (segment_start, segment_end) in enumerate(
-            ((start, start + MODULE.timedelta(hours=12)), (start + MODULE.timedelta(hours=12), end))
-        ):
+        for index in range(4):
+            segment_start = start + MODULE.timedelta(hours=12 * index)
+            segment_end = segment_start + MODULE.timedelta(hours=12)
             segment_root = (
                 campaign_root
                 / name
@@ -50,10 +76,10 @@ def build_campaign(tmp_path):
             (attempt / "restart").mkdir()
             output = attempt / "output" / f"segment-{index}.nc"
             output.write_bytes(b"not-netcdf")
-            times = MODULE.expected_times(segment_start, segment_end)
+            times = MODULE.expected_times(segment_start, segment_end, 600)
             if index:
                 times = times[1:]
-            output_times[output] = times
+            output_times[output] = [(value, 0.432) for value in times]
             restart = attempt / "restart" / f"terminal-{index}.nc"
             restart.write_bytes(b"restart")
             if previous_restart is not None:
@@ -72,12 +98,21 @@ def build_campaign(tmp_path):
                 "name": name,
                 "start": start.isoformat(),
                 "end": end.isoformat(),
+                "evaluation_start": evaluation_start.isoformat(),
+                "evaluation_end": end.isoformat(),
                 "static": str(static),
             }
         )
     config = tmp_path / "campaign.json"
     config.write_text(
-        json.dumps({"root": str(campaign_root), "segment_hours": 12, "seasons": config_seasons})
+        json.dumps(
+            {
+                "root": str(campaign_root),
+                "segment_hours": 12,
+                "output_interval": 600,
+                "seasons": config_seasons,
+            }
+        )
     )
     return config, data_root, output_root, output_times
 
@@ -108,10 +143,19 @@ def test_dry_run_builds_complete_command_plan_without_netcdf(tmp_path, monkeypat
         == 0
     )
     manifest = json.loads((output_root / "evaluation_manifest.json").read_text())
+    assert manifest["temporal_validation"]["campaign_output_interval_seconds"] == 600
+    assert "0.432 s" in manifest["temporal_validation"]["serializer_time_normalization"]
     commands = manifest["commands"]
     assert len(commands) == 9
     assert all(
         command[command.index("--overlap-policy") + 1] == "error" for command in commands[:4]
+    )
+    assert all(
+        command[command.index("--simulation-start") + 1].endswith("00:00:00")
+        and command[command.index("--evaluation-start") + 1].endswith("00:00:00")
+        and command[command.index("--evaluation-end") + 1].endswith("00:00:00")
+        and command.count("--output-file") == 3
+        for command in commands[:4]
     )
     assert commands[4].count("--metric") == len(
         MODULE.METRICS + MODULE.DIAGNOSTIC_METRICS
@@ -121,8 +165,15 @@ def test_dry_run_builds_complete_command_plan_without_netcdf(tmp_path, monkeypat
     )
     assert all("--include-optimistic-best-cell" not in command for command in commands[5:])
     assert all(
-        len(item["segments"][0]["output_times"]) == 13
-        and len(item["segments"][1]["output_times"]) == 12
+        len(item["segments"]) == 4
+        and len(item["segments"][0]["output_times"]) == 73
+        and all(len(segment["output_times"]) == 72 for segment in item["segments"][1:])
+        and len(item["evaluation_times"]) == 25
+        and all(
+            segment["serializer_time_offset_seconds"]
+            == {"minimum": 0.432, "maximum": 0.432}
+            for segment in item["segments"]
+        )
         for item in manifest["inputs"].values()
     )
 
@@ -160,7 +211,10 @@ def test_rejects_duplicate_or_missing_join_time(tmp_path, monkeypatch, mode):
         path for path in output_times if "winter" in str(path) and "segment-1" in path.name
     )
     if mode == "duplicate":
-        output_times[second] = [MODULE.parse_time("2020-01-15T12:00:00"), *output_times[second]]
+        output_times[second] = [
+            (MODULE.parse_time("2020-01-15T12:00:00"), 0.432),
+            *output_times[second],
+        ]
     else:
         output_times[second] = output_times[second][1:]
     monkeypatch.setattr(MODULE, "decode_times", lambda path: output_times[path])

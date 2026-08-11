@@ -1,5 +1,5 @@
 {
-  "root": "/scratch/mch/olifu/icon_hicar/rd/swiss_all_stations_20m/campaign_8a019da8_sleve41c",
+  "root": "/scratch/mch/olifu/icon_hicar/rd/swiss_all_stations_20m/campaign_reference_48h",
   "repo_root": "/scratch/mch/olifu/icon_hicar/rd/source/coordinator-national-sleve-v1",
   "forcing_dir": "/scratch/mch/olifu/icon_hicar/rd/swiss_all_stations_20m/input/forcing",
   "python": "/scratch/mch/olifu/icon_hicar/venv_static/bin/python",
@@ -19,31 +19,39 @@
   "model_nodes": 12,
   "model_time": "06:00:00",
   "output_profile": "evaluation",
-  "output_interval": 3600,
+  "output_interval": 600,
   "radiation_update_interval": 600,
   "seasons": [
     {
       "name": "winter",
       "start": "2020-01-15T00:00:00",
-      "end": "2020-01-16T00:00:00",
+      "end": "2020-01-17T00:00:00",
+      "evaluation_start": "2020-01-16T00:00:00",
+      "evaluation_end": "2020-01-17T00:00:00",
       "static": "/scratch/mch/olifu/icon_hicar/rd/swiss_all_stations_20m/input/runtime/domain_runtime_smn_20200115_0000_20m.nc"
     },
     {
       "name": "spring",
       "start": "2020-04-29T00:00:00",
-      "end": "2020-04-30T00:00:00",
+      "end": "2020-05-01T00:00:00",
+      "evaluation_start": "2020-04-30T00:00:00",
+      "evaluation_end": "2020-05-01T00:00:00",
       "static": "/scratch/mch/olifu/icon_hicar/rd/swiss_all_stations_20m/input/runtime/domain_runtime_smn_20200429_0000_20m.nc"
     },
     {
       "name": "summer",
       "start": "2020-07-01T00:00:00",
-      "end": "2020-07-02T00:00:00",
+      "end": "2020-07-03T00:00:00",
+      "evaluation_start": "2020-07-02T00:00:00",
+      "evaluation_end": "2020-07-03T00:00:00",
       "static": "/scratch/mch/olifu/icon_hicar/rd/swiss_all_stations_20m/input/runtime/domain_runtime_smn_20200701_0000_20m.nc"
     },
     {
       "name": "autumn",
       "start": "2020-10-02T00:00:00",
-      "end": "2020-10-03T00:00:00",
+      "end": "2020-10-04T00:00:00",
+      "evaluation_start": "2020-10-03T00:00:00",
+      "evaluation_end": "2020-10-04T00:00:00",
       "static": "/scratch/mch/olifu/icon_hicar/rd/swiss_all_stations_20m/input/runtime/domain_runtime_smn_20201002_0000_20m.nc"
     }
   ]

@@ -187,7 +187,7 @@ def canonical_time(value: datetime) -> datetime:
     else:
         value = value.astimezone(timezone.utc)
     rounded = value.replace(microsecond=0)
-    if abs((value - rounded).total_seconds()) <= 1.0:
+    if abs((value - rounded).total_seconds()) <= 0.5:
         return rounded
     return value
 
@@ -205,6 +205,33 @@ def exact_integral_lead_hour(valid: datetime, start: datetime) -> int:
             f"integral-hour lead from {start.isoformat()}"
         )
     return delta.days * 24 + delta.seconds // 3600
+
+
+def select_hourly_evaluation_records(
+    records: dict[datetime, tuple],
+    simulation_start: datetime,
+    evaluation_start: datetime,
+    evaluation_end: datetime,
+) -> dict[datetime, tuple]:
+    """Select hourly records in an inclusive evaluation window.
+
+    National reference runs write every ten minutes, whereas the currently
+    available SwissMetNet and native REA-L comparison records are hourly.  The
+    lead remains elapsed time from the original simulation start, not time
+    since the post-spin-up evaluation window.
+    """
+    if not simulation_start <= evaluation_start < evaluation_end:
+        raise ValueError("invalid simulation/evaluation time ordering")
+    result = {}
+    for valid, record in records.items():
+        if not evaluation_start <= valid <= evaluation_end:
+            continue
+        try:
+            exact_integral_lead_hour(valid, simulation_start)
+        except ValueError:
+            continue
+        result[valid] = record
+    return result
 
 
 def decoded_times(dataset: netCDF4.Dataset) -> list[datetime]:
@@ -762,6 +789,12 @@ def main() -> int:
     reference.add_argument("--native-reference-csv", type=Path)
     parser.add_argument("--observations", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
+    parser.add_argument(
+        "--simulation-start",
+        help="original integration start used to label elapsed lead hours",
+    )
+    parser.add_argument("--evaluation-start", help="inclusive scoring-window start")
+    parser.add_argument("--evaluation-end", help="inclusive scoring-window end")
     parser.add_argument("--boundary-width-m", type=float, default=10_000.0)
     parser.add_argument("--temperature-lapse-rate-k-m", type=float, default=-0.0065)
     parser.add_argument("--minimum-core-pairs", type=int, default=100)
@@ -835,6 +868,48 @@ def main() -> int:
             failures.append("no HICAR output records")
             raise RuntimeError("no HICAR output records")
 
+        explicit_window = args.evaluation_start is not None or args.evaluation_end is not None
+        if explicit_window:
+            if args.evaluation_start is None or args.evaluation_end is None:
+                raise ValueError(
+                    "--evaluation-start and --evaluation-end must be supplied together"
+                )
+            evaluation_start = canonical_time(parse_time(args.evaluation_start))
+            evaluation_end = canonical_time(parse_time(args.evaluation_end))
+            simulation_start = canonical_time(
+                parse_time(args.simulation_start)
+                if args.simulation_start is not None
+                else evaluation_start
+            )
+            model_records = select_hourly_evaluation_records(
+                model_records,
+                simulation_start,
+                evaluation_start,
+                evaluation_end,
+            )
+            expected_evaluation_times = [
+                evaluation_start + timedelta(hours=hour)
+                for hour in range(
+                    int((evaluation_end - evaluation_start).total_seconds() // 3600) + 1
+                )
+            ]
+            if sorted(model_records) != expected_evaluation_times:
+                failures.append(
+                    "HICAR hourly evaluation records do not exactly cover the "
+                    "inclusive evaluation window"
+                )
+        else:
+            evaluation_start = min(model_records)
+            evaluation_end = max(model_records)
+            simulation_start = (
+                canonical_time(parse_time(args.simulation_start))
+                if args.simulation_start is not None
+                else evaluation_start
+            )
+        if not model_records:
+            failures.append("no hourly HICAR records in evaluation window")
+            raise RuntimeError("no hourly HICAR records in evaluation window")
+
         native_reference = (
             read_native_reference(args.native_reference_csv)
             if args.native_reference_csv is not None else None
@@ -870,7 +945,7 @@ def main() -> int:
         previous_model_time = None
         matched_times = []
         for valid in ordered_times:
-            lead_hour = exact_integral_lead_hour(valid, ordered_times[0])
+            lead_hour = exact_integral_lead_hour(valid, simulation_start)
             if valid not in reference_records:
                 failures.append(f"missing REA-L reference at {valid.isoformat()}")
                 continue
@@ -1106,6 +1181,13 @@ def main() -> int:
             "compared over aligned ending-hour intervals."
         ),
         "sampling": {
+            "simulation_start": simulation_start.isoformat(),
+            "evaluation_start_inclusive": evaluation_start.isoformat(),
+            "evaluation_end_inclusive": evaluation_end.isoformat(),
+            "temporal_selection": (
+                "Hourly station/reference-compatible samples selected from HICAR "
+                "output inside the explicit evaluation window"
+            ),
             "horizontal": (
                 "nearest HICAR cell; nearest native REA-L cell"
                 if args.native_reference_csv is not None
@@ -1185,8 +1267,8 @@ def main() -> int:
         },
         "metrics": metric_results,
         "lead_time_definition": (
-            "Whole hours since the first HICAR output time in this event; "
-            "the restart occurs at lead hour 12."
+            "Whole elapsed hours since the original HICAR simulation start; "
+            "the post-spin-up evaluation window does not reset lead time."
         ),
         "lead_time_metrics": {
             str(lead_hour): accumulator_results(values)
