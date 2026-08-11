@@ -12,10 +12,17 @@ import json
 import math
 import os
 from pathlib import Path
+import sys
 from tempfile import NamedTemporaryFile
 
 import netCDF4
 import numpy as np
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from preprocessing.hicarprep import grid_to_earth_wind, hicar_grid_rotation
 
 
 EPSILON = 0.622
@@ -164,6 +171,13 @@ class Site:
         return f"{self.abbreviation}:{self.meas_site}"
 
 
+@dataclass(frozen=True)
+class HourlyHicarRecord:
+    """Six ten-minute records representing the hour ending at ``valid``."""
+
+    samples: tuple[tuple, ...]
+
+
 def finite_float(value: str) -> float:
     try:
         result = float(value)
@@ -212,25 +226,35 @@ def select_hourly_evaluation_records(
     simulation_start: datetime,
     evaluation_start: datetime,
     evaluation_end: datetime,
-) -> dict[datetime, tuple]:
-    """Select hourly records in an inclusive evaluation window.
+) -> dict[datetime, HourlyHicarRecord]:
+    """Build ending-hour aggregates in an inclusive evaluation window.
 
-    National reference runs write every ten minutes, whereas the currently
-    available SwissMetNet and native REA-L comparison records are hourly.  The
-    lead remains elapsed time from the original simulation start, not time
-    since the post-spin-up evaluation window.
+    SwissMetNet ``h0`` means are aggregates over the preceding civil hour.
+    HICAR writes every ten minutes, so each selected hour consists of the six
+    ending-interval samples at minutes 10, 20, ..., 60.  Missing samples are a
+    hard error instead of silently changing an hour's weighting.  The lead
+    remains elapsed time from the original simulation start.
     """
     if not simulation_start <= evaluation_start < evaluation_end:
         raise ValueError("invalid simulation/evaluation time ordering")
-    result = {}
-    for valid, record in records.items():
-        if not evaluation_start <= valid <= evaluation_end:
-            continue
-        try:
-            exact_integral_lead_hour(valid, simulation_start)
-        except ValueError:
-            continue
-        result[valid] = record
+    result: dict[datetime, HourlyHicarRecord] = {}
+    valid = evaluation_start
+    while valid <= evaluation_end:
+        exact_integral_lead_hour(valid, simulation_start)
+        sample_times = tuple(
+            valid - timedelta(minutes=offset) for offset in (50, 40, 30, 20, 10, 0)
+        )
+        missing = [time for time in sample_times if time not in records]
+        if missing:
+            rendered = ", ".join(time.isoformat() for time in missing)
+            raise ValueError(
+                f"HICAR ending-hour aggregate at {valid.isoformat()} lacks "
+                f"ten-minute samples: {rendered}"
+            )
+        result[valid] = HourlyHicarRecord(
+            samples=tuple(records[time] for time in sample_times)
+        )
+        valid += timedelta(hours=1)
     return result
 
 
@@ -263,6 +287,35 @@ def sample_hicar(
     x_indices: np.ndarray,
 ) -> np.ndarray:
     return read_2d(dataset, name, index)[y_indices, x_indices]
+
+
+def sample_hicar_hourly(
+    record: HourlyHicarRecord,
+    name: str,
+    y_indices: np.ndarray,
+    x_indices: np.ndarray,
+) -> np.ndarray:
+    """Return the arithmetic mean of six ending-ten-minute samples."""
+    values = [
+        sample_hicar(dataset, name, index, y_indices, x_indices)
+        for dataset, index in record.samples
+    ]
+    return np.mean(np.stack(values), axis=0)
+
+
+def sample_hicar_series(
+    record: HourlyHicarRecord,
+    name: str,
+    y_indices: np.ndarray,
+    x_indices: np.ndarray,
+) -> np.ndarray:
+    """Return six ending-ten-minute samples with time as the first axis."""
+    return np.stack(
+        [
+            sample_hicar(dataset, name, index, y_indices, x_indices)
+            for dataset, index in record.samples
+        ]
+    )
 
 
 def read_observations(
@@ -648,6 +701,8 @@ def select_common_site_values(
         names: tuple[str, ...],
         require_noncalm: bool = False,
     ) -> tuple[tuple[float, ...], tuple[float, ...], tuple[float, ...]] | None:
+        if not any(name in hicar or name in rea_l for name in names):
+            return None
         counts = accounting.setdefault(metric, Counter())
         counts["candidate_station_time_count"] += 1
         observed = finite_values(observation, names)
@@ -817,6 +872,9 @@ def main() -> int:
         longitude = read_2d(static, "lon")
         terrain = read_2d(static, "topo")
         dx_m = float(getattr(static, "hicar_dx_m", 200.0))
+    grid_sine, grid_cosine = hicar_grid_rotation(
+        latitude, longitude, dx_m=dx_m
+    )
     y_indices, x_indices, distances_km = nearest_hicar_cells(
         latitude, longitude, sites
     )
@@ -851,6 +909,7 @@ def main() -> int:
         site.key: create_accumulators(single_site_classes) for site in sites
     }
     common_triplet_accounting: dict[str, Counter] = {}
+    daylight_shortwave = PairStatistics()
 
     model_records: dict[datetime, tuple[netCDF4.Dataset, int]] = {}
     overlap_times: list[datetime] = []
@@ -906,6 +965,12 @@ def main() -> int:
                 if args.simulation_start is not None
                 else evaluation_start
             )
+            model_records = select_hourly_evaluation_records(
+                model_records,
+                simulation_start,
+                evaluation_start,
+                evaluation_end,
+            )
         if not model_records:
             failures.append("no hourly HICAR records in evaluation window")
             raise RuntimeError("no hourly HICAR records in evaluation window")
@@ -943,6 +1008,7 @@ def main() -> int:
         ordered_times = sorted(model_records)
         previous_model_precipitation = None
         previous_model_time = None
+        previous_reference_state = None
         matched_times = []
         for valid in ordered_times:
             lead_hour = exact_integral_lead_hour(valid, simulation_start)
@@ -952,58 +1018,108 @@ def main() -> int:
             if valid not in observations:
                 failures.append(f"missing station observations at {valid.isoformat()}")
                 continue
-            model_dataset, model_index = model_records[valid]
+            model_record = model_records[valid]
             reference_dataset = reference_records[valid]
             lead_accumulator = lead_time_accumulators.setdefault(
                 lead_hour, create_accumulators(classes)
             )
 
-            hicar_temperature = sample_hicar(
-                model_dataset, "taix", model_index, y_indices, x_indices
+            hicar_temperature_series = sample_hicar_series(
+                model_record, "taix", y_indices, x_indices
             )
-            hicar_pressure = sample_hicar(
-                model_dataset, "psfc", model_index, y_indices, x_indices
+            hicar_pressure_series = sample_hicar_series(
+                model_record, "psfc", y_indices, x_indices
             )
-            hicar_humidity = sample_hicar(
-                model_dataset, "hus2m", model_index, y_indices, x_indices
+            hicar_humidity_series = sample_hicar_series(
+                model_record, "hus2m", y_indices, x_indices
             )
-            hicar_u = sample_hicar(
-                model_dataset, "u10m", model_index, y_indices, x_indices
+            hicar_grid_u_series = sample_hicar_series(
+                model_record, "u10m", y_indices, x_indices
             )
-            hicar_v = sample_hicar(
-                model_dataset, "v10m", model_index, y_indices, x_indices
+            hicar_grid_v_series = sample_hicar_series(
+                model_record, "v10m", y_indices, x_indices
+            )
+            sampled_cosine = grid_cosine[y_indices, x_indices]
+            sampled_sine = grid_sine[y_indices, x_indices]
+            earth_wind_samples = [
+                grid_to_earth_wind(
+                    grid_u, grid_v, sampled_sine, sampled_cosine
+                )
+                for grid_u, grid_v in zip(
+                    hicar_grid_u_series, hicar_grid_v_series
+                )
+            ]
+            hicar_earth_u_series = np.stack(
+                [values[0] for values in earth_wind_samples]
+            )
+            hicar_earth_v_series = np.stack(
+                [values[1] for values in earth_wind_samples]
+            )
+            mean_earth_u = np.mean(hicar_earth_u_series, axis=0)
+            mean_earth_v = np.mean(hicar_earth_v_series, axis=0)
+            hicar_speed = np.mean(
+                np.hypot(hicar_earth_u_series, hicar_earth_v_series), axis=0
+            )
+            mean_vector_speed = np.hypot(mean_earth_u, mean_earth_v)
+            hicar_u = np.divide(
+                mean_earth_u * hicar_speed,
+                mean_vector_speed,
+                out=np.zeros_like(mean_earth_u),
+                where=mean_vector_speed > 0.0,
+            )
+            hicar_v = np.divide(
+                mean_earth_v * hicar_speed,
+                mean_vector_speed,
+                out=np.zeros_like(mean_earth_v),
+                where=mean_vector_speed > 0.0,
             )
             hicar_snow = sample_hicar(
-                model_dataset, "snow_height", model_index, y_indices, x_indices
+                model_record.samples[-1][0],
+                "snow_height",
+                model_record.samples[-1][1],
+                y_indices,
+                x_indices,
             )
-            hicar_shortwave = sample_hicar(
-                model_dataset, "rsds", model_index, y_indices, x_indices
+            hicar_shortwave = sample_hicar_hourly(
+                model_record, "rsds", y_indices, x_indices
             )
             hicar_precipitation = sample_hicar(
-                model_dataset, "precipitation", model_index, y_indices, x_indices
+                model_record.samples[-1][0],
+                "precipitation",
+                model_record.samples[-1][1],
+                y_indices,
+                x_indices,
             )
             hicar_terrain = terrain[y_indices, x_indices]
             hicar_fields = {
-                "temperature_2m_raw_k": hicar_temperature,
+                "temperature_2m_raw_k": np.mean(hicar_temperature_series, axis=0),
                 "temperature_2m_height_adjusted_k": height_adjust_temperature(
-                    hicar_temperature,
+                    np.mean(hicar_temperature_series, axis=0),
                     hicar_terrain,
                     site_elevation,
                     args.temperature_lapse_rate_k_m,
                 ),
-                "relative_humidity_2m_percent": relative_humidity_percent(
-                    hicar_temperature, hicar_humidity, hicar_pressure
+                "relative_humidity_2m_percent": np.mean(
+                    relative_humidity_percent(
+                        hicar_temperature_series,
+                        hicar_humidity_series,
+                        hicar_pressure_series,
+                    ),
+                    axis=0,
                 ),
-                "surface_pressure_raw_pa": hicar_pressure,
-                "surface_pressure_height_adjusted_pa": height_adjust_pressure(
-                    hicar_pressure,
-                    hicar_temperature,
-                    hicar_terrain,
-                    site_elevation,
+                "surface_pressure_raw_pa": np.mean(hicar_pressure_series, axis=0),
+                "surface_pressure_height_adjusted_pa": np.mean(
+                    height_adjust_pressure(
+                        hicar_pressure_series,
+                        hicar_temperature_series,
+                        hicar_terrain,
+                        site_elevation,
+                    ),
+                    axis=0,
                 ),
                 "u_wind_10m_m_s": hicar_u,
                 "v_wind_10m_m_s": hicar_v,
-                "wind_speed_10m_m_s": np.hypot(hicar_u, hicar_v),
+                "wind_speed_10m_m_s": hicar_speed,
                 "wind_direction_degrees": wind_direction_from(hicar_u, hicar_v),
                 "global_shortwave_radiation_w_m2": hicar_shortwave,
                 "snow_height_m": hicar_snow,
@@ -1055,32 +1171,102 @@ def main() -> int:
                 reference_snow = native_values("snow_height_ref")
                 reference_precipitation = native_values("precipitation_interval_ref")
                 reference_terrain = native_values("source_terrain_m")
-            reference_fields = {
-                "temperature_2m_raw_k": reference_temperature,
-                "temperature_2m_height_adjusted_k": height_adjust_temperature(
-                    reference_temperature,
-                    reference_terrain,
-                    site_elevation,
-                    args.temperature_lapse_rate_k_m,
-                ),
-                "relative_humidity_2m_percent": relative_humidity_percent(
-                    reference_temperature, reference_humidity, reference_pressure
-                ),
-                "surface_pressure_raw_pa": reference_pressure,
-                "surface_pressure_height_adjusted_pa": height_adjust_pressure(
-                    reference_pressure,
-                    reference_temperature,
-                    reference_terrain,
-                    site_elevation,
-                ),
-                "u_wind_10m_m_s": reference_u,
-                "v_wind_10m_m_s": reference_v,
-                "wind_speed_10m_m_s": np.hypot(reference_u, reference_v),
-                "wind_direction_degrees": wind_direction_from(
-                    reference_u, reference_v
-                ),
-                "snow_height_m": reference_snow,
+            current_reference_state = {
+                "temperature": reference_temperature,
+                "pressure": reference_pressure,
+                "humidity": reference_humidity,
+                "u": reference_u,
+                "v": reference_v,
+                "terrain": reference_terrain,
             }
+            reference_fields = {"snow_height_m": reference_snow}
+            if previous_reference_state is None:
+                hicar_fields = {"snow_height_m": hicar_snow}
+            else:
+                reference_temperature_mean = 0.5 * (
+                    previous_reference_state["temperature"] + reference_temperature
+                )
+                reference_pressure_mean = 0.5 * (
+                    previous_reference_state["pressure"] + reference_pressure
+                )
+                reference_mean_u = 0.5 * (
+                    previous_reference_state["u"] + reference_u
+                )
+                reference_mean_v = 0.5 * (
+                    previous_reference_state["v"] + reference_v
+                )
+                reference_speed = 0.5 * (
+                    np.hypot(
+                        previous_reference_state["u"],
+                        previous_reference_state["v"],
+                    )
+                    + np.hypot(reference_u, reference_v)
+                )
+                reference_vector_speed = np.hypot(
+                    reference_mean_u, reference_mean_v
+                )
+                reference_hourly_u = np.divide(
+                    reference_mean_u * reference_speed,
+                    reference_vector_speed,
+                    out=np.zeros_like(reference_mean_u),
+                    where=reference_vector_speed > 0.0,
+                )
+                reference_hourly_v = np.divide(
+                    reference_mean_v * reference_speed,
+                    reference_vector_speed,
+                    out=np.zeros_like(reference_mean_v),
+                    where=reference_vector_speed > 0.0,
+                )
+                reference_fields.update({
+                    "temperature_2m_raw_k": reference_temperature_mean,
+                    "temperature_2m_height_adjusted_k": 0.5 * (
+                        height_adjust_temperature(
+                            previous_reference_state["temperature"],
+                            previous_reference_state["terrain"],
+                            site_elevation,
+                            args.temperature_lapse_rate_k_m,
+                        )
+                        + height_adjust_temperature(
+                            reference_temperature,
+                            reference_terrain,
+                            site_elevation,
+                            args.temperature_lapse_rate_k_m,
+                        )
+                    ),
+                    "relative_humidity_2m_percent": 0.5 * (
+                        relative_humidity_percent(
+                            previous_reference_state["temperature"],
+                            previous_reference_state["humidity"],
+                            previous_reference_state["pressure"],
+                        )
+                        + relative_humidity_percent(
+                            reference_temperature,
+                            reference_humidity,
+                            reference_pressure,
+                        )
+                    ),
+                    "surface_pressure_raw_pa": reference_pressure_mean,
+                    "surface_pressure_height_adjusted_pa": 0.5 * (
+                        height_adjust_pressure(
+                            previous_reference_state["pressure"],
+                            previous_reference_state["temperature"],
+                            previous_reference_state["terrain"],
+                            site_elevation,
+                        )
+                        + height_adjust_pressure(
+                            reference_pressure,
+                            reference_temperature,
+                            reference_terrain,
+                            site_elevation,
+                        )
+                    ),
+                    "u_wind_10m_m_s": reference_hourly_u,
+                    "v_wind_10m_m_s": reference_hourly_v,
+                    "wind_speed_10m_m_s": reference_speed,
+                    "wind_direction_degrees": wind_direction_from(
+                        reference_mean_u, reference_mean_v
+                    ),
+                })
 
             if previous_model_precipitation is not None:
                 hicar_fields["precipitation_interval_kg_m2"] = (
@@ -1146,8 +1332,18 @@ def main() -> int:
                     0,
                     common,
                 )
+                if previous_reference_state is not None:
+                    observed_shortwave = observed.get(
+                        "global_shortwave_radiation_w_m2", math.nan
+                    )
+                    hicar_shortwave_value = float(hicar_shortwave[site_index])
+                    if observed_shortwave > 0.0:
+                        daylight_shortwave.add(
+                            hicar_shortwave_value, observed_shortwave
+                        )
             previous_model_precipitation = hicar_precipitation
             previous_model_time = valid
+            previous_reference_state = current_reference_state
             matched_times.append(valid)
     finally:
         for dataset in output_datasets + reference_datasets:
@@ -1172,21 +1368,31 @@ def main() -> int:
     metric_results = accumulator_results(accumulators)
 
     report = {
-        "schema_version": 1,
+        "schema_version": 2,
         "event_name": args.event_name,
         "interpretation": (
-            "Independent station comparison. HICAR values are instantaneous at "
-            "hourly output times, while station temperature, humidity, "
-            "wind, and radiation are hourly aggregates. Precipitation is "
-            "compared over aligned ending-hour intervals."
+            "Independent station comparison on ending-hour intervals. HICAR "
+            "means use six ten-minute samples; REA-L means use the trapezoidal "
+            "average of consecutive hourly endpoints; SwissMetNet h0 values "
+            "are civil-hour aggregates. Snow height remains endpoint-to-endpoint."
         ),
         "sampling": {
             "simulation_start": simulation_start.isoformat(),
             "evaluation_start_inclusive": evaluation_start.isoformat(),
             "evaluation_end_inclusive": evaluation_end.isoformat(),
             "temporal_selection": (
-                "Hourly station/reference-compatible samples selected from HICAR "
-                "output inside the explicit evaluation window"
+                "For each scored ending hour after the baseline endpoint: HICAR "
+                "arithmetic mean of samples at minutes 10..60; REA-L linear "
+                "interval estimate 0.5*(previous endpoint+current endpoint); "
+                "SwissMetNet civil-hour h0 aggregate. Precipitation is an endpoint "
+                "difference/sum and snow height is the ending-time state."
+            ),
+            "wind_rotation": (
+                "HICAR grid-relative ten-metre u/v are inverse-rotated using "
+                "mass-grid coefficients derived from static lat/lon with HICAR's "
+                "+/-2-cell x derivative and smoothing convention. Scalar wind "
+                "speed is averaged before combining with the mean-vector direction, "
+                "matching post-2014 DWH fkl010h0 scalar-hourly semantics."
             ),
             "horizontal": (
                 "nearest HICAR cell; nearest native REA-L cell"
@@ -1226,6 +1432,16 @@ def main() -> int:
             "metrics": common_triplet_accounting_results(
                 common_triplet_accounting
             ),
+        },
+        "hicar_observation_shortwave_daylight_only": {
+            "interpretation": (
+                "HICAR six-sample ending-hour mean versus SwissMetNet gre000h0, "
+                "restricted to finite pairs with observed radiation > 0 W m-2. "
+                "This diagnostic is excluded from HICAR-versus-REA-L added-value "
+                "ranking because the staged native REA-L reference has no "
+                "shortwave-radiation field."
+            ),
+            "statistics": daylight_shortwave.result(),
         },
         "observation_file": str(args.observations.resolve()),
         "rea_l_reference": str(

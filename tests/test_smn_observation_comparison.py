@@ -50,15 +50,21 @@ def test_exact_integral_lead_hour_rejects_sub_hour_and_negative_leads():
 
 def test_explicit_evaluation_window_keeps_hourly_samples_and_elapsed_leads():
     start = MODULE.parse_time("20200701000000")
+    evaluation_start = start + timedelta(hours=24)
     records = {
-        start + timedelta(minutes=10 * index): ("dataset", index)
+        start + timedelta(minutes=10 * index): (
+            "previous_segment"
+            if start + timedelta(minutes=10 * index) < evaluation_start
+            else "current_segment",
+            index,
+        )
         for index in range(48 * 6 + 1)
     }
 
     selected = MODULE.select_hourly_evaluation_records(
         records,
         start,
-        start + timedelta(hours=24),
+        evaluation_start,
         start + timedelta(hours=48),
     )
 
@@ -66,6 +72,39 @@ def test_explicit_evaluation_window_keeps_hourly_samples_and_elapsed_leads():
     assert MODULE.exact_integral_lead_hour(min(selected), start) == 24
     assert MODULE.exact_integral_lead_hour(max(selected), start) == 48
     assert all(value.minute == 0 for value in selected)
+    assert [record[1] for record in selected[start + timedelta(hours=24)].samples] == [
+        139, 140, 141, 142, 143, 144
+    ]
+    assert [record[0] for record in selected[evaluation_start].samples] == [
+        "previous_segment",
+        "previous_segment",
+        "previous_segment",
+        "previous_segment",
+        "previous_segment",
+        "current_segment",
+    ]
+
+
+def test_hicar_rotation_coefficients_and_inverse_follow_model_convention():
+    y, x = np.mgrid[:5, :7]
+    angle = math.radians(30.0)
+    latitude = 46.0 - x * math.sin(angle) * 0.001 + y * 0.001
+    longitude = 7.0 + x * math.cos(angle) * 0.001 / math.cos(math.radians(46.0))
+    sine, cosine = MODULE.hicar_grid_rotation(latitude, longitude, dx_m=1000.0)
+
+    assert cosine[2, 3] == pytest.approx(math.cos(angle), rel=2.0e-4)
+    assert sine[2, 3] == pytest.approx(math.sin(angle), rel=2.0e-4)
+    earth_u = np.full(6, 3.0)
+    earth_v = np.full(6, 4.0)
+    sine_coefficients = np.full(6, sine[2, 3])
+    cosine_coefficients = np.full(6, cosine[2, 3])
+    grid_u = earth_u * cosine_coefficients - earth_v * sine_coefficients
+    grid_v = earth_v * cosine_coefficients + earth_u * sine_coefficients
+    recovered_u, recovered_v = MODULE.grid_to_earth_wind(
+        grid_u, grid_v, sine_coefficients, cosine_coefficients
+    )
+    np.testing.assert_allclose(recovered_u, earth_u)
+    np.testing.assert_allclose(recovered_v, earth_v)
 
 
 def test_pair_statistics_exposes_minimal_error_anatomy():
@@ -345,13 +384,12 @@ def test_full_station_comparison_reports_exact_synthetic_match(tmp_path):
         dataset.createVariable("topo", "f4", ("y", "x"))[:] = 500.0
 
     with netCDF4.Dataset(output, "w") as dataset:
-        dataset.createDimension("time", 2)
+        dataset.createDimension("time", 18)
         dataset.createDimension("y", 3)
         dataset.createDimension("x", 3)
         time = dataset.createVariable("time", "f8", ("time",))
         time.units = "hours since 2020-07-01 00:00:00"
-        offset = 0.432 / 3600.0
-        time[:] = [offset, 3.0 + offset]
+        time[:] = np.arange(-5, 13) / 6.0
         temperature = 280.0
         pressure = 90_000.0
         relative_humidity = 60.0
@@ -367,14 +405,14 @@ def test_full_station_comparison_reports_exact_synthetic_match(tmp_path):
             / (pressure - (1.0 - MODULE.EPSILON) * vapor_pressure)
         )
         values = {
-            "taix": [temperature, temperature],
-            "psfc": [pressure, pressure],
-            "hus2m": [specific_humidity, specific_humidity],
-            "u10m": [3.0, 3.0],
-            "v10m": [4.0, 4.0],
-            "snow_height": [0.2, 0.2],
-            "rsds": [100.0, 100.0],
-            "precipitation": [0.0, 3.0],
+            "taix": np.full(18, temperature),
+            "psfc": np.full(18, pressure),
+            "hus2m": np.full(18, specific_humidity),
+            "u10m": np.full(18, 3.0),
+            "v10m": np.full(18, 4.0),
+            "snow_height": np.full(18, 0.2),
+            "rsds": np.full(18, 100.0),
+            "precipitation": np.arange(18) / 6.0,
         }
         for name, series in values.items():
             dataset.createVariable(name, "f4", ("time", "y", "x"))[:] = (
@@ -382,7 +420,7 @@ def test_full_station_comparison_reports_exact_synthetic_match(tmp_path):
             )
 
     reference_paths = []
-    for hour, precipitation in ((0, 0.0), (3, 3.0)):
+    for hour, precipitation in ((0, 0.0), (1, 1.0), (2, 1.0)):
         path = tmp_path / f"reference_{hour}.nc"
         reference_paths.append(path)
         with netCDF4.Dataset(path, "w") as dataset:
@@ -430,7 +468,7 @@ def test_full_station_comparison_reports_exact_synthetic_match(tmp_path):
         header.extend([parameter, "pi", "mi", "dq", "uc"])
     direction = float(MODULE.wind_direction_from(np.array([3.0]), np.array([4.0]))[0])
     rows = []
-    for hour in range(4):
+    for hour in range(3):
         values = {
             "tre200h0": temperature - 273.15,
             "ure200h0": relative_humidity,
@@ -474,6 +512,12 @@ def test_full_station_comparison_reports_exact_synthetic_match(tmp_path):
             str(observations),
             "--minimum-core-pairs",
             "1",
+            "--simulation-start",
+            "2020-07-01T00:00:00",
+            "--evaluation-start",
+            "2020-07-01T00:00:00",
+            "--evaluation-end",
+            "2020-07-01T02:00:00",
             "--report",
             str(report),
         ],
@@ -483,10 +527,10 @@ def test_full_station_comparison_reports_exact_synthetic_match(tmp_path):
 
     assert result.returncode == 0, result.stderr + result.stdout
     payload = json.loads(report.read_text())
-    assert len(payload["matched_model_times"]) == 2
-    assert sorted(payload["lead_time_metrics"]) == ["0", "3"]
+    assert len(payload["matched_model_times"]) == 3
+    assert sorted(payload["lead_time_metrics"]) == ["0", "1", "2"]
     assert (
-        payload["lead_time_metrics"]["3"]["hicar"]["all_sites"]
+        payload["lead_time_metrics"]["2"]["hicar"]["all_sites"]
         ["wind_speed_10m_m_s"]["count"]
         == 1
     )
@@ -502,6 +546,9 @@ def test_full_station_comparison_reports_exact_synthetic_match(tmp_path):
         ]["count"]
         == 2
     )
+    assert payload["hicar_observation_shortwave_daylight_only"]["statistics"][
+        "count"
+    ] == 2
     assert (
         payload["seasonal_metrics"]["DJF"]["hicar"]["all_sites"][
             "temperature_2m_height_adjusted_k"
@@ -533,7 +580,7 @@ def test_full_station_comparison_reports_exact_synthetic_match(tmp_path):
     assert accounting["wind_vector"]["accepted_common_triplet_count"] == 2
     assert accounting["precipitation_interval_kg_m2"] == {
         "candidate_station_time_count": 2,
-        "accepted_common_triplet_count": 1,
-        "excluded_station_time_count": 1,
-        "exclusions": {"observation_missing_or_nonfinite": 1},
+        "accepted_common_triplet_count": 2,
+        "excluded_station_time_count": 0,
+        "exclusions": {},
     }
