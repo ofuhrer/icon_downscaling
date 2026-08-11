@@ -42,6 +42,11 @@ def test_restart_output_omits_predecessor_terminal_time() -> None:
     ]
 
 
+def test_reference_surface_coupling_is_required() -> None:
+    assert VALIDATOR.REQUIRED_PHYSICS["lsm.nmp_opt_sfc"] == "3"
+    assert VALIDATOR.REQUIRED_PHYSICS["sfc.iz0tlnd"] == "1"
+
+
 def test_restart_comparison_excludes_three_cell_guard_region() -> None:
     class Variable:
         def __init__(self, values: np.ndarray):

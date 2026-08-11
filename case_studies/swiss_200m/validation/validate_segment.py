@@ -13,6 +13,20 @@ import netCDF4
 import numpy as np
 
 
+REQUIRED_PHYSICS = {
+    "physics.wind": "variational solver",
+    "physics.mp": "morrison",
+    "physics.pbl": "ysu",
+    "physics.lsm": "noahmp",
+    "physics.rad": "RRTMGP",
+    "lsm.nmp_opt_sfc": "3",
+    "sfc.iz0tlnd": "1",
+    "wind.wind_solver_iterations": "2500",
+    "adv.advect_density": "T",
+    "domain.nz": "80",
+}
+
+
 def decode_times(path: Path) -> list[datetime]:
     with netCDF4.Dataset(path) as dataset:
         if "time" not in dataset.variables or dataset["time"].size == 0:
@@ -149,19 +163,9 @@ def main() -> int:
         raise SystemExit(f"checkpoint time is {restart_times}, expected {[restart_time]}")
     with netCDF4.Dataset(args.restart) as restart:
         require_restart_state(restart)
-        required_physics = {
-            "physics.wind": "variational solver",
-            "physics.mp": "morrison",
-            "physics.pbl": "ysu",
-            "physics.lsm": "noahmp",
-            "physics.rad": "RRTMGP",
-            "wind.wind_solver_iterations": "2500",
-            "adv.advect_density": "T",
-            "domain.nz": "80",
-        }
         mismatches = {
             name: {"actual": str(getattr(restart, name, "")), "expected": expected_value}
-            for name, expected_value in required_physics.items()
+            for name, expected_value in REQUIRED_PHYSICS.items()
             if str(getattr(restart, name, "")) != expected_value
         }
     if mismatches:
