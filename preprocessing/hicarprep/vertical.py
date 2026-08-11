@@ -102,16 +102,8 @@ def interpolate_interface_w_to_hfl(
         raise ValueError("target W interpolation requires finite three-dimensional geometry")
     if np.any((hfl <= hhl[:-1]) | (hfl >= hhl[1:])):
         raise ValueError("every HFL level must lie strictly between its HHL interfaces")
-    result = np.empty_like(hfl)
-    for row in range(hhl.shape[1]):
-        for col in range(hhl.shape[2]):
-            result[:, row, col] = interpolate_height_profile(
-                hhl[:, row, col],
-                w[:, row, col],
-                hfl[:, row, col],
-                monotone=True,
-            )
-    return result
+    layer_fraction = (hfl - hhl[:-1]) / (hhl[1:] - hhl[:-1])
+    return w[:-1] + layer_fraction * (w[1:] - w[:-1])
 
 
 def saturation_specific_humidity(temperature_k: np.ndarray, pressure_pa: np.ndarray) -> np.ndarray:

@@ -530,6 +530,34 @@ class VerticalTransformTests(unittest.TestCase):
         )
         np.testing.assert_allclose(mass_w[:, 0, 0], [2.5, 15.0])
 
+    def test_interface_w_vectorization_matches_columnwise_linear_interpolation(self) -> None:
+        hhl = np.array(
+            [
+                [[0.0, 10.0], [20.0, 30.0]],
+                [[100.0, 130.0], [160.0, 190.0]],
+                [[310.0, 350.0], [390.0, 430.0]],
+            ]
+        )
+        fractions = np.array(
+            [[[0.2, 0.4], [0.6, 0.8]], [[0.75, 0.5], [0.25, 0.9]]]
+        )
+        hfl = hhl[:-1] + fractions * (hhl[1:] - hhl[:-1])
+        interface_w = np.arange(12, dtype=np.float64).reshape(3, 2, 2) / 3.0
+        actual = interpolate_interface_w_to_hfl(
+            target_hhl_m=hhl,
+            target_hfl_m=hfl,
+            interface_w_ms=interface_w,
+        )
+        expected = np.empty_like(hfl)
+        for row in range(2):
+            for column in range(2):
+                expected[:, row, column] = np.interp(
+                    hfl[:, row, column],
+                    hhl[:, row, column],
+                    interface_w[:, row, column],
+                )
+        np.testing.assert_allclose(actual, expected, atol=1.0e-15)
+
     def test_above_source_top_is_rejected(self) -> None:
         source_hhl, t, p, qv = self._source()
         with self.assertRaisesRegex(ValueError, "top"):
@@ -653,7 +681,9 @@ class ProductPipelineTests(unittest.TestCase):
                     dataset.hicar_water_conversion = "APPLIED_JOINT_ALL_WATER_SPECIES"
                     dataset.hicar_pressure_adjustment = "APPLIED_HICAR_NATIVE"
                     dataset.wind_balance = "APPLIED_HICAR_ADJOINT_VARIATIONAL_PROJECTION"
-                    dataset.lateral_w_policy = "diagnose_in_hicar"
+                    dataset.lateral_w_policy = (
+                        "regular_forcing_initial_guess_then_hicar_projection"
+                    )
                     dataset.target_grid_fingerprint = "target"
                     dataset.static_sha256 = "static"
                     dataset.relaxation_profile = "cosine_squared"

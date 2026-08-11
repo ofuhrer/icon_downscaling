@@ -16,6 +16,9 @@ from .pipeline import manifest_identity
 from .products import sha256
 
 
+EXPECTED_LATERAL_W_POLICY = "regular_forcing_initial_guess_then_hicar_projection"
+
+
 def _timestamp(value: str) -> dt.datetime:
     parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
@@ -104,6 +107,8 @@ def validate_boundary_sequence(
             ny = int(getattr(dataset, "domain_ny", 0))
             if nx <= 0 or ny <= 0:
                 raise ValueError(f"{path}: invalid or missing domain_nx/domain_ny")
+            if str(getattr(dataset, "lateral_w_policy", "")) != EXPECTED_LATERAL_W_POLICY:
+                raise ValueError(f"{path}: unsupported lateral_w_policy")
             point_rows = np.asarray(dataset["row"][:], dtype=np.int64)
             point_columns = np.asarray(dataset["column"][:], dtype=np.int64)
             if np.any((point_rows < 0) | (point_rows >= ny)) or np.any(

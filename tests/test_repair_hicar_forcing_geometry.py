@@ -81,7 +81,7 @@ def test_repair_replaces_only_geometry_and_rebinds_boundary(tmp_path: Path) -> N
         dataset.domain_nx = 2
         dataset.domain_ny = 2
         dataset.hicar_water_conversion = "APPLIED_JOINT_ALL_WATER_SPECIES"
-        dataset.lateral_w_policy = "diagnose_in_hicar"
+        dataset.lateral_w_policy = "regular_forcing_initial_guess_then_hicar_projection"
         dataset.target_grid_fingerprint = "target"
         dataset.static_sha256 = static_sha
         dataset.relaxation_profile = "cosine_squared"

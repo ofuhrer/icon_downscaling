@@ -954,7 +954,9 @@ def write_boundary_condition(
                 else "NOT_APPLIED_RESEARCH_PRODUCT"
             )
             dataset.authoritative_temporal_basis = "T,P,QV,QC,QI; dependent diagnostics refreshed after interpolation"
-            dataset.lateral_w_policy = "diagnose_in_hicar"
+            dataset.lateral_w_policy = (
+                "regular_forcing_initial_guess_then_hicar_projection"
+            )
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
