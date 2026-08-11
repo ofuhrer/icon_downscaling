@@ -82,8 +82,10 @@ than a claimed optimum.
   (`alb=2`), so external LAI/VEGFRA/static albedo are not campaign inputs.
 - Land drag uses the published revised-MM5 option 3. Its missing modular
   Noah-MP implementation is restored by a checksum-pinned HICAR patch and
-  matches archived HICAR v2 scalar results bit-for-bit. The exact final
-  NVHPC/OpenACC build and restart trajectory still require qualification.
+  matches archived HICAR v2 scalar results bit-for-bit. The clean final
+  NVHPC/OpenACC/NCCL executable is built; its option-3 runtime fields and the
+  complete-physics restart trajectory remain to be checked in the daylight
+  smoke test.
 - RRTMGP runs every 600 s with one block per rank. Direct, diffuse and reflected
   shortwave plus terrain longwave are enabled after HLM/SVF/slope/aspect are
   generated. The reflected-shortwave cadence defect is fixed in the selected
@@ -132,17 +134,20 @@ curves, and correlations are descriptive rather than rankings.
 
 ## Remaining work before launch
 
-1. Finish HLM/SVF/slope/aspect for the rebuilt 15 km static. HORAYZON uses a
-   20.2 km exterior REA-L terrain band, EGM2008 and 90 azimuths. The 20 km ray
-   extent is a documented terrain-radiation approximation, not a convergence
-   claim.
-2. Build and qualify the exact clean HICAR source containing the self-contained
-   revised-MM5 option-3 restoration with NVHPC/NCCL.
-3. Run one real hourly W/SST/scalar-LBC product and inspect SST fallback
-   distances and HICAR ingestion before producing all 196 seasonal hours.
-4. Repeat a daylight turnover and continuous-versus-restart proof with the
-   complete final physics/static/input configuration.
-5. Launch the four independent restart chains on `preemptible`, then evaluate
+The final 15 km static is complete and contains HLM/SVF/slope/aspect computed
+with HORAYZON from a 20.2 km exterior REA-L terrain band, EGM2008 and 90
+azimuths. The 20 km ray extent remains a documented terrain-radiation
+approximation, not a convergence claim. All four season-specific runtime
+domains are complete. The clean final HICAR source is built with NVHPC/OpenACC
+and NCCL; the executable is pinned by checksum.
+
+1. Finish and validate one real hourly W/SST/scalar-LBC product, including SST
+   fallback distances and HICAR ingestion, before producing all 196 seasonal
+   hours.
+2. Repeat a daylight turnover and continuous-versus-restart proof with the
+   complete final physics/static/input configuration; also verify the restored
+   revised-MM5 option-3 state identities in the resulting restart.
+3. Launch the four independent restart chains on `preemptible`, then evaluate
    them against all usable SwissMetNet stations and native REA-L-CH1.
 
 Do not tune individual parameters until this reference result identifies a
