@@ -29,9 +29,14 @@
 @SNOW_TEMPERATURE_LINE@
 @LAND_CLIMATOLOGY_LINES@
   use_map_factors = .True.
+  use_agl_height = .True.
+  agl_cap = 800.0
+  sleve = .True.
+  sleve_n = 1.35
+  flat_z_height = 0.0
   auto_level = 1
   height_lowest_level = @LOWEST_LAYER_M@
-  model_top_height = 12000.0
+  model_top_height = 15000.0
   stretch_fac = 0.65
   terrain_smooth_windowsize = 5
   terrain_smooth_cycles = 10
@@ -58,8 +63,14 @@
   zvar = 'HFL'
   latvar = 'lat_1'
   lonvar = 'lon_1'
+  t_offset = 0.0
+  p_multiplier = 1.0
+  limit_rh = .False.
+  qv_is_relative_humidity = .False.
   qv_is_spec_humidity = .False.
   t_is_potential = .False.
+  z_is_geopotential = .False.
+  time_varying_z = .False.
   relax_filters = .False.
 /
 &physics
@@ -79,6 +90,8 @@
 &lt_parameters
 /
 &mp_parameters
+  update_interval_mp = 0.0
+  top_mp_level = 0
 /
 &adv_parameters
   h_order = 3
@@ -91,6 +104,8 @@
 /
 &lsm_parameters
   LU_Categories = 'USGS'
+  update_interval_lsm = 300.0
+  num_soil_layers = 4
   monthly_vegfrac = @MONTHLY_VEGFRAC@
   ! HICAR's generic USGS default leaves glaciers disabled. WorldCover snow/ice
   ! is mapped to USGS category 24, so select Noah-MP glacier physics explicitly.
@@ -98,13 +113,37 @@
   ! Freeze HICAR's effective default rather than relying on namelist fallback.
   ! The pinned Noah-MP implements surface resistances for options 1 and 2.
   nmp_opt_sfc = 1
+  nmp_dveg = 3
+  nmp_opt_crs = 1
+  nmp_opt_btr = 2
+  nmp_opt_runsrf = 1
+  nmp_opt_runsub = 1
+  nmp_opt_infdv = 1
+  nmp_opt_tksno = 1
+  nmp_opt_scf = 1
+  nmp_opt_compact = 1
+  nmp_opt_frz = 1
+  nmp_opt_inf = 1
+  nmp_opt_rad = 3
+  nmp_opt_alb = 2
+  nmp_opt_wet = 0
+  nmp_opt_snf = 4
+  nmp_opt_tbot = 2
+  nmp_opt_stc = 1
+  nmp_opt_gla = 1
+  nmp_opt_rsf = 1
   nmp_opt_soil = 2
+  nmp_opt_pedo = 0
+  nmp_opt_crop = 0
+  nmp_opt_irr = 0
+  nmp_opt_irrm = 0
+  nmp_opt_tdrn = 0
+  nmp_soiltstep = 0
+  noahmp_output = 1
 /
 &cu_parameters
 /
 &rad_parameters
-  ! Explicitly freeze the previously effective RRTMGP defaults. Terrain
-  ! radiation remains off unless a causal profile is selected explicitly.
   update_interval_rad = @RADIATION_UPDATE_INTERVAL@
   ! The selected 48-compute-rank national layout is reproducible with one
   ! RRTMGP block per rank; the default block size creates two and is not.
@@ -113,17 +152,38 @@
   tzone = 0.0
   icloud = 3
   cldovrlp = 2
-  terrain_shading = .False.
+  read_ghg = .False.
+  terrain_shading = .True.
+  terrain_direct_sw = .True.
+  terrain_diffuse_sw = .True.
+  terrain_reflected_sw = .True.
+  terrain_longwave = .True.
+  terrain_refl_radius = 1500.0
 /
 &pbl_parameters
+  ysu_topdown_pblmix = 0
 /
 &sfc_parameters
+  isfflx = 0
+  scm_force_flux = 1
+  iz0tlnd = 1
+  isftcflx = 0
+  sbrlim = 250.0
 /
 &wind
   Sx = @SX@
+  Sx_dmax = 600.0
+  Sx_scale_ang = 30.0
+  TPI_dmax = 4000.0
+  TPI_scale = 200.0
   smooth_wind_distance = 500.0
   alpha_const = @ALPHA_CONST@
+  update_frequency = 1
+  wind_iterations = 2
   wind_solver_iterations = 2500
+  thermal = .False.
+  linear_theory = .False.
+  wind_only = .False.
 /
 &output
   output_folder = '@OUTPUT_DIR@'

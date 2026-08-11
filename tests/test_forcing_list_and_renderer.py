@@ -29,13 +29,13 @@ def static_file(path: Path, *, land_climatology: bool = False) -> None:
             dataset.createVariable("ALBEDO", "f4", ("y", "x"))[:] = 0.2
             dataset.createVariable("vegetation_fraction_max", "f4", ("y", "x"))[:] = 80.0
             dataset.createVariable("snow_temperature_initial", "f4", ("y", "x"))[:] = 270.0
-        hhl = np.linspace(0.0, 12_000.0, 81)
+        hhl = np.linspace(0.0, 15_000.0, 81)
         dataset.createVariable("HHL", "f4", ("half_level", "y", "x"))[:] = hhl[:, None, None]
         dataset.createVariable("HFL", "f4", ("level", "y", "x"))[:] = (
             0.5 * (hhl[:-1] + hhl[1:])
         )[:, None, None]
         dataset.sleve_nz = 80
-        dataset.sleve_model_top_m = 12_000.0
+        dataset.sleve_model_top_m = 15_000.0
         dataset.sleve_lowest_layer_m = 20.0
         dataset.sleve_stretch_factor = 0.65
         dataset.required_minimum_sleve_layer_thickness_m = 12.0
@@ -86,9 +86,11 @@ def test_renderer_has_one_explicit_hicarprep_configuration(tmp_path: Path) -> No
         "sst_var = 'SST'",
         "qv_is_spec_humidity = .False.", "relax_filters = .False.",
         "soiltexture_var = 'soil_type_layer'", "nmp_opt_sfc = 1",
-        "nmp_opt_soil = 2",
-        "Sx = .True.", "advect_density = .True.", "alpha_const = 1.0",
-        "terrain_shading = .False.", "height_lowest_level = 20.0",
+        "nmp_dveg = 3", "nmp_opt_soil = 2",
+        "Sx = .True.", "advect_density = .True.", "alpha_const = -1.0",
+        "Sx_dmax = 600.0", "TPI_dmax = 4000.0", "TPI_scale = 200.0",
+        "terrain_shading = .True.", "terrain_longwave = .True.",
+        "height_lowest_level = 20.0", "model_top_height = 15000.0",
         "cfl_reduction_factor = 1.6", "update_interval_rad = 600.0",
         "rrtmgp_block_N = 256",
     ):

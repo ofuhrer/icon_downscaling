@@ -16,7 +16,7 @@ CASE = Path(__file__).resolve().parents[1]
 TEMPLATE = CASE / "config" / "hicar_swiss_200m.nml.in"
 TOKEN = re.compile(r"@[A-Z_]+@")
 SELECTED_NZ = 80
-SELECTED_MODEL_TOP_M = 12_000.0
+SELECTED_MODEL_TOP_M = 15_000.0
 SELECTED_LOWEST_LAYER_M = 20.0
 SELECTED_STRETCH_FACTOR = 0.65
 SELECTED_MINIMUM_LAYER_THICKNESS_M = 12.0
@@ -67,7 +67,7 @@ def main() -> int:
     parser.add_argument("--restart-dir", type=Path, required=True)
     parser.add_argument("--restart-from")
     parser.add_argument("--restart-interval", type=int, default=24)
-    parser.add_argument("--output-interval", type=int, default=3600)
+    parser.add_argument("--output-interval", type=int, default=600)
     parser.add_argument("--radiation-update-interval", type=float, default=600.0)
     parser.add_argument(
         "--output-profile", choices=("station", "evaluation", "debug"), default="evaluation"
@@ -77,7 +77,7 @@ def main() -> int:
     parser.add_argument(
         "--alpha-const",
         type=float,
-        default=1.0,
+        default=-1.0,
         help="fixed wind-solver alpha in 0.01..1, or -1 for dynamic Froude alpha",
     )
     parser.add_argument("--cfl-reduction-factor", type=float, default=1.6)

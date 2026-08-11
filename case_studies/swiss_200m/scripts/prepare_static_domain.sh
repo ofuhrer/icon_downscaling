@@ -23,7 +23,7 @@ mkdir -p "$STATIC_DIR"
 trap 'rm -f "$RAW" "$TEMP_OUTPUT" "$TEMP_EXTERNAL" "$TEMP_INITIAL"' EXIT
 python3 "$ROOT/scripts/prepare_static_inputs.py" \
   --output "$RAW" --center-lat 46.815 --center-lon 8.225 \
-  --width-km 454 --height-km 330 --dx-m 200 \
+  --width-km 412 --height-km 286 --dx-m 200 \
   --public-sources --static-field-set land-surface --cache-dir "$CACHE_DIR" \
   --boundary-topo-source "$BOUNDARY_TOPO" --topo-blend-width-km 30 \
   --topo-blend-shape cosine --write-topo-blend-diagnostics --lu-categories USGS
@@ -31,7 +31,7 @@ python3 "$ROOT/scripts/hicarprep.py" build-domain \
   --source "$RAW" --static "$TEMP_OUTPUT" --external "$TEMP_EXTERNAL" \
   --initial-surface "$TEMP_INITIAL" --epoch-valid-from 2021-01-01T00:00:00Z \
   --initial-valid-time 2021-01-01T00:00:00Z \
-  --nz 80 --model-top-m 12000 --lowest-layer-m 20 --stretch-factor 0.65 \
+  --nz 80 --model-top-m 15000 --lowest-layer-m 20 --stretch-factor 0.65 \
   --decay-rate-large 2 --decay-rate-small 6 --smooth-window-radius 5 --smooth-cycles 10 \
   --minimum-layer-thickness-m 12
 mv "$TEMP_OUTPUT" "$OUTPUT"

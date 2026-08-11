@@ -353,12 +353,12 @@ class Campaign:
                     "SEGMENT_RUN_DIR": str(run_dir),
                     "RESTART_INPUT": str(previous_restart or ""),
                     "OUTPUT_PROFILE": self.config.get("output_profile", "evaluation"),
-                    "OUTPUT_INTERVAL": str(self.config.get("output_interval", 3600)),
+                    "OUTPUT_INTERVAL": str(self.config.get("output_interval", 600)),
                     "HICAR_RADIATION_UPDATE_INTERVAL": str(
                         self.radiation_update_interval
                     ),
                     "HICAR_DISABLE_SX": "1" if self.config.get("disable_sx", False) else "0",
-                    "HICAR_ALPHA_CONST": str(self.config.get("alpha_const", 1.0)),
+                    "HICAR_ALPHA_CONST": str(self.config.get("alpha_const", -1.0)),
                     "HICAR_ALLOW_INPUT_SUPERSET": (
                         "1" if self.full_season_input_lists else "0"
                     ),

@@ -1,0 +1,151 @@
+# Swiss 200 m scientific reference setup
+
+This is the untuned reference for four-season wind downscaling. It is a
+scientific specification, not a claim that HICAR has already demonstrated
+added value over REA-L-CH1. Settings are selected together from published
+HICAR practice and the documented behavior of the present source. Parameter
+tuning starts only after this complete setup has been run against SwissMetNet
+and native REA-L-CH1 on identical station/time pairs.
+
+The closest published precedent is HICAR v1.1 over the Swiss Alps
+([Reynolds et al., 2023](https://doi.org/10.5194/gmd-16-5049-2023)). Its
+national experiment was 250 m and January-only, so no published HICAR setup is
+an already validated national, all-season 100--200 m wind configuration. The
+later 50 m experiments
+([Reynolds et al., 2024](https://doi.org/10.3389/feart.2024.1388416)) and
+seasonal snow work
+([Berg et al., 2024](https://doi.org/10.3389/feart.2024.1393260)) constrain
+surface and terrain-radiation choices but cover much smaller domains.
+
+## Domain and terrain
+
+- 200 m azimuthal-equidistant grid, 2061 x 1431 cells (412 x 286 km), centred
+  at 46.815 N, 8.225 E. The 40 km external buffer includes every station in
+  the broad Switzerland-covering SwissMetNet query used by this project.
+- Copernicus GLO-30 elevation is area-aggregated to 200 m. The physical
+  surface is not smoothed: published HICAR upscaled a roughly 30 m DEM without
+  smoothing. The SLEVE terrain split changes coordinate deformation, not the
+  surface elevation.
+- A 30 km cosine blend makes the high-resolution terrain equal REA-L-CH1
+  `HSURF` at the outer edge and fully high-resolution inward. This is the
+  topographic sponge. It is intentionally broader than the 10 km atmospheric
+  boundary shoulder.
+- Static land inputs are WorldCover-to-USGS land use, land/water mask and four
+  depth-dependent SoilGrids texture classes. Epoch mismatch, glaciers and
+  unresolved sub-grid lakes remain representativeness uncertainties.
+
+## Vertical grid
+
+- 80 SLEVE levels, `auto_level=1`, 15 km ASL top, nominal 20 m first layer and
+  stretch factor 0.65. The first six flat-terrain layers are approximately
+  20, 26, 31.9, 37.8, 43.6 and 49.3 m.
+- Every generated national grid must retain positive Jacobians and at least
+  12 m interface spacing everywhere; values below 10 m are never accepted.
+  On the selected 2061 x 1431 terrain, the 15 km construction achieves a
+  17.008 m minimum interface spacing and a 0.3375 minimum SLEVE Jacobian.
+- SLEVE parameters are window radius 5, 10 smoothing cycles, large/small
+  decay 2/6 and exponent 1.35. Map factors are applied. Forcing interpolation
+  uses AGL height below an 800 m transition and ASL above it.
+- The 15 km top follows the process-based ICAR recommendation to encompass the
+  full troposphere; a real-mountain case stabilized near 15.2 km
+  ([Horak et al., 2021](https://doi.org/10.5194/gmd-14-1657-2021)). The old
+  12 km top is not retained for an all-season Alpine reference.
+
+## Meteorological preprocessing
+
+- Decode hourly native REA-L-CH1 pressure, temperature, water vapour, cloud
+  water, cloud ice when available, horizontal and vertical wind, interface
+  height, surface height and skin temperature. Units, grid identity and valid
+  time are checked before transformation.
+- Horizontally remap with the existing bounded/conditioned local RBF weights.
+  Reconstruct positive source-layer thicknesses before vertical interpolation;
+  use target HHL/HFL from the exact HICAR SLEVE geometry.
+- Supply pressure, temperature and dry-air mixing ratios. Preserve resolved
+  supersaturation (`limit_rh=false`). QI is explicitly zero only when absent
+  in REA-L; QR/QS/QG are not invented, so precipitation and cold-cloud spin-up
+  remain limitations.
+- Regular full-domain forcing contains P, T, QV, QC, QI, earth-relative U/V,
+  vertical velocity W interpolated to target HFL, and hourly water-surface
+  temperature SST. HICAR rotates U/V to its staggered grid before applying the
+  diagnostic wind solver. Available REA-L W is the published-2023-like initial
+  guess; it is never inserted as a sparse boundary value.
+- Sparse lateral relaxation contains only T, P, QV, QC and QI on the mass
+  grid. U/V are deliberately excluded: the previous path inserted
+  earth-relative values into grid-relative staggered winds after projection.
+  W is excluded because a sparse insertion would break the balanced wind
+  field. The provisional shoulder is 10 km with a 3600 s time scale.
+- Prescribed SST is used only on water cells. The former blank `sst_var`
+  silently held every lake at 280 K and is not scientifically acceptable.
+  HICAR's simple-water lower bound of 273.15 K means frozen-lake physics is
+  still not represented.
+
+## Dynamics and diagnostic wind
+
+- RK3, CFL reduction 1.6, third-order horizontal and vertical advection,
+  FCT option 1, density-weighted transport and no extra constant-z diffusion.
+  These match established HICAR real-data examples; no cumulus scheme is used
+  at 200 m.
+- Use the fork's adjoint variational mass-conserving projection. It has exact
+  algebraic/restart tests but is not the same published operator and must be
+  identified as such in interpretation.
+- Diagnose the Froude-dependent alpha at every hourly wind update, bounded by
+  the published 0.1--1.0 range. A fixed alpha of 1 is the stable end member,
+  not the published HICAR reference.
+- Apply Sx/TPI with `Sx_dmax=600 m`, `Sx_scale_ang=30 degrees`,
+  `TPI_dmax=4000 m`, `TPI_scale=200`, and 500 m wind smoothing. Use two wind
+  adjustment passes, a 2500-iteration solver cap and one update per hourly
+  input interval. Thermal and linear-theory corrections remain off: the
+  former was too strong in the published small-domain evaluation, and the
+  latter would duplicate mountain-wave structure already present in REA-L.
+
+## Physical parameterizations
+
+- Morrison two-moment microphysics, YSU PBL, Noah-MP land, revised-MM5
+  atmospheric surface layer, prescribed simple-water SST, RRTMGP radiation
+  and Noah-MP's internal snow model. Microphysics and YSU run every timestep
+  on all levels; YSU top-down radiative mixing is off for the selected
+  RRTMGP path.
+- Noah-MP uses USGS classes, four soil layers and a 300 s update. The untuned
+  option vector is `dveg=3`, `crs=1`, `btr=2`, `runsrf=1`, `runsub=1`,
+  `infdv=1`, `tksno=1`, `scf=1`, `compact=1`, `frz=1`, `inf=1`, `rad=3`,
+  `alb=2`, `wet=0`, `snf=4`, `tbot=2`, `stc=1`, `gla=1`, `rsf=1`,
+  `soil=2`, `pedo=0`, `crop=0`, `irr=0`, `irrm=0`, `tdrn=0`, with the soil
+  process timestep equal to the Noah-MP call and standard output. USGS class
+  24 activates glacier treatment.
+- `dveg=3` uses the class/date-interpolated Noah-MP LAI table and diagnoses
+  FVEG. `alb=2` diagnoses soil/snow albedo. External LAI, VEGFRA and static
+  ALBEDO are therefore not campaign requirements under this reference.
+- The target land surface-drag choice is the published HICAR revised-MM5
+  option 3 only if the bounded port to the pinned modular Noah-MP passes
+  scalar parity, CPU/GPU and restart tests. Otherwise the campaign uses the
+  supported Noah-MP MOST option 1 and labels this departure explicitly; the
+  current modular dependency must never run its unimplemented option 3.
+
+## Radiation
+
+- RRTMGP at 600 s, UTC, cloud-fraction option 3 and maximum-random overlap.
+  `rrtmgp_block_N=256` gives one radiation block per compute rank on the
+  selected 12-node/48-compute-rank layout and is the bit-reproducible path.
+- Enable direct, diffuse and reflected shortwave terrain corrections and
+  terrain longwave with a 1500 m reflection/emission neighbourhood after HLM,
+  SVF, slope and aspect have been generated and checked. The repaired
+  reflected-shortwave accumulation is part of the selected HICAR source.
+
+## Runs and verification
+
+- Each season is one 48 h continuous physical trajectory split into 12 h
+  restart segments on the preemptible partition. The first 24 h are spin-up;
+  the following 24 h reproduce the selected winter, spring, summer and autumn
+  evaluation events. A final daylight turnover and continuous-versus-restart
+  check is required after the complete setup changes, not for tuning it.
+- Write the essential two-dimensional station-comparison and surface-process
+  fields every 600 s, then aggregate to the exact SwissMetNet observation
+  definitions. Hourly diagnostic fields may be written separately; an hourly
+  instantaneous model value is not compared with an hourly observation
+  aggregate.
+- Use every usable SwissMetNet site and identical station/time pairs for HICAR
+  and native REA-L-CH1. RMSE remains the headline. Bias, MAE, variability ratio
+  and correlation diagnose why scalar RMSE changes; wind additionally uses
+  speed bias/MAE and vector RMSE. Stratify only by season, elapsed time and
+  elevation/terrain class, with station-level inspection for exposed ridges.
+  Four events support diagnosis, not a climatological ranking.
