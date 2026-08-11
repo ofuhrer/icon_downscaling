@@ -71,6 +71,40 @@ def test_horayzon_float32_radian_azimuth_roundoff_is_accepted() -> None:
         MODULE.validate_horayzon_azimuths(stored + np.float32(np.deg2rad(0.01)))
 
 
+def test_pinned_horayzon_v121_padded_slope_contract() -> None:
+    calls = {}
+
+    class FakeTransform:
+        @staticmethod
+        def rotation_matrix_glob2loc(north, normal):
+            calls["direction_shapes"] = (north.shape, normal.shape)
+            return np.zeros((4, 5, 3, 3), dtype=np.float32)
+
+    class FakeTopoParam:
+        @staticmethod
+        def slope_plane_meth(x, y, z, *, rot_mat, output_rot):
+            calls["slope_shapes"] = (x.shape, y.shape, z.shape, rot_mat.shape)
+            calls["output_rot"] = output_rot
+            result = np.full((4, 5, 3), np.nan, dtype=np.float32)
+            result[1:-1, 1:-1, 2] = 1.0
+            return result
+
+    class FakeHorayzon:
+        transform = FakeTransform()
+        topo_param = FakeTopoParam()
+
+    padded = np.zeros((4, 5), dtype=np.float32)
+    target_vectors = np.zeros((2, 3, 3), dtype=np.float32)
+    tilted = MODULE.tilted_surface_normals_v121(
+        FakeHorayzon(), padded, padded, padded, target_vectors, target_vectors
+    )
+    assert calls["direction_shapes"] == ((2, 3, 3), (2, 3, 3))
+    assert calls["slope_shapes"] == ((4, 5), (4, 5), (4, 5), (4, 5, 3, 3))
+    assert calls["output_rot"] is True
+    assert tilted.shape == (2, 3, 3)
+    np.testing.assert_array_equal(tilted[..., 2], 1.0)
+
+
 def test_extended_dem_contains_exact_target_and_real_outer_band(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

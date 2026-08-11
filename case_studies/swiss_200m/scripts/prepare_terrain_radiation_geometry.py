@@ -89,6 +89,33 @@ def validate_horayzon_azimuths(azimuth_radians: np.ndarray) -> None:
         raise ValueError(f"HORAYZON returned unexpected azimuths: {azimuth_degrees}")
 
 
+def tilted_surface_normals_v121(
+    hray,
+    x: np.ndarray,
+    y: np.ndarray,
+    z: np.ndarray,
+    target_north: np.ndarray,
+    target_normal: np.ndarray,
+) -> np.ndarray:
+    """Apply HORAYZON v1.2.1's padded rotation/slope array contract."""
+    if x.shape != y.shape or x.shape != z.shape or x.ndim != 2:
+        raise ValueError("slope coordinates must share one two-dimensional padded grid")
+    target_shape = (x.shape[0] - 2, x.shape[1] - 2, 3)
+    if target_north.shape != target_shape or target_normal.shape != target_shape:
+        raise ValueError("target direction vectors do not match the unpadded slope grid")
+    # v1.2.1 pads the target-grid rotation matrices by one cell internally;
+    # these dimensions therefore match the explicitly padded slope coordinates.
+    rotation = hray.transform.rotation_matrix_glob2loc(target_north, target_normal)
+    if rotation.shape != (*x.shape, 3, 3):
+        raise ValueError("HORAYZON rotation matrix does not match padded slope coordinates")
+    tilted = hray.topo_param.slope_plane_meth(
+        x, y, z, rot_mat=rotation, output_rot=True
+    )
+    if tilted.shape != (*x.shape, 3):
+        raise ValueError("HORAYZON slope normals do not match padded slope coordinates")
+    return tilted[1:-1, 1:-1]
+
+
 def extension_cells(search_distance_km: float, dx_m: float) -> int:
     if search_distance_km <= 0.0:
         raise ValueError("horizon search distance must be positive")
@@ -514,38 +541,16 @@ def compute_geometry(extended_dem: Path, output: Path, egm2008_grid: Path) -> di
         slice(y_start - 1, y_start + target_ny + 1),
         slice(x_start - 1, x_start + target_nx + 1),
     )
-    slope_norm_ecef = hray.direction.surf_norm(
-        longitude[slope_slice], latitude[slope_slice]
-    )
-    slope_north_ecef = hray.direction.north_dir(
-        x_ecef[slope_slice],
-        y_ecef[slope_slice],
-        z_ecef[slope_slice],
-        slope_norm_ecef,
-        ellps="WGS84",
-    )
-    slope_norm_enu = hray.transform.ecef2enu_vector(slope_norm_ecef, transformer)
-    slope_north_enu = hray.transform.ecef2enu_vector(slope_north_ecef, transformer)
-    rotation = hray.transform.rotation_matrix_glob2loc(slope_north_enu, slope_norm_enu)
-    del (
-        x_ecef,
-        y_ecef,
-        z_ecef,
-        vec_north_enu,
-        vec_norm_enu,
-        slope_norm_ecef,
-        slope_north_ecef,
-        slope_norm_enu,
-        slope_north_enu,
-    )
-    vec_tilt = hray.topo_param.slope_plane_meth(
+    vec_tilt = tilted_surface_normals_v121(
+        hray,
         x_enu[slope_slice],
         y_enu[slope_slice],
         z_enu[slope_slice],
-        rot_mat=rotation,
-        output_rot=True,
-    )[1:-1, 1:-1]
-    del rotation, x_enu, y_enu, z_enu, vertices
+        vec_north_enu,
+        vec_norm_enu,
+    )
+    del x_ecef, y_ecef, z_ecef, vec_north_enu, vec_norm_enu
+    del x_enu, y_enu, z_enu, vertices
     svf = hray.topo_param.sky_view_factor(azimuth, horizon, vec_tilt)
     slope = np.arccos(np.clip(vec_tilt[:, :, 2], -1.0, 1.0))
     aspect = np.pi / 2.0 - np.arctan2(vec_tilt[:, :, 1], vec_tilt[:, :, 0])
