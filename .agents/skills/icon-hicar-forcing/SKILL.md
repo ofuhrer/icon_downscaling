@@ -29,8 +29,13 @@ lateral-boundary frame from the same state.
 Water variables are converted jointly from moist-air mass fractions to
 dry-air mixing ratios. HICAR reads P/T/QV/QC/QI/U/V/W and HFL/HHL. Source W is
 terrain-adjusted and interpolated to the exact target HFL mass levels before
-the variational projection. Sparse LBC contains only T/P/QV/QC/QI and mass-grid
-geometry; it never inserts winds. REA-L SKT is remapped separately with
+the variational projection. Rotate earth-relative U/V into HICAR's target-grid
+basis before taking the terrain-slope dot product, but keep serialized regular
+U/V earth-relative. Require forcing attributes
+`target_w_vertical_coordinate=authoritative_static_HFL` and
+`target_w_terrain_wind_basis=HICAR_grid_relative`; older records without both
+are stale. Sparse LBC contains only T/P/QV/QC/QI and mass-grid geometry; it
+never inserts winds. REA-L SKT is remapped separately with
 same-surface water support and written as hourly regular-forcing `SST`; require
 exact time, target grid, static checksum, and water mask. Set
 `relax_filters=.False.`.

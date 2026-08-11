@@ -30,8 +30,10 @@ result identifies a specific scientific ambiguity.
   longwave on, using validated HLM/SVF/slope/aspect geometry.
 
 Atmospheric forcing is hicarprep P/T/U/V/W/QV/QC/QI plus SST in dry-air mixing
-ratios. W is supplied on the authoritative target HFL levels and SST is hourly
-REA-L skin temperature over water support. Set `qv_is_spec_humidity=.False.`,
+ratios. W is supplied on the authoritative target HFL levels; its terrain
+correction uses grid-relative U/V even though serialized U/V stay
+earth-relative. SST is hourly REA-L skin temperature over water support. Set
+`qv_is_spec_humidity=.False.`,
 `wvar='W'`, `sst_var='SST'`, and `relax_filters=.False.`. Sparse target-grid
 LBC contains mass-grid T/P/QV/QC/QI only; do not insert sparse U/V/W after wind
 projection.
@@ -46,8 +48,11 @@ and requalify reproducibility if the domain or compute decomposition changes.
 - no discontinuity at restart joins;
 - water/precipitation stores interpreted with cumulative versus interval
   semantics explicitly handled;
-- station and REA-L comparisons use identical times/sites and report sampling
-  and height-adjustment choices.
+- station and REA-L comparisons use identical ending-hour intervals/sites;
+  aggregate 600 s HICAR output to the SwissMetNet definition, approximate
+  REA-L interval means from consecutive hourly endpoints, inverse-rotate HICAR
+  grid-relative wind before vector metrics, and report sampling and
+  height-adjustment choices.
 
 Do not equate a stable short run with scientific skill. Extend duration or add
 regimes only after the current experiment distinguishes the competing
