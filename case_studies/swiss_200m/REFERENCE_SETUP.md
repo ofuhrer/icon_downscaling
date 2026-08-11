@@ -70,7 +70,9 @@ surface and terrain-radiation choices but cover much smaller domains.
   remain limitations.
 - Regular full-domain forcing contains P, T, QV, QC, QI, earth-relative U/V,
   vertical velocity W interpolated to target HFL, and hourly water-surface
-  temperature SST. HICAR rotates U/V to its staggered grid before applying the
+  temperature SST. The terrain-following W correction rotates U/V into the
+  HICAR grid basis before taking the slope dot product; serialized U/V remain
+  earth-relative. HICAR rotates U/V to its staggered grid before applying the
   diagnostic wind solver. Available REA-L W is the published-2023-like initial
   guess; it is never inserted as a sparse boundary value.
 - Sparse lateral relaxation contains only T, P, QV, QC and QI on the mass
@@ -143,10 +145,13 @@ surface and terrain-radiation choices but cover much smaller domains.
   evaluation events. A final daylight turnover and continuous-versus-restart
   check is required after the complete setup changes, not for tuning it.
 - Write the essential two-dimensional station-comparison and surface-process
-  fields every 600 s, then aggregate to the exact SwissMetNet observation
-  definitions. Hourly diagnostic fields may be written separately; an hourly
-  instantaneous model value is not compared with an hourly observation
-  aggregate.
+  fields every 600 s. For each ending civil hour, aggregate the six HICAR
+  ten-minute samples to the SwissMetNet `h0` definitions; inverse-rotate HICAR
+  wind components before vector verification. Approximate the corresponding
+  REA-L interval mean by the trapezoidal mean of its consecutive hourly
+  endpoints, and retain endpoint semantics for snow and interval differences
+  for precipitation. An hourly instantaneous model value is not compared with
+  an hourly observation aggregate.
 - Use every usable SwissMetNet site and identical station/time pairs for HICAR
   and native REA-L-CH1. RMSE remains the headline. Bias, MAE, variability ratio
   and correlation diagnose why scalar RMSE changes; wind additionally uses

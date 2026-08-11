@@ -54,7 +54,9 @@ than a claimed optimum.
   `hicarprep` path. The old fieldextra route is retired.
 - Regular full-domain forcing supplies P, T, dry-air QV/QC/QI, earth-relative
   U/V, W on the authoritative target HFL, and valid-time SST on water cells.
-  HICAR rotates horizontal wind and applies the diagnostic projection.
+  Terrain-following W uses U/V rotated into the target-grid basis for the slope
+  dot product, while serialized U/V remain earth-relative. HICAR rotates those
+  horizontal winds and applies the diagnostic projection.
 - Sparse lateral relaxation supplies only T/P/QV/QC/QI on mass-grid support,
   using a provisional 10 km shoulder and 3600 s timescale. Sparse U/V were
   removed because they were inserted earth-relative into grid-relative winds
@@ -123,14 +125,20 @@ event is evaluated:
 | Summer | 2020-06-30 00 to 2020-07-02 00 UTC | Jul 1--2 |
 | Autumn | 2020-10-01 00 to 2020-10-03 00 UTC | Oct 2--3 |
 
-Essential station-comparison fields are written every 600 s and aggregated to
-the exact SwissMetNet definitions. HICAR and native REA-L use identical valid
-times and all usable common stations. RMSE remains the headline; bias, MAE,
-standard-deviation ratio and correlation explain scalar errors, while wind also
-uses speed bias/MAE and vector RMSE. Stratification is limited to season,
-elapsed time, elevation/terrain class and selected station-level diagnostics.
-With four events, lead traces are event/diurnal diagnostics, not forecast-skill
-curves, and correlations are descriptive rather than rankings.
+Essential station-comparison fields are written every 600 s. Six ending-
+ten-minute HICAR samples form each SwissMetNet-compatible civil-hour mean;
+HICAR grid-relative 10 m wind is inverse-rotated before vector verification.
+REA-L interval means are transparently approximated from consecutive hourly
+endpoints. Snow remains an endpoint state and precipitation an ending-hour
+interval. HICAR and native REA-L use identical valid intervals and all usable
+common stations. RMSE remains the headline; bias, MAE, standard-deviation ratio
+and correlation explain scalar errors, while wind also uses speed bias/MAE and
+vector RMSE. Stratification is limited to season, elapsed time,
+elevation/terrain class and selected station-level diagnostics. With four
+events, lead traces are event/diurnal diagnostics, not forecast-skill curves,
+and correlations are descriptive rather than rankings. Daylight shortwave is
+checked directly against SwissMetNet but excluded from HICAR-versus-REA-L
+added-value ranking because the staged native REA-L reference lacks shortwave.
 
 ## Remaining work before launch
 
