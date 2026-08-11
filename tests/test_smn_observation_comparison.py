@@ -215,6 +215,67 @@ def test_nearest_hicar_cells_refines_coarse_search():
     assert distance[0] < 0.25
 
 
+def test_nearest_hicar_land_cells_overrides_water_and_records_displacement():
+    latitude = np.repeat(np.linspace(46.0, 46.01, 11)[:, None], 11, axis=1)
+    longitude = np.repeat(np.linspace(7.0, 7.014, 11)[None, :], 11, axis=0)
+    landmask = np.ones((11, 11), dtype=np.int16)
+    landmask[5, 5] = 0
+    site = MODULE.Site(
+        "1", "ABC", float(latitude[5, 5]), float(longitude[5, 5]), 500.0
+    )
+    unconstrained_y, unconstrained_x, unconstrained_distance = (
+        MODULE.nearest_hicar_cells(latitude, longitude, [site], stride=5)
+    )
+
+    mapping = MODULE.nearest_hicar_land_cells(
+        latitude,
+        longitude,
+        landmask,
+        [site],
+        unconstrained_y,
+        unconstrained_x,
+        unconstrained_distance,
+        dx_m=100.0,
+        maximum_displacement_km=0.2,
+    )
+
+    assert (
+        int(mapping.unconstrained_y_indices[0]),
+        int(mapping.unconstrained_x_indices[0]),
+    ) == (5, 5)
+    assert landmask[mapping.y_indices[0], mapping.x_indices[0]] == 1
+    assert bool(mapping.surface_override[0]) is True
+    assert 0.0 < mapping.displacement_km[0] <= 0.2
+    assert mapping.unconstrained_distances_km[0] == pytest.approx(0.0)
+    assert mapping.distances_km[0] > mapping.unconstrained_distances_km[0]
+
+
+def test_nearest_hicar_land_cells_rejects_override_beyond_bound():
+    latitude = np.repeat(np.linspace(46.0, 46.01, 11)[:, None], 11, axis=1)
+    longitude = np.repeat(np.linspace(7.0, 7.014, 11)[None, :], 11, axis=0)
+    landmask = np.zeros((11, 11), dtype=np.int16)
+    landmask[5, 8] = 1
+    site = MODULE.Site(
+        "1", "ABC", float(latitude[5, 5]), float(longitude[5, 5]), 500.0
+    )
+    unconstrained_y, unconstrained_x, unconstrained_distance = (
+        MODULE.nearest_hicar_cells(latitude, longitude, [site], stride=5)
+    )
+
+    with pytest.raises(ValueError, match="no land cell within 0.2 km"):
+        MODULE.nearest_hicar_land_cells(
+            latitude,
+            longitude,
+            landmask,
+            [site],
+            unconstrained_y,
+            unconstrained_x,
+            unconstrained_distance,
+            dx_m=100.0,
+            maximum_displacement_km=0.2,
+        )
+
+
 def test_station_selection_excludes_sites_outside_hicar_domain():
     sites = [
         MODULE.Site("1", "IN", 46.0, 7.0, 500.0),
@@ -382,6 +443,7 @@ def test_full_station_comparison_reports_exact_synthetic_match(tmp_path):
         dataset.createVariable("lat", "f8", ("y", "x"))[:] = latitudes
         dataset.createVariable("lon", "f8", ("y", "x"))[:] = longitudes
         dataset.createVariable("topo", "f4", ("y", "x"))[:] = 500.0
+        dataset.createVariable("landmask", "i2", ("y", "x"))[:] = 1
 
     with netCDF4.Dataset(output, "w") as dataset:
         dataset.createDimension("time", 18)
@@ -527,6 +589,13 @@ def test_full_station_comparison_reports_exact_synthetic_match(tmp_path):
 
     assert result.returncode == 0, result.stderr + result.stdout
     payload = json.loads(report.read_text())
+    mapping = payload["station_mapping"]
+    assert mapping["surface_override_site_count"] == 0
+    assert mapping["unconstrained_water_cell_site_count"] == 0
+    assert mapping["maximum_land_cell_displacement_km"] == 1.0
+    assert mapping["sites"][0]["selected_hicar_cell_surface"] == "land"
+    assert mapping["sites"][0]["unconstrained_hicar_cell_surface"] == "land"
+    assert mapping["sites"][0]["surface_mapping_override"] is False
     assert len(payload["matched_model_times"]) == 3
     assert sorted(payload["lead_time_metrics"]) == ["0", "1", "2"]
     assert (

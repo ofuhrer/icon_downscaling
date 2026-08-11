@@ -181,6 +181,20 @@ class HourlyHicarRecord:
     samples: tuple[tuple, ...]
 
 
+@dataclass(frozen=True)
+class HicarLandCellMapping:
+    """Nearest land-cell mapping and its unconstrained nearest-cell baseline."""
+
+    y_indices: np.ndarray
+    x_indices: np.ndarray
+    distances_km: np.ndarray
+    unconstrained_y_indices: np.ndarray
+    unconstrained_x_indices: np.ndarray
+    unconstrained_distances_km: np.ndarray
+    surface_override: np.ndarray
+    displacement_km: np.ndarray
+
+
 def finite_float(value: str) -> float:
     try:
         result = float(value)
@@ -467,6 +481,116 @@ def nearest_hicar_cells(
         np.asarray(y_indices, dtype=np.int32),
         np.asarray(x_indices, dtype=np.int32),
         np.asarray(distances_km, dtype=np.float64),
+    )
+
+
+def nearest_hicar_land_cells(
+    latitude: np.ndarray,
+    longitude: np.ndarray,
+    landmask: np.ndarray,
+    sites: list[Site],
+    unconstrained_y_indices: np.ndarray,
+    unconstrained_x_indices: np.ndarray,
+    unconstrained_distances_km: np.ndarray,
+    dx_m: float,
+    maximum_displacement_km: float,
+) -> HicarLandCellMapping:
+    """Map terrestrial stations to the nearest land cell within a hard bound.
+
+    The unconstrained nearest cell remains explicit in the result. The bound
+    applies to the distance between that cell centre and the selected land-cell
+    centre, so the representativeness shift cannot be hidden.
+    """
+    if latitude.shape != longitude.shape or latitude.shape != landmask.shape:
+        raise ValueError("HICAR latitude, longitude and landmask shapes differ")
+    if not math.isfinite(dx_m) or dx_m <= 0.0:
+        raise ValueError("HICAR grid spacing must be positive and finite")
+    if not math.isfinite(maximum_displacement_km) or maximum_displacement_km <= 0.0:
+        raise ValueError("maximum land-cell displacement must be positive and finite")
+    if not (
+        len(sites)
+        == len(unconstrained_y_indices)
+        == len(unconstrained_x_indices)
+        == len(unconstrained_distances_km)
+    ):
+        raise ValueError("site and unconstrained HICAR mapping lengths differ")
+
+    land = np.asarray(landmask, dtype=np.float64)
+    if not np.all(np.isfinite(land)) or np.any((land < 0.0) | (land > 1.0)):
+        raise ValueError("HICAR landmask must be finite and lie within [0, 1]")
+    land = land >= 0.5
+    latitude0 = float(np.nanmean(latitude))
+    longitude_scale = 111.32 * math.cos(math.radians(latitude0))
+    latitude_scale = 110.57
+    # Two extra cells cover diagonal geometry and small departures of actual
+    # projected-grid spacing from the nominal dx.
+    search_cells = int(math.ceil(maximum_displacement_km * 1_000.0 / dx_m)) + 2
+    selected_y: list[int] = []
+    selected_x: list[int] = []
+    selected_distance: list[float] = []
+    selected_displacement: list[float] = []
+    selected_override: list[bool] = []
+    tolerance_km = max(1.0e-9, 1.0e-6 * maximum_displacement_km)
+
+    for site, origin_y, origin_x in zip(
+        sites, unconstrained_y_indices, unconstrained_x_indices
+    ):
+        origin_y = int(origin_y)
+        origin_x = int(origin_x)
+        y0 = max(0, origin_y - search_cells)
+        y1 = min(latitude.shape[0], origin_y + search_cells + 1)
+        x0 = max(0, origin_x - search_cells)
+        x1 = min(latitude.shape[1], origin_x + search_cells + 1)
+        local_latitude = latitude[y0:y1, x0:x1]
+        local_longitude = longitude[y0:y1, x0:x1]
+        coordinate_finite = np.isfinite(local_latitude) & np.isfinite(local_longitude)
+        displacement_squared = (
+            (local_latitude - latitude[origin_y, origin_x]) * latitude_scale
+        ) ** 2 + (
+            (local_longitude - longitude[origin_y, origin_x]) * longitude_scale
+        ) ** 2
+        eligible = (
+            land[y0:y1, x0:x1]
+            & coordinate_finite
+            & (displacement_squared <= (maximum_displacement_km + tolerance_km) ** 2)
+        )
+        if not np.any(eligible):
+            raise ValueError(
+                f"no land cell within {maximum_displacement_km:g} km of the "
+                f"unconstrained HICAR cell for terrestrial station {site.key}"
+            )
+        station_distance_squared = (
+            (local_latitude - site.latitude) * latitude_scale
+        ) ** 2 + (
+            (local_longitude - site.longitude) * longitude_scale
+        ) ** 2
+        station_distance_squared = np.where(eligible, station_distance_squared, np.inf)
+        local_flat = int(np.argmin(station_distance_squared))
+        local_y, local_x = np.unravel_index(local_flat, station_distance_squared.shape)
+        y_index = y0 + int(local_y)
+        x_index = x0 + int(local_x)
+        displacement = math.sqrt(float(displacement_squared[local_y, local_x]))
+        if displacement > maximum_displacement_km + tolerance_km:
+            raise AssertionError("selected HICAR land cell exceeds displacement bound")
+        selected_y.append(y_index)
+        selected_x.append(x_index)
+        selected_distance.append(
+            math.sqrt(float(station_distance_squared[local_y, local_x]))
+        )
+        selected_displacement.append(displacement)
+        selected_override.append(y_index != origin_y or x_index != origin_x)
+
+    return HicarLandCellMapping(
+        y_indices=np.asarray(selected_y, dtype=np.int32),
+        x_indices=np.asarray(selected_x, dtype=np.int32),
+        distances_km=np.asarray(selected_distance, dtype=np.float64),
+        unconstrained_y_indices=np.asarray(unconstrained_y_indices, dtype=np.int32),
+        unconstrained_x_indices=np.asarray(unconstrained_x_indices, dtype=np.int32),
+        unconstrained_distances_km=np.asarray(
+            unconstrained_distances_km, dtype=np.float64
+        ),
+        surface_override=np.asarray(selected_override, dtype=bool),
+        displacement_km=np.asarray(selected_displacement, dtype=np.float64),
     )
 
 
@@ -857,6 +981,15 @@ def main() -> int:
     parser.add_argument("--temperature-lapse-rate-k-m", type=float, default=-0.0065)
     parser.add_argument("--minimum-core-pairs", type=int, default=100)
     parser.add_argument(
+        "--maximum-land-cell-displacement-km",
+        type=float,
+        default=1.0,
+        help=(
+            "hard maximum displacement from the unconstrained nearest HICAR "
+            "cell to the selected land cell for terrestrial stations"
+        ),
+    )
+    parser.add_argument(
         "--overlap-policy",
         choices=("error", "last"),
         default="error",
@@ -874,23 +1007,38 @@ def main() -> int:
         latitude = read_2d(static, "lat")
         longitude = read_2d(static, "lon")
         terrain = read_2d(static, "topo")
+        landmask = read_2d(static, "landmask")
         dx_m = float(getattr(static, "hicar_dx_m", 200.0))
     grid_sine, grid_cosine = hicar_grid_rotation(
         latitude, longitude, dx_m=dx_m
     )
-    y_indices, x_indices, distances_km = nearest_hicar_cells(
+    unconstrained_y, unconstrained_x, unconstrained_distances_km = nearest_hicar_cells(
         latitude, longitude, sites
     )
     maximum_distance_km = max(1.0, 3.0 * dx_m / 1000.0)
-    sites, y_indices, x_indices, distances_km, excluded_sites = (
+    sites, unconstrained_y, unconstrained_x, unconstrained_distances_km, excluded_sites = (
         select_sites_by_distance(
             sites,
-            y_indices,
-            x_indices,
-            distances_km,
+            unconstrained_y,
+            unconstrained_x,
+            unconstrained_distances_km,
             maximum_distance_km,
         )
     )
+    mapping = nearest_hicar_land_cells(
+        latitude,
+        longitude,
+        landmask,
+        sites,
+        unconstrained_y,
+        unconstrained_x,
+        unconstrained_distances_km,
+        dx_m,
+        args.maximum_land_cell_displacement_km,
+    )
+    y_indices = mapping.y_indices
+    x_indices = mapping.x_indices
+    distances_km = mapping.distances_km
     site_position = {site.key: index for index, site in enumerate(sites)}
     site_elevation = np.asarray([site.elevation_m for site in sites])
     classes, relative_terrain = class_memberships(
@@ -1398,9 +1546,11 @@ def main() -> int:
                 "matching post-2014 DWH fkl010h0 scalar-hourly semantics."
             ),
             "horizontal": (
-                "nearest HICAR cell; nearest native REA-L cell"
+                "nearest valid HICAR land cell for terrestrial SwissMetNet "
+                "stations; nearest native REA-L cell"
                 if args.native_reference_csv is not None
-                else "nearest HICAR cell; bilinear REA-L regular grid"
+                else "nearest valid HICAR land cell for terrestrial SwissMetNet "
+                "stations; bilinear REA-L regular grid"
             ),
             "temperature_height_adjustment": (
                 "T_at_station=T_model+lapse_rate*(H_station-H_model)"
@@ -1456,11 +1606,50 @@ def main() -> int:
         ],
         "station_mapping": {
             "site_count": len(sites),
+            "surface_policy": (
+                "SwissMetNet automatic-weather-station sites are terrestrial; "
+                "select the nearest HICAR landmask>=0.5 cell and retain the "
+                "unconstrained nearest cell as representativeness provenance"
+            ),
             "maximum_accepted_distance_km": maximum_distance_km,
+            "maximum_unconstrained_domain_distance_km": maximum_distance_km,
+            "maximum_land_cell_displacement_km": (
+                args.maximum_land_cell_displacement_km
+            ),
             "excluded_outside_domain_site_count": len(excluded_sites),
             "excluded_outside_domain_sites": excluded_sites,
-            "maximum_nearest_cell_distance_km": float(np.max(distances_km)),
-            "mean_nearest_cell_distance_km": float(np.mean(distances_km)),
+            "surface_override_site_count": int(
+                np.count_nonzero(mapping.surface_override)
+            ),
+            "unconstrained_water_cell_site_count": int(
+                np.count_nonzero(
+                    landmask[
+                        mapping.unconstrained_y_indices,
+                        mapping.unconstrained_x_indices,
+                    ] < 0.5
+                )
+            ),
+            "maximum_unconstrained_cell_distance_km": float(
+                np.max(mapping.unconstrained_distances_km)
+            ),
+            "mean_unconstrained_cell_distance_km": float(
+                np.mean(mapping.unconstrained_distances_km)
+            ),
+            "maximum_selected_land_cell_distance_km": float(
+                np.max(mapping.distances_km)
+            ),
+            "mean_selected_land_cell_distance_km": float(
+                np.mean(mapping.distances_km)
+            ),
+            "maximum_nearest_cell_distance_km": float(
+                np.max(mapping.distances_km)
+            ),
+            "mean_nearest_cell_distance_km": float(
+                np.mean(mapping.distances_km)
+            ),
+            "maximum_surface_mapping_displacement_km": float(
+                np.max(mapping.displacement_km)
+            ),
             "class_site_counts": {
                 name: int(np.count_nonzero(values))
                 for name, values in classes.items()
@@ -1479,6 +1668,33 @@ def main() -> int:
                         terrain[y_indices[index], x_indices[index]]
                     ),
                     "nearest_cell_distance_km": float(distances_km[index]),
+                    "selected_land_cell_distance_km": float(
+                        mapping.distances_km[index]
+                    ),
+                    "unconstrained_hicar_y_index": int(
+                        mapping.unconstrained_y_indices[index]
+                    ),
+                    "unconstrained_hicar_x_index": int(
+                        mapping.unconstrained_x_indices[index]
+                    ),
+                    "unconstrained_cell_distance_km": float(
+                        mapping.unconstrained_distances_km[index]
+                    ),
+                    "unconstrained_hicar_cell_surface": (
+                        "land"
+                        if landmask[
+                            mapping.unconstrained_y_indices[index],
+                            mapping.unconstrained_x_indices[index],
+                        ] >= 0.5
+                        else "water"
+                    ),
+                    "surface_mapping_override": bool(
+                        mapping.surface_override[index]
+                    ),
+                    "surface_mapping_displacement_km": float(
+                        mapping.displacement_km[index]
+                    ),
+                    "selected_hicar_cell_surface": "land",
                     "terrain_relative_elevation_m": float(relative_terrain[index]),
                 }
                 for index, site in enumerate(sites)

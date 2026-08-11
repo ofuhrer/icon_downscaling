@@ -256,8 +256,10 @@ class FootprintSpec:
     dy_cells: np.ndarray
     dx_cells: np.ndarray
     expected_cell_count: int
+    domain_cell_count: int
     actual_cell_count: int
     coverage_fraction: float
+    land_fraction_within_domain: float
     clipped_by_domain: bool
     too_small: bool
     terrain_min_m: float
@@ -343,8 +345,12 @@ class FootprintAccumulator:
             "radius_km": self.spec.radius_km,
             "geometry": {
                 "expected_cell_count": self.spec.expected_cell_count,
+                "domain_cell_count": self.spec.domain_cell_count,
                 "actual_cell_count": self.spec.actual_cell_count,
                 "coverage_fraction": self.spec.coverage_fraction,
+                "land_fraction_within_domain": (
+                    self.spec.land_fraction_within_domain
+                ),
                 "clipped_by_domain": self.spec.clipped_by_domain,
                 "too_small": self.spec.too_small,
             },
@@ -404,6 +410,7 @@ class FootprintAccumulator:
 
 def build_footprint_spec(
     terrain_variable: netCDF4.Variable,
+    landmask_variable: netCDF4.Variable,
     y_index: int,
     x_index: int,
     radius_km: float,
@@ -426,7 +433,15 @@ def build_footprint_spec(
         np.arange(x0, x1) - x_index,
         indexing="ij",
     )
-    mask = np.hypot(dy * dx_m, dx * dx_m) <= radius_m + 1.0e-9
+    domain_mask = np.hypot(dy * dx_m, dx * dx_m) <= radius_m + 1.0e-9
+    landmask = read_float_values(
+        landmask_variable, (slice(y0, y1), slice(x0, x1))
+    )
+    if not np.all(np.isfinite(landmask)) or np.any(
+        (landmask < 0.0) | (landmask > 1.0)
+    ):
+        raise ValueError("footprint landmask is non-finite or outside [0, 1]")
+    mask = domain_mask & (landmask >= 0.5)
     terrain = read_float_values(
         terrain_variable, (slice(y0, y1), slice(x0, x1))
     )[mask]
@@ -434,8 +449,9 @@ def build_footprint_spec(
         raise ValueError(
             f"footprint at y={y_index}, x={x_index}, radius={radius_km} km has invalid terrain"
         )
+    domain_count = int(np.count_nonzero(domain_mask))
     actual_count = int(np.count_nonzero(mask))
-    coverage = actual_count / expected_count
+    coverage = domain_count / expected_count
     return FootprintSpec(
         radius_km=radius_km,
         y_slice=slice(y0, y1),
@@ -444,9 +460,11 @@ def build_footprint_spec(
         dy_cells=np.asarray(dy[mask], dtype=np.int32),
         dx_cells=np.asarray(dx[mask], dtype=np.int32),
         expected_cell_count=expected_count,
+        domain_cell_count=domain_count,
         actual_cell_count=actual_count,
         coverage_fraction=coverage,
-        clipped_by_domain=actual_count < expected_count,
+        land_fraction_within_domain=actual_count / domain_count,
+        clipped_by_domain=domain_count < expected_count,
         too_small=(
             actual_count < MINIMUM_FOOTPRINT_CELLS
             or coverage < MINIMUM_FOOTPRINT_COVERAGE
@@ -463,14 +481,22 @@ def validate_static_and_build_accumulators(
 ) -> tuple[tuple[int, int], dict[str, dict], dict, tuple[np.ndarray, np.ndarray]]:
     site_runtime: dict[str, dict] = {}
     with netCDF4.Dataset(static_path) as dataset:
-        for name in ("lat", "lon", "topo"):
+        for name in ("lat", "lon", "topo", "landmask"):
             if name not in dataset.variables:
                 raise ValueError(f"static file lacks {name!r}")
         terrain = dataset.variables["topo"]
+        landmask = dataset.variables["landmask"]
         latitude = dataset.variables["lat"]
         longitude = dataset.variables["lon"]
-        if terrain.ndim != 2 or latitude.shape != terrain.shape or longitude.shape != terrain.shape:
-            raise ValueError("static lat/lon/topo do not share one two-dimensional grid")
+        if (
+            terrain.ndim != 2
+            or latitude.shape != terrain.shape
+            or longitude.shape != terrain.shape
+            or landmask.shape != terrain.shape
+        ):
+            raise ValueError(
+                "static lat/lon/topo/landmask do not share one two-dimensional grid"
+            )
         ny, nx = terrain.shape
         dx_m = finite_float(getattr(dataset, "hicar_dx_m", None))
         if dx_m is None or dx_m <= 0.0:
@@ -489,6 +515,10 @@ def validate_static_and_build_accumulators(
             x_index = int(site["hicar_x_index"])
             if not (0 <= y_index < ny and 0 <= x_index < nx):
                 raise ValueError(f"mapped cell for {key} is outside the static grid")
+            if float(landmask[y_index, x_index]) < 0.5:
+                raise ValueError(
+                    f"evaluator mapped terrestrial station {key} to a water cell"
+                )
             cell_elevation = float(terrain[y_index, x_index])
             report_elevation = float(site["hicar_elevation_m"])
             if abs(cell_elevation - report_elevation) > STATIC_ELEVATION_TOLERANCE_M:
@@ -509,10 +539,17 @@ def validate_static_and_build_accumulators(
                     f"static/report mapped-coordinate distance mismatch for {key}: "
                     f"{distance_km} versus {report_distance} km"
                 )
+            selected_land_distance = float(
+                site.get("selected_land_cell_distance_km", report_distance)
+            )
+            if abs(selected_land_distance - report_distance) > 1.0e-9:
+                raise ValueError(
+                    f"evaluator selected-land/nearest distance mismatch for {key}"
+                )
             footprints = {
                 radius: FootprintAccumulator(
                     build_footprint_spec(
-                        terrain, y_index, x_index, radius, dx_m
+                        terrain, landmask, y_index, x_index, radius, dx_m
                     )
                 )
                 for radius in FOOTPRINT_RADII_KM
@@ -799,6 +836,23 @@ def main(argv: list[str] | None = None) -> int:
                     "terrain_relative_elevation_m"
                 ],
                 "nearest_cell_distance_km": site["nearest_cell_distance_km"],
+                "selected_land_cell_distance_km": site.get(
+                    "selected_land_cell_distance_km",
+                    site["nearest_cell_distance_km"],
+                ),
+                "unconstrained_cell_distance_km": site.get(
+                    "unconstrained_cell_distance_km",
+                    site["nearest_cell_distance_km"],
+                ),
+                "unconstrained_hicar_cell_surface": site.get(
+                    "unconstrained_hicar_cell_surface", "unknown"
+                ),
+                "surface_mapping_override": site.get(
+                    "surface_mapping_override", False
+                ),
+                "surface_mapping_displacement_km": site.get(
+                    "surface_mapping_displacement_km", 0.0
+                ),
                 "hicar_y_index": runtime["y_index"],
                 "hicar_x_index": runtime["x_index"],
                 "evaluator_wind_vector": site["evaluator_wind_vector"],
@@ -809,11 +863,12 @@ def main(argv: list[str] | None = None) -> int:
     payload = {
         "schema_version": 2,
         "interpretation": (
-            "Point-to-grid representativeness diagnostic. Nearest-cell values "
-            "remain the primary station score; footprint means and fixed-cell "
-            "distributions quantify location sensitivity and are not an "
-            "alternative observational truth. HICAR winds use the evaluator's "
-            "earth-relative six-sample ending-hour definition."
+            "Point-to-grid representativeness diagnostic for terrestrial "
+            "SwissMetNet stations. The evaluator's nearest valid land-cell "
+            "values remain the primary station score; land-only footprint "
+            "means and fixed-cell distributions quantify location sensitivity "
+            "and are not an alternative observational truth. HICAR winds use "
+            "the evaluator's earth-relative six-sample ending-hour definition."
         ),
         "limitations": [
             "Native REA-L station samples have no equivalent fine-grid footprint.",

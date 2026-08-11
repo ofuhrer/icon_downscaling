@@ -38,6 +38,7 @@ def make_inputs(tmp_path, *, report_times=None, report_elevation=1_000.0):
         dataset.createVariable("lat", "f8", ("y", "x"))[:] = latitude
         dataset.createVariable("lon", "f8", ("y", "x"))[:] = longitude
         dataset.createVariable("topo", "f4", ("y", "x"))[:] = terrain
+        dataset.createVariable("landmask", "i2", ("y", "x"))[:] = 1
 
     sine, cosine = MODULE.hicar_grid_rotation(latitude, longitude, dx_m=200.0)
     earth_u = np.ones((7, 7), dtype=np.float64)
@@ -103,6 +104,11 @@ def make_inputs(tmp_path, *, report_times=None, report_elevation=1_000.0):
                             "station_elevation_m": 2_200.0,
                             "hicar_elevation_m": report_elevation,
                             "nearest_cell_distance_km": 0.0,
+                            "selected_land_cell_distance_km": 0.0,
+                            "unconstrained_cell_distance_km": 0.0,
+                            "unconstrained_hicar_cell_surface": "land",
+                            "surface_mapping_override": False,
+                            "surface_mapping_displacement_km": 0.0,
                             "terrain_relative_elevation_m": 200.0,
                             "hicar_y_index": 3,
                             "hicar_x_index": 3,
@@ -142,6 +148,7 @@ def test_streaming_footprint_metrics_and_quality_flags(tmp_path):
     payload = json.loads(inputs[-1].read_text())
     assert payload["selection"]["selected_site_count"] == 1
     site = payload["sites"][0]
+    assert site["unconstrained_hicar_cell_surface"] == "land"
     assert set(site["selection_reasons"]) == {
         "terrain_ridge_relative_gt_150m",
         "station_elevation_ge_2000m",
@@ -174,6 +181,47 @@ def test_streaming_footprint_metrics_and_quality_flags(tmp_path):
     assert payload["data_quality"]["required_ten_minute_sample_count"] == 6
     assert payload["data_quality"]["unused_input_time_count"] == 1
     assert payload["data_quality"]["missing_qc_observation_times_by_selected_site"] == {}
+
+
+def test_footprint_spec_excludes_water_cells(tmp_path):
+    static = tmp_path / "static.nc"
+    landmask = np.ones((7, 7), dtype=np.int16)
+    landmask[3, 4] = 0
+    with netCDF4.Dataset(static, "w") as dataset:
+        dataset.createDimension("y", 7)
+        dataset.createDimension("x", 7)
+        terrain = dataset.createVariable("topo", "f4", ("y", "x"))
+        land = dataset.createVariable("landmask", "i2", ("y", "x"))
+        terrain[:] = 500.0
+        land[:] = landmask
+    with netCDF4.Dataset(static) as dataset:
+        spec = MODULE.build_footprint_spec(
+            dataset.variables["topo"],
+            dataset.variables["landmask"],
+            y_index=3,
+            x_index=3,
+            radius_km=0.4,
+            dx_m=200.0,
+        )
+
+    assert spec.expected_cell_count == 13
+    assert spec.domain_cell_count == 13
+    assert spec.actual_cell_count == 12
+    assert spec.land_fraction_within_domain == pytest.approx(12.0 / 13.0)
+    assert not any(
+        dy == 0 and dx == 1 for dy, dx in zip(spec.dy_cells, spec.dx_cells)
+    )
+
+
+def test_rejects_evaluator_mapping_of_terrestrial_station_to_water(tmp_path):
+    inputs = make_inputs(tmp_path)
+    with netCDF4.Dataset(inputs[0], "r+") as dataset:
+        dataset.variables["landmask"][3, 3] = 0
+
+    with pytest.raises(ValueError, match="terrestrial station RID:1 to a water cell"):
+        MODULE.main(arguments(*inputs))
+
+    assert not inputs[-1].exists()
 
 
 def test_rejects_static_report_grid_identity_mismatch(tmp_path):
