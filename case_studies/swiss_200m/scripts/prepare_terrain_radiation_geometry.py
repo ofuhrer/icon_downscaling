@@ -24,6 +24,7 @@ import numpy as np
 
 
 AZIMUTH_DEGREES = np.arange(0.0, 360.0, 4.0, dtype=np.float64)
+HORAYZON_AZIMUTH_TOLERANCE_DEGREES = 5.0e-5
 EGM2008_GRID_SHA256 = "4191d471eefebf24091b56dbc604353cb3b8cf8cc70e448bb9ae56a272bef17a"
 EXPECTED_TARGET_SHAPE = (1431, 2061)
 EXPECTED_DX_M = 200.0
@@ -74,6 +75,18 @@ def spacing(values: np.ndarray, name: str) -> float:
     if not np.allclose(delta, representative, atol=1.0e-4, rtol=0.0):
         raise ValueError(f"{name} must be regularly spaced")
     return representative
+
+
+def validate_horayzon_azimuths(azimuth_radians: np.ndarray) -> None:
+    """Accept the selected sectors after HORAYZON's float32-radian storage."""
+    azimuth_degrees = np.mod(np.rad2deg(azimuth_radians), 360.0)
+    if azimuth_degrees.shape != AZIMUTH_DEGREES.shape or not np.allclose(
+        azimuth_degrees,
+        AZIMUTH_DEGREES,
+        atol=HORAYZON_AZIMUTH_TOLERANCE_DEGREES,
+        rtol=0.0,
+    ):
+        raise ValueError(f"HORAYZON returned unexpected azimuths: {azimuth_degrees}")
 
 
 def extension_cells(search_distance_km: float, dx_m: float) -> int:
@@ -495,11 +508,7 @@ def compute_geometry(extended_dem: Path, output: Path, egm2008_grid: Path) -> di
         search_distance_km,
         output.parent,
     )
-    azimuth_degrees = np.mod(np.rad2deg(azimuth), 360.0)
-    if azimuth_degrees.shape != (90,) or not np.allclose(
-        azimuth_degrees, AZIMUTH_DEGREES, atol=1.0e-5, rtol=0.0
-    ):
-        raise ValueError(f"HORAYZON returned unexpected azimuths: {azimuth_degrees}")
+    validate_horayzon_azimuths(azimuth)
 
     slope_slice = (
         slice(y_start - 1, y_start + target_ny + 1),

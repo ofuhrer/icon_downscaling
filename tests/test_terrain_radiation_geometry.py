@@ -62,6 +62,15 @@ def test_selected_azimuth_convention() -> None:
     np.testing.assert_array_equal(MODULE.AZIMUTH_DEGREES, np.arange(0.0, 360.0, 4.0))
 
 
+def test_horayzon_float32_radian_azimuth_roundoff_is_accepted() -> None:
+    stored = np.deg2rad(MODULE.AZIMUTH_DEGREES).astype(np.float32)
+    converted = np.mod(np.rad2deg(stored), 360.0)
+    assert np.max(np.abs(converted - MODULE.AZIMUTH_DEGREES)) > 1.0e-5
+    MODULE.validate_horayzon_azimuths(stored)
+    with pytest.raises(ValueError, match="unexpected azimuths"):
+        MODULE.validate_horayzon_azimuths(stored + np.float32(np.deg2rad(0.01)))
+
+
 def test_extended_dem_contains_exact_target_and_real_outer_band(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
