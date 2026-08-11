@@ -71,7 +71,23 @@ def test_repair_replaces_only_geometry_and_rebinds_boundary(tmp_path: Path) -> N
         sst = dataset.createVariable("SST", "f4", ("time", "y_1", "x_1"))
         sst[:] = 277.0
         sst.units = "K"
+        dataset.createVariable(
+            "SST_global_fallback_mask", "i1", ("y_1", "x_1")
+        )[:] = 0
+        dataset.createVariable(
+            "SST_global_fallback_distance_km", "f8", ("y_1", "x_1")
+        )[:] = np.nan
         dataset.sst_source_sha256 = "synthetic-target-sst"
+        dataset.sst_target_product_sha256 = "synthetic-target-sst"
+        dataset.sst_valid_time = "2020-01-01T01:00:00Z"
+        dataset.sst_source_variable = "SKT"
+        dataset.sst_native_source_sha256 = "synthetic-native-sst"
+        dataset.sst_remap_policy = "same-surface water support; RBF baseline on land"
+        dataset.sst_water_cell_count = 1
+        dataset.sst_water_local_fallback_count = 0
+        dataset.sst_water_global_fallback_count = 0
+        dataset.sst_maximum_fallback_distance_km = 0.0
+        dataset.sst_maximum_global_fallback_distance_km = 0.0
         dataset.target_w_vertical_coordinate = "authoritative_static_HFL"
         dataset.target_w_terrain_wind_basis = "HICAR_grid_relative"
     original_payload = sha256(forcing)
