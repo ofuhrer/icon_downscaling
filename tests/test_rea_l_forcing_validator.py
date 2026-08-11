@@ -58,13 +58,23 @@ def files(root: Path, invalid_hfl: bool = False) -> tuple[Path, Path, Path]:
         sst = dataset.createVariable("SST", "f4", ("time", "y_1", "x_1"))
         sst[:] = 277.0
         sst.units = "K"
+        dataset.createVariable(
+            "SST_global_fallback_mask", "i1", ("y_1", "x_1")
+        )[:] = 0
+        dataset.createVariable(
+            "SST_global_fallback_distance_km", "f8", ("y_1", "x_1")
+        )[:] = np.nan
         dataset.sst_source_sha256 = "synthetic-target-sst"
+        dataset.sst_target_product_sha256 = "synthetic-target-sst"
+        dataset.sst_valid_time = "2020-01-01T01:00:00Z"
+        dataset.sst_source_variable = "SKT"
         dataset.sst_native_source_sha256 = "synthetic-native-sst"
         dataset.sst_remap_policy = "same-surface water support; RBF baseline on land"
         dataset.sst_water_cell_count = 1
         dataset.sst_water_local_fallback_count = 0
         dataset.sst_water_global_fallback_count = 0
         dataset.sst_maximum_fallback_distance_km = 0.0
+        dataset.sst_maximum_global_fallback_distance_km = 0.0
         dataset.geometry_serialization = "static_sleve_with_one_ulp_top_cover"
         dataset.target_w_vertical_coordinate = "authoritative_static_HFL"
         dataset.target_w_terrain_wind_basis = "HICAR_grid_relative"
@@ -146,6 +156,31 @@ def test_earth_relative_terrain_w_contract_fails(tmp_path: Path) -> None:
     )
     assert result.returncode != 0
     assert "grid-relative winds" in result.stderr
+
+
+def test_sst_global_fallback_mask_must_match_count(tmp_path: Path) -> None:
+    forcing, static, boundary = files(tmp_path)
+    with netCDF4.Dataset(forcing, "a") as dataset:
+        dataset["SST_global_fallback_mask"][0, 1] = 1
+        dataset["SST_global_fallback_distance_km"][0, 1] = 5.0
+    with netCDF4.Dataset(boundary, "a") as dataset:
+        dataset.initial_condition_sha256 = sha256(forcing)
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATOR),
+            "--forcing-file",
+            str(forcing),
+            "--boundary-file",
+            str(boundary),
+            "--static-file",
+            str(static),
+        ],
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode != 0
+    assert "global fallback mask disagrees with its count" in result.stderr
 
 
 def test_mismatched_boundary_pair_fails(tmp_path: Path) -> None:

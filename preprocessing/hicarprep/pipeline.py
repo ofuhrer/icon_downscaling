@@ -255,7 +255,9 @@ def write_hicar_forcing_record(
         static_digest=static_digest,
     )
     with netCDF4.Dataset(target_sst_path) as target_sst:
+        sst_valid_time = str(getattr(target_sst, "valid_time", ""))
         sst_remap_policy = str(getattr(target_sst, "remap_policy", ""))
+        sst_source_variable = str(getattr(target_sst, "source_variable", ""))
         sst_native_source_sha256 = str(
             getattr(target_sst, "source_sha256", "")
         )
@@ -271,9 +273,32 @@ def write_hicar_forcing_record(
         sst_maximum_fallback_distance_km = float(
             getattr(target_sst, "maximum_fallback_distance_km", np.nan)
         )
+        sst_maximum_global_fallback_distance_km = float(
+            getattr(target_sst, "maximum_global_fallback_distance_km", np.nan)
+        )
+        for name in ("global_fallback_mask", "global_fallback_distance_km"):
+            if name not in target_sst.variables:
+                raise ValueError(f"SST input lacks {name} provenance")
+        if target_sst["global_fallback_mask"].dimensions != ("y", "x") or (
+            target_sst["global_fallback_distance_km"].dimensions != ("y", "x")
+        ):
+            raise ValueError("SST fallback provenance is not on the target grid")
+        sst_global_fallback_mask = np.asarray(
+            target_sst["global_fallback_mask"][:], dtype=bool
+        )
+        sst_global_fallback_distance_km = np.asarray(
+            np.ma.asarray(target_sst["global_fallback_distance_km"][:]).filled(
+                np.nan
+            ),
+            dtype=np.float64,
+        )
     expected_water_cells = int(np.sum(~target_land))
     if sst_remap_policy != "same-surface water support; RBF baseline on land":
         raise ValueError("SST input lacks the same-surface remapping contract")
+    if _normalized_time(sst_valid_time) != when:
+        raise ValueError("SST provenance time differs from forcing valid time")
+    if sst_source_variable != "SKT":
+        raise ValueError("SST input does not identify native SKT as its source")
     if not sst_native_source_sha256:
         raise ValueError("SST input lacks native-source provenance")
     if sst_water_cell_count != expected_water_cells:
@@ -289,6 +314,34 @@ def write_hicar_forcing_record(
         sst_maximum_fallback_distance_km < 0.0
     ):
         raise ValueError("SST fallback distance is missing or invalid")
+    if sst_global_fallback_mask.shape != target_land.shape or (
+        sst_global_fallback_distance_km.shape != target_land.shape
+    ):
+        raise ValueError("SST fallback provenance shape differs from the runtime domain")
+    if np.any(sst_global_fallback_mask & target_land):
+        raise ValueError("SST global fallback includes target land cells")
+    if int(np.count_nonzero(sst_global_fallback_mask)) != (
+        sst_water_global_fallback_count
+    ):
+        raise ValueError("SST global fallback mask disagrees with its count")
+    if np.any(~np.isfinite(sst_global_fallback_distance_km[sst_global_fallback_mask])) or (
+        np.any(sst_global_fallback_distance_km[sst_global_fallback_mask] < 0.0)
+    ):
+        raise ValueError("SST global fallback distances are invalid")
+    if np.any(np.isfinite(sst_global_fallback_distance_km[~sst_global_fallback_mask])):
+        raise ValueError("SST fallback distances are defined outside its fallback mask")
+    expected_global_maximum = (
+        float(np.max(sst_global_fallback_distance_km[sst_global_fallback_mask]))
+        if sst_water_global_fallback_count
+        else 0.0
+    )
+    if not np.isclose(
+        sst_maximum_global_fallback_distance_km,
+        expected_global_maximum,
+        rtol=0.0,
+        atol=1.0e-9,
+    ):
+        raise ValueError("SST global fallback maximum disagrees with its distance field")
     serialized_hhl, serialized_hfl = forcing_geometry_for_serialization(hhl, hfl)
 
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -322,6 +375,23 @@ def write_hicar_forcing_record(
             sst_variable[0] = sst
             sst_variable.units = "K"
             sst_variable.hicar_support = "water cells"
+            sst_fallback_mask = dataset.createVariable(
+                "SST_global_fallback_mask", "i1", ("y_1", "x_1"), zlib=True
+            )
+            sst_fallback_mask[:] = sst_global_fallback_mask
+            sst_fallback_mask.long_name = (
+                "SST target cells filled from nearest same-surface source outside "
+                "the compact RBF stencil"
+            )
+            sst_fallback_distance = dataset.createVariable(
+                "SST_global_fallback_distance_km",
+                "f8",
+                ("y_1", "x_1"),
+                zlib=True,
+                fill_value=np.nan,
+            )
+            sst_fallback_distance[:] = sst_global_fallback_distance_km
+            sst_fallback_distance.units = "km"
             for name, values in payloads.items():
                 variable = dataset.createVariable(
                     name, "f4", ("time", "z", "y_1", "x_1"), zlib=True
@@ -356,6 +426,9 @@ def write_hicar_forcing_record(
             dataset.source_sha256 = sha256(source_path)
             dataset.static_sha256 = static_digest
             dataset.sst_source_sha256 = sha256(target_sst_path)
+            dataset.sst_target_product_sha256 = sha256(target_sst_path)
+            dataset.sst_valid_time = sst_valid_time
+            dataset.sst_source_variable = sst_source_variable
             dataset.sst_native_source_sha256 = sst_native_source_sha256
             dataset.sst_remap_policy = sst_remap_policy
             dataset.sst_water_cell_count = sst_water_cell_count
@@ -367,6 +440,9 @@ def write_hicar_forcing_record(
             )
             dataset.sst_maximum_fallback_distance_km = (
                 sst_maximum_fallback_distance_km
+            )
+            dataset.sst_maximum_global_fallback_distance_km = (
+                sst_maximum_global_fallback_distance_km
             )
             dataset.target_grid_fingerprint = grid_fingerprint(lat, lon)
             dataset.geometry_serialization = "static_sleve_with_one_ulp_top_cover"

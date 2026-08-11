@@ -722,11 +722,18 @@ class ProductPipelineTests(unittest.TestCase):
                 dataset.createVariable("water_mask", "i1", ("y", "x"))[:] = (
                     landmask < 0.5
                 )
+                dataset.createVariable(
+                    "global_fallback_mask", "i1", ("y", "x")
+                )[:] = 0
+                dataset.createVariable(
+                    "global_fallback_distance_km", "f8", ("y", "x")
+                )[:] = np.nan
                 dataset.product_type = "hicarprep_target_water_temperature"
                 dataset.valid_time = "2020-02-10T01:00:00Z"
                 dataset.static_sha256 = sha256(static)
                 dataset.target_grid_fingerprint = grid_fingerprint(lat, lon)
                 dataset.source_sha256 = "synthetic-native-sst"
+                dataset.source_variable = "SKT"
                 dataset.remap_policy = (
                     "same-surface water support; RBF baseline on land"
                 )
@@ -734,6 +741,7 @@ class ProductPipelineTests(unittest.TestCase):
                 dataset.water_local_fallback_count = 0
                 dataset.water_global_fallback_count = 0
                 dataset.maximum_fallback_distance_km = 0.0
+                dataset.maximum_global_fallback_distance_km = 0.0
             state = {
                 "T": np.full((levels, ny, nx), 280.0),
                 "P": np.full((levels, ny, nx), 90_000.0),
@@ -797,6 +805,21 @@ class ProductPipelineTests(unittest.TestCase):
                 self.assertEqual(dataset.sst_water_cell_count, 1)
                 self.assertEqual(dataset.sst_water_global_fallback_count, 0)
                 self.assertEqual(dataset.sst_maximum_fallback_distance_km, 0.0)
+                self.assertEqual(
+                    dataset.sst_maximum_global_fallback_distance_km,
+                    0.0,
+                )
+                np.testing.assert_array_equal(
+                    dataset["SST_global_fallback_mask"][:],
+                    np.zeros((ny, nx), dtype=np.int8),
+                )
+                self.assertTrue(
+                    np.isnan(
+                        np.ma.asarray(
+                            dataset["SST_global_fallback_distance_km"][:]
+                        ).filled(np.nan)
+                    ).all()
+                )
                 valid = netCDF4.num2date(
                     dataset["time"][0], dataset["time"].units, dataset["time"].calendar
                 )

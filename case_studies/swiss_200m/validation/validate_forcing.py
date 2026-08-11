@@ -103,6 +103,17 @@ def main() -> int:
             raise SystemExit("forcing lacks exact valid-time SST provenance")
         if not str(getattr(forcing, "sst_native_source_sha256", "")):
             raise SystemExit("forcing lacks native SST-source provenance")
+        if str(getattr(forcing, "sst_target_product_sha256", "")) != str(
+            getattr(forcing, "sst_source_sha256", "")
+        ):
+            raise SystemExit("forcing target-SST product identity is inconsistent")
+        if str(getattr(forcing, "sst_source_variable", "")) != "SKT":
+            raise SystemExit("forcing SST does not identify native SKT as its source")
+        sst_valid_time = datetime.fromisoformat(
+            str(getattr(forcing, "sst_valid_time", "")).replace("Z", "+00:00")
+        ).replace(tzinfo=None)
+        if sst_valid_time != valid:
+            raise SystemExit("forcing SST provenance time differs from forcing time")
         if str(getattr(forcing, "sst_remap_policy", "")) != (
             "same-surface water support; RBF baseline on land"
         ):
@@ -128,6 +139,50 @@ def main() -> int:
             raise SystemExit("SST fallback counts are inconsistent")
         if not np.isfinite(fallback_distance) or fallback_distance < 0.0:
             raise SystemExit("SST fallback distance is missing or invalid")
+        for name in ("SST_global_fallback_mask", "SST_global_fallback_distance_km"):
+            if name not in forcing.variables:
+                raise SystemExit(f"forcing lacks {name}")
+        if forcing["SST_global_fallback_mask"].dimensions != ("y_1", "x_1") or (
+            forcing["SST_global_fallback_distance_km"].dimensions
+            != ("y_1", "x_1")
+        ):
+            raise SystemExit("SST fallback provenance is not on the target grid")
+        global_fallback_mask = np.asarray(
+            forcing["SST_global_fallback_mask"][:], dtype=bool
+        )
+        global_fallback_distance = np.asarray(
+            np.ma.asarray(forcing["SST_global_fallback_distance_km"][:]).filled(
+                np.nan
+            ),
+            dtype=np.float64,
+        )
+        if np.any(global_fallback_mask & ~water):
+            raise SystemExit("SST global fallback includes target land cells")
+        if int(np.count_nonzero(global_fallback_mask)) != global_fallback_count:
+            raise SystemExit("SST global fallback mask disagrees with its count")
+        if np.any(~np.isfinite(global_fallback_distance[global_fallback_mask])) or (
+            np.any(global_fallback_distance[global_fallback_mask] < 0.0)
+        ):
+            raise SystemExit("SST global fallback distances are invalid")
+        if np.any(np.isfinite(global_fallback_distance[~global_fallback_mask])):
+            raise SystemExit("SST fallback distances exist outside the fallback mask")
+        expected_global_maximum = (
+            float(np.max(global_fallback_distance[global_fallback_mask]))
+            if global_fallback_count
+            else 0.0
+        )
+        reported_global_maximum = float(
+            getattr(forcing, "sst_maximum_global_fallback_distance_km", np.nan)
+        )
+        if not np.isclose(
+            reported_global_maximum,
+            expected_global_maximum,
+            rtol=0.0,
+            atol=1.0e-9,
+        ):
+            raise SystemExit(
+                "SST global fallback maximum disagrees with its distance field"
+            )
         hhl = np.asarray(forcing["HHL"][:])
         hfl = np.asarray(forcing["HFL"][:])
         if np.any(np.diff(hhl, axis=0) <= 0.0) or np.any(np.diff(hfl, axis=0) <= 0.0):
