@@ -71,7 +71,9 @@ def test_repair_replaces_only_geometry_and_rebinds_boundary(tmp_path: Path) -> N
         sst = dataset.createVariable("SST", "f4", ("time", "y_1", "x_1"))
         sst[:] = 277.0
         sst.units = "K"
-        dataset.sst_source_sha256 = "synthetic-target-sst"
+            dataset.sst_source_sha256 = "synthetic-target-sst"
+            dataset.target_w_vertical_coordinate = "authoritative_static_HFL"
+            dataset.target_w_terrain_wind_basis = "HICAR_grid_relative"
     original_payload = sha256(forcing)
 
     with netCDF4.Dataset(boundary, "w") as dataset:
