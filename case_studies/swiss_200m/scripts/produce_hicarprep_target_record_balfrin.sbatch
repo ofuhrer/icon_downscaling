@@ -55,6 +55,8 @@ trap 'rm -rf "$work"' EXIT
 native="$work/icon_native.nc"
 surface_grib="$work/skt.grib"
 target_sst="$work/target_sst.nc"
+staged_output="$work/$(basename "$output")"
+staged_boundary="$work/$(basename "$boundary")"
 
 REPO_ROOT="$repo_root" \
 ICON_ATMOSPHERE_OUTPUT="$native" \
@@ -94,8 +96,10 @@ test -z "$vector_weights" || vector_args=(--vector-weights "$vector_weights")
 "$python" "$repo_root/scripts/hicarprep.py" prepare-hicar-forcing \
   --icon-state "$native" --static "$static" --weights "$weights" \
   --target-sst "$target_sst" "${vector_args[@]}" \
-  --output "$output" --boundary "$boundary"
+  --output "$staged_output" --boundary "$staged_boundary"
 "$python" "$repo_root/case_studies/swiss_200m/validation/validate_forcing.py" \
-  --forcing-file "$output" --boundary-file "$boundary" \
+  --forcing-file "$staged_output" --boundary-file "$staged_boundary" \
   --static-file "$static" --expected-valid-time "$valid"
+mv "$staged_output" "$output"
+mv "$staged_boundary" "$boundary"
 touch "$output.ready" "$boundary.ready"

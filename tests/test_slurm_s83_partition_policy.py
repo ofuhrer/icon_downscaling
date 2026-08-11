@@ -26,3 +26,17 @@ def test_submission_scripts_check_exact_s83_or_all() -> None:
         assert "AllowGroups=ALL" in text
         assert "AllowGroups=s83" in text
         assert "s83opr" not in text and "s83disp" not in text
+
+
+def test_hicarprep_record_is_validated_before_publication() -> None:
+    text = (
+        ROOT
+        / "case_studies/swiss_200m/scripts/produce_hicarprep_target_record_balfrin.sbatch"
+    ).read_text()
+    assert '--output "$staged_output" --boundary "$staged_boundary"' in text
+    assert '--forcing-file "$staged_output" --boundary-file "$staged_boundary"' in text
+    validation = text.index('--forcing-file "$staged_output"')
+    publish_forcing = text.index('mv "$staged_output" "$output"')
+    publish_boundary = text.index('mv "$staged_boundary" "$boundary"')
+    ready = text.index('touch "$output.ready" "$boundary.ready"')
+    assert validation < publish_forcing < publish_boundary < ready
