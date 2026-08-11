@@ -20,13 +20,15 @@ SPEC.loader.exec_module(MODULE)
 
 def make_inputs(tmp_path, *, report_times=None, report_elevation=1_000.0):
     static = tmp_path / "static.nc"
-    output = tmp_path / "output.nc"
+    previous_output = tmp_path / "previous_segment.nc"
+    current_output = tmp_path / "current_segment.nc"
     observations = tmp_path / "observations.csv"
     evaluator = tmp_path / "evaluator.json"
     diagnostic = tmp_path / "diagnostic.json"
 
-    latitude = np.repeat(np.linspace(46.0, 46.06, 7)[:, None], 7, axis=1)
-    longitude = np.repeat(np.linspace(7.0, 7.06, 7)[None, :], 7, axis=0)
+    y, x = np.mgrid[:7, :7]
+    latitude = 46.0 + 0.01 * y - 0.005 * x
+    longitude = 7.0 + 0.01 * x
     terrain = np.full((7, 7), 500.0, dtype=np.float32)
     terrain[3, 3] = 1_000.0
     with netCDF4.Dataset(static, "w") as dataset:
@@ -37,19 +39,27 @@ def make_inputs(tmp_path, *, report_times=None, report_elevation=1_000.0):
         dataset.createVariable("lon", "f8", ("y", "x"))[:] = longitude
         dataset.createVariable("topo", "f4", ("y", "x"))[:] = terrain
 
-    with netCDF4.Dataset(output, "w") as dataset:
-        dataset.createDimension("time", 2)
-        dataset.createDimension("y", 7)
-        dataset.createDimension("x", 7)
-        time = dataset.createVariable("time", "f8", ("time",))
-        time.units = "hours since 2020-10-02 00:00:00"
-        time[:] = [0.432 / 3600.0, 1.0 + 0.432 / 3600.0]
-        dataset.createVariable("lat", "f8", ("y", "x"))[:] = latitude
-        dataset.createVariable("lon", "f8", ("y", "x"))[:] = longitude
-        u = np.ones((2, 7, 7), dtype=np.float32)
-        u[:, 3, 3] = 3.0
-        dataset.createVariable("u10m", "f4", ("time", "y", "x"))[:] = u
-        dataset.createVariable("v10m", "f4", ("time", "y", "x"))[:] = 0.0
+    sine, cosine = MODULE.hicar_grid_rotation(latitude, longitude, dx_m=200.0)
+    earth_u = np.ones((7, 7), dtype=np.float64)
+    earth_u[3, 3] = 3.0
+    grid_u = earth_u * cosine
+    grid_v = earth_u * sine
+
+    def write_output(path, hours):
+        with netCDF4.Dataset(path, "w") as dataset:
+            dataset.createDimension("time", len(hours))
+            dataset.createDimension("y", 7)
+            dataset.createDimension("x", 7)
+            time = dataset.createVariable("time", "f8", ("time",))
+            time.units = "hours since 2020-10-02 00:00:00"
+            time[:] = np.asarray(hours) + 0.432 / 3600.0
+            dataset.createVariable("lat", "f8", ("y", "x"))[:] = latitude
+            dataset.createVariable("lon", "f8", ("y", "x"))[:] = longitude
+            dataset.createVariable("u10m", "f4", ("time", "y", "x"))[:] = grid_u
+            dataset.createVariable("v10m", "f4", ("time", "y", "x"))[:] = grid_v
+
+    write_output(previous_output, np.arange(6) / 6.0)
+    write_output(current_output, [1.0])
 
     header = [
         "meas_site", "termin", "nat_abbr",
@@ -58,7 +68,7 @@ def make_inputs(tmp_path, *, report_times=None, report_elevation=1_000.0):
     ]
     rows = [
         ["1", "20201002000000", "RID", "1.0", "", "", "4", "", "270", "", "", "4", ""],
-        ["1", "20201002010000", "RID", "1.0", "", "", "3", "", "270", "", "", "4", ""],
+        ["1", "20201002010000", "RID", "1.0", "", "", "4", "", "270", "", "", "4", ""],
     ]
     observations.write_text(
         ";".join(header)
@@ -79,7 +89,7 @@ def make_inputs(tmp_path, *, report_times=None, report_elevation=1_000.0):
     evaluator.write_text(
         json.dumps(
             {
-                "schema_version": 1,
+                "schema_version": 2,
                 "issues": [],
                 "matched_model_times": matched_times,
                 "station_mapping": {
@@ -101,25 +111,27 @@ def make_inputs(tmp_path, *, report_times=None, report_elevation=1_000.0):
                 },
                 "site_metrics": {
                     "RID:1": {
-                        "hicar": {"wind_vector": vector_metric(2, 3.0)},
-                        "rea_l": {"wind_vector": vector_metric(2, 1.0)},
+                        "hicar": {"wind_vector": vector_metric(1, 3.0)},
+                        "rea_l": {"wind_vector": vector_metric(1, 1.0)},
                     }
                 },
             }
         )
     )
-    return static, output, observations, evaluator, diagnostic
+    return static, (previous_output, current_output), observations, evaluator, diagnostic
 
 
-def arguments(static, output, observations, evaluator, diagnostic):
-    return [
+def arguments(static, outputs, observations, evaluator, diagnostic):
+    result = [
         "--evaluator-report", str(evaluator),
         "--static-file", str(static),
-        "--output-file", str(output),
         "--observations", str(observations),
         "--report", str(diagnostic),
         "--include-optimistic-best-cell",
     ]
+    for output in outputs:
+        result.extend(["--output-file", str(output)])
+    return result
 
 
 def test_streaming_footprint_metrics_and_quality_flags(tmp_path):
@@ -139,24 +151,29 @@ def test_streaming_footprint_metrics_and_quality_flags(tmp_path):
     assert small["geometry"]["expected_cell_count"] == 13
     assert small["geometry"]["too_small"] is False
     assert small["valid_observation_count"] == 1
-    assert math.isclose(small["nearest_cell"]["vector_rmse_m_s"], 2.0)
     assert math.isclose(
-        small["footprint_mean_vector"]["vector_rmse_m_s"], 2.0 / 13.0
+        small["nearest_cell"]["vector_rmse_m_s"], 2.0, rel_tol=1.0e-6
+    )
+    assert math.isclose(
+        small["footprint_mean_vector"]["vector_rmse_m_s"],
+        2.0 / 13.0,
+        rel_tol=1.0e-6,
     )
     distribution = small["fixed_cell_vector_rmse_distribution_m_s"]
     assert distribution["complete_cell_count"] == 13
-    assert math.isclose(distribution["median"], 0.0, abs_tol=1.0e-12)
-    assert math.isclose(distribution["p90"], 0.0, abs_tol=1.0e-12)
+    assert math.isclose(distribution["median"], 0.0, abs_tol=1.0e-6)
+    assert math.isclose(distribution["p90"], 0.0, abs_tol=1.0e-6)
     assert math.isclose(
         small["optimistic_post_hoc_best_fixed_cell"]["vector_rmse_m_s"],
         0.0,
-        abs_tol=1.0e-12,
+        abs_tol=1.0e-6,
     )
     assert site["footprints"]["1"]["geometry"]["too_small"] is True
-    assert payload["data_quality"]["model_times_exactly_match_evaluator"] is True
-    assert payload["data_quality"]["missing_qc_observation_times_by_selected_site"] == {
-        "RID:1": ["2020-10-02T01:00:00+00:00"]
-    }
+    assert payload["data_quality"]["required_ten_minute_samples_complete"] is True
+    assert payload["data_quality"]["scored_hour_count"] == 1
+    assert payload["data_quality"]["required_ten_minute_sample_count"] == 6
+    assert payload["data_quality"]["unused_input_time_count"] == 1
+    assert payload["data_quality"]["missing_qc_observation_times_by_selected_site"] == {}
 
 
 def test_rejects_static_report_grid_identity_mismatch(tmp_path):
@@ -168,12 +185,16 @@ def test_rejects_static_report_grid_identity_mismatch(tmp_path):
     assert not inputs[-1].exists()
 
 
-def test_rejects_model_times_that_do_not_exactly_match_evaluator(tmp_path):
+def test_rejects_missing_ten_minute_samples_for_evaluator_hour(tmp_path):
     inputs = make_inputs(
-        tmp_path, report_times=["2020-10-02T00:00:00+00:00"]
+        tmp_path,
+        report_times=[
+            "2020-10-02T00:00:00+00:00",
+            "2020-10-02T02:00:00+00:00",
+        ],
     )
 
-    with pytest.raises(ValueError, match="do not exactly equal"):
+    with pytest.raises(ValueError, match="lacks evaluator-required ten-minute"):
         MODULE.main(arguments(*inputs))
 
     assert not inputs[-1].exists()

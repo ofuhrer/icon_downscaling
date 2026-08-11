@@ -12,16 +12,26 @@ from __future__ import annotations
 import argparse
 import csv
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import math
 import os
 from pathlib import Path
+import sys
 from tempfile import NamedTemporaryFile
 from typing import Any
 
 import netCDF4
 import numpy as np
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from preprocessing.hicarprep import (  # noqa: E402
+    grid_to_earth_wind,
+    hicar_grid_rotation,
+)
 
 
 FOOTPRINT_RADII_KM = (0.4, 1.0)
@@ -162,6 +172,8 @@ def wind_vector_metric(values: dict) -> tuple[int, float] | None:
 
 def load_evaluator_report(path: Path, worst_site_count: int) -> tuple[dict, list[dict], dict]:
     payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("schema_version") != 2:
+        raise ValueError("footprint diagnostics require evaluator schema version 2")
     if payload.get("issues"):
         raise ValueError(f"evaluator report contains issues: {payload['issues']}")
     mapping = payload.get("station_mapping", {})
@@ -448,7 +460,7 @@ def build_footprint_spec(
 def validate_static_and_build_accumulators(
     static_path: Path,
     selected_sites: list[dict],
-) -> tuple[tuple[int, int], dict[str, dict], dict]:
+) -> tuple[tuple[int, int], dict[str, dict], dict, tuple[np.ndarray, np.ndarray]]:
     site_runtime: dict[str, dict] = {}
     with netCDF4.Dataset(static_path) as dataset:
         for name in ("lat", "lon", "topo"):
@@ -463,8 +475,13 @@ def validate_static_and_build_accumulators(
         dx_m = finite_float(getattr(dataset, "hicar_dx_m", None))
         if dx_m is None or dx_m <= 0.0:
             raise ValueError("static file lacks a positive hicar_dx_m")
-        latitude_mean = float(np.nanmean(latitude[:]))
+        latitude_values = read_float_values(latitude, slice(None))
+        longitude_values = read_float_values(longitude, slice(None))
+        latitude_mean = float(np.nanmean(latitude_values))
         longitude_scale = 111.32 * math.cos(math.radians(latitude_mean))
+        grid_sine, grid_cosine = hicar_grid_rotation(
+            latitude_values, longitude_values, dx_m=dx_m
+        )
 
         for site in selected_sites:
             key = site["key"]
@@ -513,17 +530,16 @@ def validate_static_and_build_accumulators(
         "dx_m": dx_m,
         "static_file": str(static_path.resolve()),
         "mapping_identity_verified": True,
-    }
+    }, (grid_sine, grid_cosine)
 
 
 def inventory_outputs(
     paths: list[Path],
     grid_shape: tuple[int, int],
     site_runtime: dict[str, dict],
-) -> tuple[list[tuple[Path, int, datetime]], list[dict]]:
-    records: list[tuple[Path, int, datetime]] = []
+) -> tuple[dict[datetime, tuple[Path, int]], list[dict]]:
+    records: dict[datetime, tuple[Path, int]] = {}
     inventory = []
-    seen: dict[datetime, Path] = {}
     for path in paths:
         with netCDF4.Dataset(path) as dataset:
             for name in ("time", "u10m", "v10m", "lat", "lon"):
@@ -560,12 +576,12 @@ def inventory_outputs(
             ):
                 raise ValueError(f"HICAR output {path} time dimension is inconsistent")
             for index, valid in enumerate(times):
-                if valid in seen:
+                if valid in records:
                     raise ValueError(
-                        f"duplicate HICAR time {valid.isoformat()} in {seen[valid]} and {path}"
+                        f"duplicate HICAR time {valid.isoformat()} in "
+                        f"{records[valid][0]} and {path}"
                     )
-                seen[valid] = path
-                records.append((path, index, valid))
+                records[valid] = (path, index)
             inventory.append(
                 {
                     "path": str(path.resolve()),
@@ -574,8 +590,72 @@ def inventory_outputs(
                     "last_time": times[-1].isoformat() if times else None,
                 }
             )
-    records.sort(key=lambda value: value[2])
     return records, inventory
+
+
+def hourly_sample_times(valid: datetime) -> tuple[datetime, ...]:
+    """Six ending-ten-minute timestamps used by the station evaluator."""
+    return tuple(
+        valid - timedelta(minutes=offset)
+        for offset in (50, 40, 30, 20, 10, 0)
+    )
+
+
+def read_hourly_earth_wind(
+    records: dict[datetime, tuple[Path, int]],
+    valid: datetime,
+    grid_sine: np.ndarray,
+    grid_cosine: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Reproduce the evaluator's hourly scalar-speed/vector-direction wind."""
+    sum_u = None
+    sum_v = None
+    sum_speed = None
+    current_path = None
+    dataset = None
+    try:
+        for sample_time in hourly_sample_times(valid):
+            path, index = records[sample_time]
+            if path != current_path:
+                if dataset is not None:
+                    dataset.close()
+                dataset = netCDF4.Dataset(path)
+                current_path = path
+            assert dataset is not None
+            grid_u = read_float_values(dataset.variables["u10m"], index)
+            grid_v = read_float_values(dataset.variables["v10m"], index)
+            earth_u, earth_v = grid_to_earth_wind(
+                grid_u, grid_v, grid_sine, grid_cosine
+            )
+            speed = np.hypot(earth_u, earth_v)
+            if sum_u is None:
+                sum_u = np.zeros_like(earth_u)
+                sum_v = np.zeros_like(earth_v)
+                sum_speed = np.zeros_like(speed)
+            sum_u += earth_u
+            sum_v += earth_v
+            sum_speed += speed
+    finally:
+        if dataset is not None:
+            dataset.close()
+    assert sum_u is not None and sum_v is not None and sum_speed is not None
+    mean_u = sum_u / 6.0
+    mean_v = sum_v / 6.0
+    scalar_speed = sum_speed / 6.0
+    vector_speed = np.hypot(mean_u, mean_v)
+    hourly_u = np.divide(
+        mean_u * scalar_speed,
+        vector_speed,
+        out=np.zeros_like(mean_u),
+        where=vector_speed > 0.0,
+    )
+    hourly_v = np.divide(
+        mean_v * scalar_speed,
+        vector_speed,
+        out=np.zeros_like(mean_v),
+        where=vector_speed > 0.0,
+    )
+    return hourly_u, hourly_v
 
 
 def process_outputs(
@@ -584,46 +664,53 @@ def process_outputs(
     observations: dict,
     grid_shape: tuple[int, int],
     site_runtime: dict[str, dict],
+    grid_rotation: tuple[np.ndarray, np.ndarray],
 ) -> tuple[list[dict], dict]:
     records, inventory = inventory_outputs(paths, grid_shape, site_runtime)
-    model_times = [value[2] for value in records]
-    if model_times != report_times:
-        missing = sorted(set(report_times) - set(model_times))
-        extra = sorted(set(model_times) - set(report_times))
+    if len(report_times) < 2:
+        raise ValueError("evaluator matched times lack a baseline plus scored hour")
+    scored_times = report_times[1:]
+    required_times = {
+        sample_time
+        for valid in scored_times
+        for sample_time in hourly_sample_times(valid)
+    }
+    missing = sorted(required_times - set(records))
+    if missing:
         raise ValueError(
-            "HICAR output times do not exactly equal evaluator matched times; "
-            f"missing={[value.isoformat() for value in missing]}, "
-            f"extra={[value.isoformat() for value in extra]}"
+            "HICAR output lacks evaluator-required ten-minute wind samples: "
+            + ", ".join(value.isoformat() for value in missing)
         )
 
-    by_file: dict[Path, list[tuple[int, datetime]]] = {}
-    for path, index, valid in records:
-        by_file.setdefault(path, []).append((index, valid))
     missing_observations: dict[str, list[str]] = {
         key: [] for key in site_runtime
     }
-    for path in paths:
-        with netCDF4.Dataset(path) as dataset:
-            for index, valid in by_file.get(path, []):
-                u_field = read_float_values(dataset.variables["u10m"], index)
-                v_field = read_float_values(dataset.variables["v10m"], index)
-                for key, runtime in site_runtime.items():
-                    observed = observations.get((valid, key))
-                    if observed is None:
-                        missing_observations[key].append(valid.isoformat())
-                        continue
-                    for accumulator in runtime["footprints"].values():
-                        accumulator.add(
-                            u_field,
-                            v_field,
-                            runtime["y_index"],
-                            runtime["x_index"],
-                            observed[0],
-                            observed[1],
-                        )
+    grid_sine, grid_cosine = grid_rotation
+    for valid in scored_times:
+        u_field, v_field = read_hourly_earth_wind(
+            records, valid, grid_sine, grid_cosine
+        )
+        for key, runtime in site_runtime.items():
+            observed = observations.get((valid, key))
+            if observed is None:
+                missing_observations[key].append(valid.isoformat())
+                continue
+            for accumulator in runtime["footprints"].values():
+                accumulator.add(
+                    u_field,
+                    v_field,
+                    runtime["y_index"],
+                    runtime["x_index"],
+                    observed[0],
+                    observed[1],
+                )
     return inventory, {
-        "model_times_exactly_match_evaluator": True,
-        "matched_time_count": len(report_times),
+        "required_ten_minute_samples_complete": True,
+        "baseline_time": report_times[0].isoformat(),
+        "scored_hour_count": len(scored_times),
+        "required_ten_minute_sample_count": len(required_times),
+        "input_time_count": len(records),
+        "unused_input_time_count": len(set(records) - required_times),
         "missing_qc_observation_times_by_selected_site": {
             key: values for key, values in missing_observations.items() if values
         },
@@ -671,8 +758,8 @@ def main(argv: list[str] | None = None) -> int:
     if report_times != sorted(set(report_times)):
         raise ValueError("evaluator matched_model_times are duplicate or unordered")
     observations, observation_inventory = read_wind_observations(args.observations)
-    grid_shape, site_runtime, static_identity = validate_static_and_build_accumulators(
-        args.static_file, selected_sites
+    grid_shape, site_runtime, static_identity, grid_rotation = (
+        validate_static_and_build_accumulators(args.static_file, selected_sites)
     )
     output_inventory, pairing_quality = process_outputs(
         args.output_file,
@@ -680,6 +767,7 @@ def main(argv: list[str] | None = None) -> int:
         observations,
         grid_shape,
         site_runtime,
+        grid_rotation,
     )
 
     site_results = []
@@ -719,15 +807,15 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "interpretation": (
             "Point-to-grid representativeness diagnostic. Nearest-cell values "
             "remain the primary station score; footprint means and fixed-cell "
             "distributions quantify location sensitivity and are not an "
-            "alternative observational truth."
+            "alternative observational truth. HICAR winds use the evaluator's "
+            "earth-relative six-sample ending-hour definition."
         ),
         "limitations": [
-            "HICAR winds are instantaneous while SwissMetNet winds are hourly aggregates.",
             "Native REA-L station samples have no equivalent fine-grid footprint.",
             "Any optional best cell is selected after seeing observations and is optimistic.",
         ],
@@ -756,7 +844,7 @@ def main(argv: list[str] | None = None) -> int:
     }
     atomic_json_dump(args.report, payload)
     print(
-        f"Diagnosed {len(site_results)} stations at {len(report_times)} times; "
+        f"Diagnosed {len(site_results)} stations at {len(report_times) - 1} hours; "
         f"wrote {args.report}"
     )
     return 0
