@@ -1,0 +1,33 @@
+{
+  "root": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/smoke/autumn_daylight/segmented",
+  "repo_root": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/source/coordinator",
+  "forcing_dir": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/input/forcing",
+  "python": "/scratch/mch/olifu/icon_hicar/venv_static/bin/python",
+  "hicar_executable": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/build/hicar-gpu-nccl/HICAR_gpu",
+  "hicar_support_dir": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/source/coordinator/HICAR/run",
+  "hicar_build_provenance": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/build/hicar-gpu-nccl/hicar_build_provenance.txt",
+  "rbf_weights": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/input/weights/rea_l_to_smn_40km_200m_reference.nc",
+  "segment_hours": 1,
+  "full_season_input_lists": true,
+  "acc_synchronous": false,
+  "max_attempts": 2,
+  "input_partitions": ["pp-long"],
+  "max_active_inputs": 4,
+  "input_cpus": 4,
+  "input_memory": "128G",
+  "input_time": "06:00:00",
+  "model_nodes": 12,
+  "model_time": "02:00:00",
+  "output_profile": "evaluation",
+  "output_interval": 600,
+  "radiation_update_interval": 600,
+  "alpha_const": -1.0,
+  "seasons": [
+    {
+      "name": "autumn",
+      "start": "2020-10-01T09:30:00",
+      "end": "2020-10-01T11:30:00",
+      "static": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/input/runtime/domain_runtime_smn_20201001_0000_reference.nc"
+    }
+  ]
+}
