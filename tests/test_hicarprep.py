@@ -45,6 +45,7 @@ from preprocessing.hicarprep.remap import (
 )
 from preprocessing.hicarprep.vertical import (
     adjust_vertical_velocity,
+    interpolate_interface_w_to_hfl,
     hydrostatic_residual,
     reconstruct_column_state,
     saturation_specific_humidity,
@@ -518,6 +519,17 @@ class VerticalTransformTests(unittest.TestCase):
         self.assertTrue(np.all(adjusted[1] > 1.0))
         np.testing.assert_allclose(adjusted[-1], 0.0)
 
+    def test_interface_w_uses_authoritative_hfl_not_arithmetic_midpoints(self) -> None:
+        hhl = np.array([0.0, 100.0, 300.0])[:, None, None]
+        hfl = np.array([25.0, 150.0])[:, None, None]
+        interface_w = np.array([0.0, 10.0, 30.0])[:, None, None]
+        mass_w = interpolate_interface_w_to_hfl(
+            target_hhl_m=hhl,
+            target_hfl_m=hfl,
+            interface_w_ms=interface_w,
+        )
+        np.testing.assert_allclose(mass_w[:, 0, 0], [2.5, 15.0])
+
     def test_above_source_top_is_rejected(self) -> None:
         source_hhl, t, p, qv = self._source()
         with self.assertRaisesRegex(ValueError, "top"):
@@ -581,6 +593,7 @@ class ProductPipelineTests(unittest.TestCase):
                     np.arange(ny + 1, dtype=np.float64)[None, :, None],
                     (levels, ny + 1, nx),
                 ).copy(),
+                "W": np.full((levels, ny, nx), 0.25),
                 "HHL": hhl,
                 "HFL": hfl,
                 "lat": lat,
@@ -609,6 +622,8 @@ class ProductPipelineTests(unittest.TestCase):
                 )
                 np.testing.assert_allclose(dataset["U"][0, 0, 0], [0.5, 1.5, 2.5])
                 np.testing.assert_allclose(dataset["V"][0, 0, :, 0], [0.5, 1.5])
+                self.assertEqual(dataset["W"].dimensions, ("time", "z", "y_1", "x_1"))
+                np.testing.assert_allclose(dataset["W"][:], 0.25)
                 valid = netCDF4.num2date(
                     dataset["time"][0], dataset["time"].units, dataset["time"].calendar
                 )
@@ -771,6 +786,8 @@ class ProductPipelineTests(unittest.TestCase):
             weights.write(weight_path)
             state, diagnostics = transform_icon_state(source_path, static_path, weights)
             self.assertEqual(diagnostics["source_vertical_order"], "top_to_bottom")
+            self.assertEqual(diagnostics["target_w_vertical_coordinate"], "authoritative_static_HFL")
+            self.assertEqual(state["W"].shape, state["HFL"].shape)
             with netCDF4.Dataset(static_path) as static:
                 np.testing.assert_array_equal(state["HFL"], static["HFL"][:])
                 self.assertFalse(

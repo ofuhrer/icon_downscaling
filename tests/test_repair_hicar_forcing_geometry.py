@@ -54,6 +54,7 @@ def test_repair_replaces_only_geometry_and_rebinds_boundary(tmp_path: Path) -> N
             ("QI", np.zeros_like(payload)),
             ("U", payload),
             ("V", -payload),
+            ("W", np.full_like(payload, 0.2)),
         ):
             dataset.createVariable(name, "f4", ("time", "z", "y_1", "x_1"))[:] = values
         dataset.createVariable("HHL", "f4", ("z_hl", "y_1", "x_1"))[:] = hhl

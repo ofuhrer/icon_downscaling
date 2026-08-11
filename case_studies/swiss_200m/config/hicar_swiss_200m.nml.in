@@ -52,7 +52,7 @@
   qivar = 'QI'
   uvar = 'U'
   vvar = 'V'
-  wvar = ''
+  wvar = 'W'
   hgtvar = 'HSURF'
   zvar = 'HFL'
   latvar = 'lat_1'

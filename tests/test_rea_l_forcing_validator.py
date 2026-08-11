@@ -40,7 +40,8 @@ def files(root: Path, invalid_hfl: bool = False) -> tuple[Path, Path, Path]:
         time = dataset.createVariable("time", "f8", ("time",))
         time.units = "hours since 2020-01-01 00:00:00"; time[:] = 1
         for name, value in (("P", 80000.0), ("T", 270.0), ("QV", .004),
-                            ("QC", 0.0), ("QI", 0.0), ("U", 5.0), ("V", -2.0)):
+                            ("QC", 0.0), ("QI", 0.0), ("U", 5.0), ("V", -2.0),
+                            ("W", 0.2)):
             dataset.createVariable(name, "f4", ("time", "z", "y_1", "x_1"))[:] = value
         hhl = np.array([0.0, 100.0, 300.0])[:, None, None] * np.ones((1, 2, 2))
         valid_top = np.nextafter(np.float32(200.0), np.float32(np.inf))

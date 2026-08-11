@@ -24,7 +24,8 @@ termination.
 - terrain radiation off.
 
 Atmospheric forcing is hicarprep P/T/U/V/QV/QC/QI in dry-air mixing ratios.
-Set `qv_is_spec_humidity=.False.`, `wvar=''`, and
+Terrain-adjusted W is supplied on the authoritative target HFL levels. Set
+`qv_is_spec_humidity=.False.`, `wvar='W'`, and
 `relax_filters=.False.`. Sparse target-grid LBC is the lateral boundary path.
 The RRTMGP block setting is topology-specific: recompute the local block count
 and requalify reproducibility if the domain or compute decomposition changes.

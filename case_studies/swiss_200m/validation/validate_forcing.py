@@ -20,7 +20,7 @@ from preprocessing.hicarprep.pipeline import forcing_geometry_for_serialization
 from preprocessing.hicarprep.products import sha256
 
 
-REQUIRED = ("P", "T", "QV", "QC", "QI", "U", "V", "HFL", "HHL", "HSURF", "FR_LAND")
+REQUIRED = ("P", "T", "QV", "QC", "QI", "U", "V", "W", "HFL", "HHL", "HSURF", "FR_LAND")
 
 
 def main() -> int:
@@ -40,8 +40,6 @@ def main() -> int:
             raise SystemExit("forcing moisture is not in HICAR dry-air mixing ratios")
         if str(getattr(forcing, "static_sha256", "")) != static_sha256:
             raise SystemExit("forcing does not belong to the supplied runtime domain")
-        if "W" in forcing.variables:
-            raise SystemExit("forcing must leave vertical-wind diagnosis to HICAR")
         missing = sorted(set(REQUIRED) - set(forcing.variables))
         if missing:
             raise SystemExit("missing variables: " + ", ".join(missing))
@@ -65,6 +63,7 @@ def main() -> int:
         qv = np.asarray(forcing["QV"][:])
         u = np.asarray(forcing["U"][:])
         v = np.asarray(forcing["V"][:])
+        w = np.asarray(forcing["W"][:])
         if pressure.min() < 100.0 or pressure.max() > 120_000.0:
             raise SystemExit("pressure range is implausible")
         if temperature.min() < 150.0 or temperature.max() > 350.0:
@@ -73,6 +72,10 @@ def main() -> int:
             raise SystemExit("water-vapour range is implausible")
         if np.max(np.hypot(u, v)) > 200.0:
             raise SystemExit("horizontal-wind speed exceeds 200 m s-1")
+        if np.max(np.abs(w)) > 100.0:
+            raise SystemExit("vertical-wind magnitude exceeds 100 m s-1")
+        if forcing["W"].dimensions != ("time", "z", "y_1", "x_1"):
+            raise SystemExit("W must be defined on target HFL mass levels")
         hhl = np.asarray(forcing["HHL"][:])
         hfl = np.asarray(forcing["HFL"][:])
         if np.any(np.diff(hhl, axis=0) <= 0.0) or np.any(np.diff(hfl, axis=0) <= 0.0):

@@ -86,6 +86,34 @@ def adjust_vertical_velocity(
     return w
 
 
+def interpolate_interface_w_to_hfl(
+    *,
+    target_hhl_m: np.ndarray,
+    target_hfl_m: np.ndarray,
+    interface_w_ms: np.ndarray,
+) -> np.ndarray:
+    """Interpolate terrain-adjusted interface W to authoritative HFL heights."""
+    hhl = np.asarray(target_hhl_m, dtype=np.float64)
+    hfl = np.asarray(target_hfl_m, dtype=np.float64)
+    w = np.asarray(interface_w_ms, dtype=np.float64)
+    if hhl.shape != w.shape or hfl.shape != (hhl.shape[0] - 1, *hhl.shape[1:]):
+        raise ValueError("W/HHL interfaces and HFL mass levels are inconsistent")
+    if hhl.ndim != 3 or not np.isfinite(hfl).all():
+        raise ValueError("target W interpolation requires finite three-dimensional geometry")
+    if np.any((hfl <= hhl[:-1]) | (hfl >= hhl[1:])):
+        raise ValueError("every HFL level must lie strictly between its HHL interfaces")
+    result = np.empty_like(hfl)
+    for row in range(hhl.shape[1]):
+        for col in range(hhl.shape[2]):
+            result[:, row, col] = interpolate_height_profile(
+                hhl[:, row, col],
+                w[:, row, col],
+                hfl[:, row, col],
+                monotone=True,
+            )
+    return result
+
+
 def saturation_specific_humidity(temperature_k: np.ndarray, pressure_pa: np.ndarray) -> np.ndarray:
     """Liquid-water saturation specific humidity with safe pressure bounds."""
     temperature_k = np.asarray(temperature_k, dtype=np.float64)

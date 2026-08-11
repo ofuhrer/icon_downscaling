@@ -22,6 +22,7 @@ from .remap import (
 )
 from .vertical import (
     adjust_vertical_velocity,
+    interpolate_interface_w_to_hfl,
     interpolate_height_profile,
     reconstruct_column_state,
 )
@@ -166,7 +167,7 @@ def write_hicar_forcing_record(
     atmosphere. Lateral relaxation remains authoritative in the
     sparse-LBC sequence produced from the same transformed state.
     """
-    required = {"T", "P", "QV", "QC", "QI", "U", "V", "HHL", "HFL", "lat", "lon"}
+    required = {"T", "P", "QV", "QC", "QI", "U", "V", "W", "HHL", "HFL", "lat", "lon"}
     missing = sorted(required - set(state))
     if missing:
         raise ValueError(f"HICAR forcing record lacks target fields: {missing}")
@@ -195,6 +196,7 @@ def write_hicar_forcing_record(
         "QI": np.asarray(state["QI"], dtype=np.float64),
         "U": _mass_grid_wind(np.asarray(state["U"], dtype=np.float64), component="U", target_shape=(ny, nx)),
         "V": _mass_grid_wind(np.asarray(state["V"], dtype=np.float64), component="V", target_shape=(ny, nx)),
+        "W": np.asarray(state["W"], dtype=np.float64),
     }
     for name in OPTIONAL_HYDROMETEORS:
         if name in state:
@@ -267,14 +269,15 @@ def write_hicar_forcing_record(
             for name in ("QV", "QC", "QI", *OPTIONAL_HYDROMETEORS):
                 if name in dataset.variables:
                     dataset[name].units = "kg kg-1 dry air"
-            for name in ("U", "V"):
+            for name in ("U", "V", "W"):
                 dataset[name].units = "m s-1"
             dataset.product_type = "hicarprep_target_forcing_record"
             dataset.hicarprep_product_version = PRODUCT_VERSION
             dataset.valid_time = when.isoformat().replace("+00:00", "Z")
             dataset.water_representation = "dry-air mixing ratio"
             dataset.wind_representation = (
-                "target mass-grid wind; sparse U/V faces reconstructed by midpoint interpolation"
+                "earth-relative U/V and terrain-adjusted W on exact target HFL mass levels; "
+                "HICAR performs final grid rotation and variational projection"
             )
             dataset.lateral_relaxation_authority = "hicarprep sparse_lbc_file_list"
             dataset.source_path = str(source_path)
@@ -682,9 +685,14 @@ def transform_icon_state(
         x_m=x,
         y_m=y,
     )
+    target_w_mass = interpolate_interface_w_to_hfl(
+        target_hhl_m=target_hhl,
+        target_hfl_m=target_hfl,
+        interface_w_ms=target_w,
+    )
     state.update(
         {
-            "W": target_w,
+            "W": target_w_mass,
             "HHL": target_hhl,
             # HICAR evaluates the nonlinear SLEVE mapping at the mass-level
             # reference height.  Except for a linear mapping, that is not the
@@ -708,6 +716,7 @@ def transform_icon_state(
         "terrain_difference_max_m": float(np.max(terrain_differences)),
         "below_source_target_levels": below_count,
         "buried_source_levels_removed": buried_count,
+        "target_w_vertical_coordinate": "authoritative_static_HFL",
         "terrain_columns_lower": cases["lower"],
         "terrain_columns_matched": cases["matched"],
         "terrain_columns_higher": cases["higher"],

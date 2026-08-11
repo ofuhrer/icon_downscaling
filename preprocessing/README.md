@@ -8,8 +8,9 @@ sparse lateral-boundary frame from the same transformed state.
 
 Atmospheric fields are P, T, U, V, QV, QC, QI, HHL and W from native REA-L.
 Operational REA-L lacks QI, so `source-absent-zero` is an explicit source-data
-policy. W is transformed for diagnostics but omitted from regular forcing and
-sparse LBC by default; HICAR diagnoses its dynamically compatible W.
+policy. W is terrain-adjusted, interpolated to the authoritative target HFL
+mass levels, and supplied through regular forcing for HICAR's variational wind
+projection. W is never inserted through sparse LBC.
 
 Typical hourly preparation:
 

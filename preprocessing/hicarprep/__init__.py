@@ -5,7 +5,11 @@ from .products import assemble_hicar_runtime_domain, validate_hicar_runtime_doma
 from .registry import FieldLifetime, FieldRegistry
 from .remap import VectorRBFWeights, RBFWeights, build_rbf_weights, build_vector_rbf_weights
 from .surface import prepare_surface_state
-from .vertical import adjust_vertical_velocity, reconstruct_column_state
+from .vertical import (
+    adjust_vertical_velocity,
+    interpolate_interface_w_to_hfl,
+    reconstruct_column_state,
+)
 
 __all__ = [
     "FieldLifetime",
@@ -18,6 +22,7 @@ __all__ = [
     "build_sleve_geometry",
     "reconstruct_column_state",
     "adjust_vertical_velocity",
+    "interpolate_interface_w_to_hfl",
     "prepare_surface_state",
     "assemble_hicar_runtime_domain",
     "validate_hicar_runtime_domain",

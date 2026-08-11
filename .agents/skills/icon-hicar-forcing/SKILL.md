@@ -25,9 +25,10 @@ domain to create a regular target-grid forcing/clock record and a sparse
 lateral-boundary frame from the same state.
 
 Water variables are converted jointly from moist-air mass fractions to
-dry-air mixing ratios. HICAR reads P/T/QV/QC/QI/U/V and HFL/HHL. W is omitted
-so HICAR diagnoses a dynamically compatible field. Sparse LBC is the only
-lateral-relaxation authority; set `relax_filters=.False.`.
+dry-air mixing ratios. HICAR reads P/T/QV/QC/QI/U/V/W and HFL/HHL. Source W is
+terrain-adjusted and interpolated to the exact target HFL mass levels before
+the variational projection. Sparse LBC contains only T/P/QV/QC/QI and mass-grid
+geometry; it never inserts winds. Set `relax_filters=.False.`.
 
 Scalar RBF caches must come from the conditioned builder: each stencil solve
 has condition number at most `1e10` after the smallest needed diagonal nugget,
