@@ -105,6 +105,7 @@ def main() -> int:
     )
     parser.add_argument("--output-interval", type=int, required=True)
     parser.add_argument("--radiation-update-interval", type=float, default=600.0)
+    parser.add_argument("--alpha-const", type=float, default=1.0)
     parser.add_argument("--forcing-list", type=Path, required=True)
     parser.add_argument("--boundary-list", type=Path, required=True)
     parser.add_argument(
@@ -167,7 +168,7 @@ def main() -> int:
         raise SystemExit("restart physics mismatch: " + json.dumps(mismatches, sort_keys=True))
     with netCDF4.Dataset(args.restart) as restart:
         numeric_physics = {
-            "wind.alpha_const": 1.0,
+            "wind.alpha_const": args.alpha_const,
             "rad.update_interval_rad": args.radiation_update_interval,
             "domain.height_lowest_level": 20.0,
         }

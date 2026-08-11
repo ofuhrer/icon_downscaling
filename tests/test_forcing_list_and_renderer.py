@@ -122,6 +122,33 @@ def test_renderer_accepts_a_causal_radiation_cadence(tmp_path: Path) -> None:
     assert "update_interval_rad = 3600.0" in namelist.read_text()
 
 
+def test_renderer_accepts_dynamic_wind_alpha(tmp_path: Path) -> None:
+    static = tmp_path / "static.nc"
+    static_file(static)
+    pairs = [input_pair(tmp_path, hour) for hour in range(2)]
+    forcing_list = tmp_path / "forcing.txt"
+    boundary_list = tmp_path / "lbc.txt"
+    forcing_list.write_text("".join(f'"{forcing}"\n' for forcing, _ in pairs))
+    boundary_list.write_text("".join(f'"{boundary}"\n' for _, boundary in pairs))
+    namelist = tmp_path / "input.nml"
+    result = subprocess.run(
+        [
+            sys.executable, str(RENDERER), "--static-file", str(static),
+            "--forcing-file-list", str(forcing_list),
+            "--sparse-lbc-file-list", str(boundary_list),
+            "--start-date", "2020-01-01 00:00:00",
+            "--end-date", "2020-01-01 01:00:00",
+            "--output-dir", str(tmp_path / "out"),
+            "--restart-dir", str(tmp_path / "restart"),
+            "--alpha-const", "-1",
+            "--output", str(namelist),
+        ],
+        text=True, capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "alpha_const = -1.0" in namelist.read_text()
+
+
 def test_renderer_rejects_static_geometry_that_does_not_match_the_namelist(
     tmp_path: Path,
 ) -> None:

@@ -74,6 +74,12 @@ def main() -> int:
     )
     parser.add_argument("--model-debug", action="store_true")
     parser.add_argument("--disable-sx", action="store_true")
+    parser.add_argument(
+        "--alpha-const",
+        type=float,
+        default=1.0,
+        help="fixed wind-solver alpha in 0.01..1, or -1 for dynamic Froude alpha",
+    )
     parser.add_argument("--cfl-reduction-factor", type=float, default=1.6)
     parser.add_argument(
         "--require-land-climatology",
@@ -94,6 +100,8 @@ def main() -> int:
         raise SystemExit("output and restart intervals must be positive")
     if not 0.0 < args.cfl_reduction_factor <= 1.6:
         raise SystemExit("--cfl-reduction-factor must be in (0, 1.6]")
+    if args.alpha_const != -1.0 and not 0.01 <= args.alpha_const <= 1.0:
+        raise SystemExit("--alpha-const must be -1 (dynamic) or in [0.01, 1]")
     if not args.static_file.is_file():
         raise SystemExit(f"missing runtime domain: {args.static_file}")
     land_climatology_lines: list[str] = []
@@ -230,6 +238,7 @@ def main() -> int:
         "@ADVECT_DENSITY@": ".True.",
         "@MODEL_DEBUG@": ".True." if args.model_debug else ".False.",
         "@SX@": ".False." if args.disable_sx else ".True.",
+        "@ALPHA_CONST@": str(args.alpha_const),
         "@CFL_REDUCTION_FACTOR@": str(args.cfl_reduction_factor),
         "@SNOW_TEMPERATURE_LINE@": snow_temperature_line,
         "@LAND_CLIMATOLOGY_LINES@": "\n".join(land_climatology_lines),

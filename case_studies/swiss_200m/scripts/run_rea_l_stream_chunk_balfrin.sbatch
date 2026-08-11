@@ -44,6 +44,7 @@ output_interval=${OUTPUT_INTERVAL:-3600}
 radiation_update_interval=${HICAR_RADIATION_UPDATE_INTERVAL:-600.0}
 model_debug=${HICAR_MODEL_DEBUG:-0}
 disable_sx=${HICAR_DISABLE_SX:-0}
+alpha_const=${HICAR_ALPHA_CONST:-1.0}
 allow_input_superset=${HICAR_ALLOW_INPUT_SUPERSET:-0}
 acc_synchronous=${HICAR_ACC_SYNCHRONOUS:-0}
 cfl_reduction=${HICAR_CFL_REDUCTION_FACTOR:-1.6}
@@ -110,6 +111,7 @@ fi
   --end-date "${model_end/T/ }" \
   --output-profile "$profile" \
   --cfl-reduction-factor "$cfl_reduction" \
+  --alpha-const "$alpha_const" \
   "${debug_args[@]}" \
   "${sx_args[@]}" \
   --output-interval "$output_interval" \
@@ -159,6 +161,7 @@ test -s "$restart" || { echo "missing terminal restart: $restart" >&2; exit 1; }
   --restart-time "$end" \
   --output-interval "$output_interval" --forcing-list "$forcing_list" \
   --radiation-update-interval "$radiation_update_interval" \
+  --alpha-const "$alpha_const" \
   --boundary-list "$lbc_list" "${validation_restart_args[@]}" \
   "${input_validation_args[@]}" \
   >"$run/segment_validation.json"

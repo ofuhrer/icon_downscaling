@@ -121,7 +121,7 @@
 &wind
   Sx = @SX@
   smooth_wind_distance = 500.0
-  alpha_const = 1.0
+  alpha_const = @ALPHA_CONST@
   wind_solver_iterations = 2500
 /
 &output
