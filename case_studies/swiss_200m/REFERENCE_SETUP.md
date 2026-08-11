@@ -30,9 +30,13 @@ surface and terrain-radiation choices but cover much smaller domains.
   `HSURF` at the outer edge and fully high-resolution inward. This is the
   topographic sponge. It is intentionally broader than the 10 km atmospheric
   boundary shoulder.
-- Static land inputs are WorldCover-to-USGS land use, land/water mask and four
-  depth-dependent SoilGrids texture classes. Epoch mismatch, glaciers and
-  unresolved sub-grid lakes remain representativeness uncertainties.
+- Land inputs are WorldCover-to-USGS land use, land/water mask and four
+  depth-dependent SoilGrids texture classes. Invariant mask/soil fields live in
+  the static domain; the 2021-epoch dominant land use and category fractions
+  remain in the matching lifetime-partitioned external product and are
+  materialized at each initialization time. Back-extrapolating that 2021 map to
+  the 2020 cases, glaciers and unresolved sub-grid lakes remain
+  representativeness uncertainties.
 
 ## Vertical grid
 

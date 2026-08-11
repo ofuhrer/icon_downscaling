@@ -94,6 +94,8 @@ than a claimed optimum.
 - Namelist rendering resolves NZ and density advection and rejects unresolved
   tokens or incompatible vertical geometry.
 - Static construction is reproducible and includes authoritative HHL/HFL.
+  Invariant terrain/mask/soil fields and the WorldCover 2021 epoch land-use
+  product are kept separate and are joined explicitly during initialization.
 - Forcing and sparse boundaries are jointly validated before ready markers;
   cache identity includes the complete runtime-domain hash.
 - Target HFL is preserved exactly. The serialized top mass level includes the
