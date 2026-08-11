@@ -65,7 +65,12 @@ than a claimed optimum.
   retained. Cold-cloud and precipitation spin-up remain interpretation limits.
 - The former blank `sst_var` held every lake at 280 K. The reference prescribes
   hourly REA-L skin temperature over source-water support. HICAR still floors
-  SST at 273.15 K, so frozen-lake physics is absent.
+  SST at 273.15 K, so frozen-lake physics is absent. The first five real SST
+  remaps found that 10,773 of 84,346 target water cells (12.77%) lacked water
+  support in the compact REA-L stencil and used a global same-surface fallback,
+  with a maximum distance of 55.67 km. Exact fallback masks and distances are
+  now retained in every forcing record; their lake/station geography must be
+  assessed before scaling the campaign.
 - Conditioned local RBF weights are required. An old nearly singular stencil
   produced a 320 m s-1 wind spike and is invalid. Operators with excessive L1
   amplification are rejected and vector bounds are checked.
@@ -149,9 +154,9 @@ approximation, not a convergence claim. All four season-specific runtime
 domains are complete. The clean final HICAR source is built with NVHPC/OpenACC
 and NCCL; the executable is pinned by checksum.
 
-1. Finish and validate one real hourly W/SST/scalar-LBC product, including SST
-   fallback distances and HICAR ingestion, before producing all 196 seasonal
-   hours.
+1. Finish and validate one real hourly W/SST/scalar-LBC product, including the
+   spatial impact of SST global fallbacks and HICAR ingestion, before producing
+   all 196 seasonal hours.
 2. Repeat a daylight turnover and continuous-versus-restart proof with the
    complete final physics/static/input configuration; also verify the restored
    revised-MM5 option-3 state identities in the resulting restart.
