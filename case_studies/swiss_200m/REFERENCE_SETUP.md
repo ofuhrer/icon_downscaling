@@ -115,11 +115,11 @@ surface and terrain-radiation choices but cover much smaller domains.
 - `dveg=3` uses the class/date-interpolated Noah-MP LAI table and diagnoses
   FVEG. `alb=2` diagnoses soil/snow albedo. External LAI, VEGFRA and static
   ALBEDO are therefore not campaign requirements under this reference.
-- The target land surface-drag choice is the published HICAR revised-MM5
-  option 3 only if the bounded port to the pinned modular Noah-MP passes
-  scalar parity, CPU/GPU and restart tests. Otherwise the campaign uses the
-  supported Noah-MP MOST option 1 and labels this departure explicitly; the
-  current modular dependency must never run its unimplemented option 3.
+- Use the published HICAR revised-MM5 land surface-drag option 3. The missing
+  modular Noah-MP implementation is restored from archived HICAR v2 code by a
+  checksum-pinned patch; stable, neutral and unstable 12/20 m scalar cases
+  match that archived implementation bit-for-bit. The exact NVHPC/OpenACC
+  build and restart trajectory are rechecked before campaign launch.
 
 ## Radiation
 

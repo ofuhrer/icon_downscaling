@@ -116,7 +116,7 @@
   ice_category = 24
   ! Freeze HICAR's effective default rather than relying on namelist fallback.
   ! The pinned Noah-MP implements surface resistances for options 1 and 2.
-  nmp_opt_sfc = 1
+  nmp_opt_sfc = 3
   nmp_dveg = 3
   nmp_opt_crs = 1
   nmp_opt_btr = 2

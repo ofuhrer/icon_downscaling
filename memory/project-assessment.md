@@ -80,10 +80,10 @@ than a claimed optimum.
   RRTMGP and Noah-MP internal snow; no cumulus scheme.
 - Noah-MP keeps untuned table phenology (`dveg=3`) and diagnosed albedo
   (`alb=2`), so external LAI/VEGFRA/static albedo are not campaign inputs.
-- The target land drag is the published revised-MM5 option 3 only after its
-  bounded restoration to the pinned modular Noah-MP passes NVHPC/OpenACC and
-  restart checks. The dependency's unmodified option 3 is incomplete; option
-  1 is the safe fallback.
+- Land drag uses the published revised-MM5 option 3. Its missing modular
+  Noah-MP implementation is restored by a checksum-pinned HICAR patch and
+  matches archived HICAR v2 scalar results bit-for-bit. The exact final
+  NVHPC/OpenACC build and restart trajectory still require qualification.
 - RRTMGP runs every 600 s with one block per rank. Direct, diffuse and reflected
   shortwave plus terrain longwave are enabled after HLM/SVF/slope/aspect are
   generated. The reflected-shortwave cadence defect is fixed in the selected
@@ -134,8 +134,8 @@ curves, and correlations are descriptive rather than rankings.
    20.2 km exterior REA-L terrain band, EGM2008 and 90 azimuths. The 20 km ray
    extent is a documented terrain-radiation approximation, not a convergence
    claim.
-2. Integrate the bounded revised-MM5 option-3 restoration without relying on an
-   unpublished Noah-MP commit, then build the exact clean NVHPC/NCCL source.
+2. Build and qualify the exact clean HICAR source containing the self-contained
+   revised-MM5 option-3 restoration with NVHPC/NCCL.
 3. Run one real hourly W/SST/scalar-LBC product and inspect SST fallback
    distances and HICAR ingestion before producing all 196 seasonal hours.
 4. Repeat a daylight turnover and continuous-versus-restart proof with the
