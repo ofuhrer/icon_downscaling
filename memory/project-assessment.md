@@ -144,6 +144,10 @@ events, lead traces are event/diurnal diagnostics, not forecast-skill curves,
 and correlations are descriptive rather than rankings. Daylight shortwave is
 checked directly against SwissMetNet but excluded from HICAR-versus-REA-L
 added-value ranking because the staged native REA-L reference lacks shortwave.
+HICAR station sampling is restricted to the nearest land cell because all
+SwissMetNet automatic stations are terrestrial. The evaluator records the
+unconstrained and selected cells and their displacement, rejects shifts above
+1 km, and keeps large overrides visible as representativeness warnings.
 
 ## Remaining work before launch
 

@@ -158,3 +158,8 @@ surface and terrain-radiation choices but cover much smaller domains.
   speed bias/MAE and vector RMSE. Stratify only by season, elapsed time and
   elevation/terrain class, with station-level inspection for exposed ridges.
   Four events support diagnosis, not a climatological ranking.
+- SwissMetNet automatic stations are terrestrial sites. Sample HICAR at the
+  nearest land cell rather than an unconstrained centre that may fall in a
+  200 m river or lake polygon. Report every surface override and displacement
+  and reject shifts above 1 km. This corrects land/water mismatch but does not
+  make an exposed ridge station representative of its surrounding model cell.
