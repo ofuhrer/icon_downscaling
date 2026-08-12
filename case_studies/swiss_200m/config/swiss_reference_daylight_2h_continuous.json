@@ -1,5 +1,5 @@
 {
-  "root": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/smoke/autumn_daylight_scalar_lbc/continuous",
+  "root": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/smoke/autumn_daylight_scalar_lbc_hourly/continuous",
   "repo_root": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/source/coordinator",
   "forcing_dir": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/input/forcing",
   "python": "/scratch/mch/olifu/icon_hicar/venv_static/bin/python",
@@ -25,8 +25,8 @@
   "seasons": [
     {
       "name": "autumn",
-      "start": "2020-10-01T09:30:00",
-      "end": "2020-10-01T11:30:00",
+      "start": "2020-10-01T09:00:00",
+      "end": "2020-10-01T11:00:00",
       "static": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/input/runtime/domain_runtime_smn_20201001_0000_reference.nc"
     }
   ]
