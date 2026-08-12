@@ -232,6 +232,11 @@ HICAR station sampling is restricted to the nearest land cell because all
 SwissMetNet automatic stations are terrestrial. The evaluator records the
 unconstrained and selected cells and their displacement, rejects shifts above
 1 km, and keeps large overrides visible as representativeness warnings.
+Post-spin-up tables retain the physical simulation lead and expose a separate
+evaluation-relative lead: the scored ending-hour intervals are exactly 1--24
+(physical leads 25--48). Footprint evidence uses the same six-sample hourly
+completeness contract as the evaluator, so the final artifact no longer relies
+on stale instantaneous-time fields.
 
 The evaluation decision rule is fixed before seeing the campaign scores.
 Vector-wind RMSE is primary and speed RMSE is co-primary; for
