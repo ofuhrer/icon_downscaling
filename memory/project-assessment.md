@@ -91,6 +91,16 @@ than a claimed optimum.
   are not sufficiently established to define the national reference.
 - Missing QI is explicitly zero; QR/QS/QG are not invented. Supersaturation is
   retained. Cold-cloud and precipitation spin-up remain interpretation limits.
+- Prepared physical W is locally very large over the steepest resolved terrain:
+  about -25 m s-1 in the winter forcing near the first 200 m AGL. HICAR's
+  corresponding CFL-limiting physical component was about -21 m s-1 while the
+  solver and conservation checks passed. This is inherited from the deliberate
+  low-level terrain-following blend toward `u_grid*dh/dx+v_grid*dh/dy`, not a
+  growing HICAR instability, but it is not qualified against observations and
+  likely contributes to cold-cloud/precipitation adjustment. The present
+  campaign qualifies horizontal surface-wind downscaling only; W, clouds and
+  precipitation remain outside its scientific claims. Terrain-W conditioning
+  is a dedicated follow-up sensitivity after the horizontal-wind result.
 - The former blank `sst_var` held every lake at 280 K. HICAR still floors SST
   at 273.15 K, so frozen-lake physics is absent. Of 84,346 target water cells,
   10,773 (12.77%, about 431 km2) lack compact same-surface REA-L support. The
