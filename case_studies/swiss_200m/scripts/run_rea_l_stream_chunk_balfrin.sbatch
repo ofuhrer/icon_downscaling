@@ -23,10 +23,11 @@ module load nvhpc/24.5 cray-mpich-nvhpc/8.1.30 cuda/12.3.0-gcc \
   netcdf-c/4.9.2-nvhpc netcdf-fortran/4.6.1-nvhpc \
   hdf5/1.14.3-nvhpc fftw/3.3.10-gcc
 
-partition=$(scontrol show partition preemptible -o)
+partition_name=${SLURM_JOB_PARTITION:?}
+partition=$(scontrol show partition "$partition_name" -o)
 case "$partition" in
   *AllowGroups=ALL*|*AllowGroups=s83*) ;;
-  *) echo "preemptible is not currently allowed for group s83" >&2; exit 2 ;;
+  *) echo "$partition_name is not currently allowed for group s83" >&2; exit 2 ;;
 esac
 
 exe=${HICAR_EXE:?}

@@ -41,6 +41,9 @@ def campaign(
     input_exclusive=False,
     use_sparse_lbc=True,
     radiation_scheme="rrtmgp",
+    model_partition="preemptible",
+    max_active_models=None,
+    model_max_partition_fraction=None,
 ) -> Campaign:
     config = {
         "root": str(tmp_path / "campaign"),
@@ -60,6 +63,7 @@ def campaign(
         "use_sparse_lbc": use_sparse_lbc,
         "radiation_update_interval": 600,
         "radiation_scheme": radiation_scheme,
+        "model_partition": model_partition,
         "seasons": seasons or [{
             "name": "autumn",
             "start": "2020-10-02T00:00:00",
@@ -67,6 +71,10 @@ def campaign(
             "static": "static.nc",
         }],
     }
+    if max_active_models is not None:
+        config["max_active_models"] = max_active_models
+    if model_max_partition_fraction is not None:
+        config["model_max_partition_fraction"] = model_max_partition_fraction
     if input_lookahead_segments is not None:
         config["input_lookahead_segments"] = input_lookahead_segments
     path = tmp_path / "campaign.json"
@@ -373,3 +381,63 @@ def test_unknown_radiation_scheme_is_rejected(tmp_path) -> None:
         assert "radiation_scheme" in str(error)
     else:
         raise AssertionError("unknown radiation scheme was accepted")
+
+
+def test_model_submission_is_bounded_globally(tmp_path, monkeypatch) -> None:
+    configured = campaign(
+        tmp_path,
+        full_season_input_lists=False,
+        max_active_models=1,
+        segment_hours=1,
+        seasons=[
+            {
+                "name": name,
+                "start": "2020-10-02T00:00:00",
+                "end": "2020-10-02T01:00:00",
+                "static": f"{name}.nc",
+            }
+            for name in ("autumn", "winter")
+        ],
+    )
+    for season in configured.seasons:
+        for when in hours(season.start, season.end):
+            forcing, boundary = configured.paths(season, when)
+            forcing.parent.mkdir(parents=True, exist_ok=True)
+            for path in (forcing, boundary):
+                path.touch()
+                Path(f"{path}.ready").touch()
+
+    submitted = []
+
+    def fake_submit(script, environment, job_name, *, partition, sbatch_options=()):
+        submitted.append((job_name, partition))
+        return "12345"
+
+    monkeypatch.setattr(rd_campaign, "submit", fake_submit)
+    monkeypatch.setattr(rd_campaign, "slurm_state", lambda _: "PENDING")
+    assert configured.submit_segments() == 1
+    assert configured.submit_segments() == 0
+    assert submitted == [("hc-aut-000-a1", "preemptible")]
+
+
+def test_model_partition_fraction_fails_closed(tmp_path, monkeypatch) -> None:
+    configured = campaign(
+        tmp_path,
+        full_season_input_lists=False,
+        model_partition="normal",
+        max_active_models=2,
+        model_max_partition_fraction=0.5,
+    )
+    monkeypatch.setattr(
+        rd_campaign,
+        "validate_partition",
+        lambda _: {"AllowGroups": "ALL", "TotalNodes": "44"},
+    )
+    configured.model_nodes = 12
+    try:
+        configured.validate_model_partition_capacity()
+    except RuntimeError as error:
+        assert "24/44" in str(error)
+        assert "50%" in str(error)
+    else:
+        raise AssertionError("model partition fraction limit was not enforced")

@@ -111,7 +111,7 @@ def submitted_attempt(directory: Path, maximum: int) -> tuple[int, str] | None:
     return None
 
 
-def validate_partition(partition: str) -> None:
+def validate_partition(partition: str) -> dict[str, str]:
     description = run(["scontrol", "show", "partition", partition, "-o"])
     fields = dict(
         item.split("=", 1) for item in description.split() if "=" in item
@@ -121,6 +121,7 @@ def validate_partition(partition: str) -> None:
         raise RuntimeError(
             f"partition {partition} is not currently allowed for exact group s83"
         )
+    return fields
 
 
 def submit(
@@ -170,6 +171,9 @@ class Campaign:
         self.input_exclusive = bool(self.config.get("input_exclusive", False))
         self.model_nodes = int(self.config.get("model_nodes", 2))
         self.model_time = str(self.config.get("model_time", "06:00:00"))
+        self.model_partition = str(
+            self.config.get("model_partition", "preemptible")
+        )
         self.radiation_update_interval = float(
             self.config.get("radiation_update_interval", 600.0)
         )
@@ -190,6 +194,13 @@ class Campaign:
             Season(item["name"], parse_time(item["start"]), parse_time(item["end"]), Path(item["static"]))
             for item in self.config["seasons"]
         ]
+        self.max_active_models = int(
+            self.config.get("max_active_models", len(self.seasons))
+        )
+        model_fraction = self.config.get("model_max_partition_fraction")
+        self.model_max_partition_fraction = (
+            None if model_fraction is None else float(model_fraction)
+        )
         if (
             self.segment_hours <= 0
             or self.max_attempts <= 0
@@ -197,6 +208,7 @@ class Campaign:
             or self.input_cpus <= 0
             or self.input_column_workers <= 0
             or self.model_nodes <= 0
+            or self.max_active_models <= 0
             or self.radiation_update_interval <= 0
         ):
             raise ValueError(
@@ -218,6 +230,11 @@ class Campaign:
             raise ValueError(
                 "bounded input look-ahead requires segment-local input lists"
             )
+        if (
+            self.model_max_partition_fraction is not None
+            and not 0 < self.model_max_partition_fraction <= 1
+        ):
+            raise ValueError("model_max_partition_fraction must be in (0, 1]")
 
     def initialize(self) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
@@ -392,8 +409,40 @@ class Campaign:
         list_root = self.root / season.name if self.full_season_input_lists else segment_root
         return records, list_root / "forcing.txt", list_root / "lbc.txt"
 
+    def active_model_attempts(self) -> int:
+        active_states = {
+            "PENDING", "RUNNING", "CONFIGURING", "COMPLETING", "SUSPENDED"
+        }
+        return sum(
+            slurm_state(job_file) in active_states
+            for job_file in self.root.glob("*/*/attempt-*.job")
+        )
+
+    def validate_model_partition_capacity(self) -> None:
+        if self.model_max_partition_fraction is None:
+            return
+        fields = validate_partition(self.model_partition)
+        try:
+            total_nodes = int(fields["TotalNodes"])
+        except (KeyError, ValueError) as error:
+            raise RuntimeError(
+                f"cannot determine node capacity of {self.model_partition}"
+            ) from error
+        requested = self.model_nodes * self.max_active_models
+        allowed = total_nodes * self.model_max_partition_fraction
+        if requested > allowed:
+            raise RuntimeError(
+                f"configured model concurrency requests {requested}/{total_nodes} "
+                f"nodes on {self.model_partition}, exceeding the "
+                f"{self.model_max_partition_fraction:.0%} limit"
+            )
+
     def submit_segments(self) -> int:
         submitted = 0
+        active_models = self.active_model_attempts()
+        if active_models >= self.max_active_models:
+            return 0
+        self.validate_model_partition_capacity()
         for season in self.seasons:
             previous_restart: Path | None = None
             for index, (start, end) in enumerate(segments(season.start, season.end, self.segment_hours)):
@@ -467,7 +516,7 @@ class Campaign:
                 job = submit(
                     self.repo / "case_studies/swiss_200m/scripts/run_rea_l_stream_chunk_balfrin.sbatch",
                     environment, f"hc-{season.name[:3]}-{index:03d}-a{attempt}",
-                    partition="preemptible",
+                    partition=self.model_partition,
                     sbatch_options=(
                         f"--nodes={self.model_nodes}",
                         f"--time={self.model_time}",
@@ -476,6 +525,9 @@ class Campaign:
                 )
                 (segment_root / f"attempt-{attempt}.job").write_text(job + "\n")
                 submitted += 1
+                active_models += 1
+                if active_models >= self.max_active_models:
+                    return submitted
                 break
         return submitted
 

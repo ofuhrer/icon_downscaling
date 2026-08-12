@@ -191,7 +191,13 @@ than a claimed optimum.
 ## Selected campaign experiment
 
 Each season is a single 48-hour physical trajectory split into four 12-hour
-preemptible segments. The first 24 hours are spin-up; the original 24-hour
+restartable segments. Four consecutive attempts on `preemptible` were
+externally displaced after 22--71 minutes without model failures. The retained
+workflow therefore uses one 12-node segment at a time on non-preempting
+`normal`, preserving the qualified 60-rank topology and consuming 27.3% of the
+current 44-node partition. A fail-closed 50% partition-share check and global
+one-model concurrency bound make this operational choice explicit. The first
+24 hours are spin-up; the original 24-hour
 event is evaluated:
 
 | Season | trajectory | evaluation |
@@ -247,7 +253,7 @@ domains are complete. The clean final HICAR source is built with NVHPC/OpenACC
 and NCCL; the executable is pinned by checksum.
 
 1. Stream validated regular forcing records at segment granularity while the
-   four independent restart chains run on `preemptible`.
+   four restart chains advance one qualified segment at a time on `normal`.
 2. Evaluate the completed trajectories against all usable SwissMetNet stations
    and native REA-L-CH1, then decide from those results whether the bounded
    alpha-one projection provides useful downscaling or only a stable control.

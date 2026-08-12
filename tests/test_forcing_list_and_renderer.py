@@ -163,6 +163,7 @@ def test_segment_wrapper_uses_validated_build_provenance_for_hicar_identity() ->
     assert '"hicar_build_provenance": provenance' in text
     assert 'r"[0-9a-f]{40}"' in text
     assert 'commit = "unknown"' not in text
+    assert 'partition_name=${SLURM_JOB_PARTITION:?}' in text
 
 
 def test_renderer_retains_explicit_sparse_lbc_support(tmp_path: Path) -> None:
