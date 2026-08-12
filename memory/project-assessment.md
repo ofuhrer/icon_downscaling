@@ -43,6 +43,17 @@ residual also passed. The dynamic-alpha coupling is therefore rejected for the
 campaign. Alpha 1 is the conservative bounded R&D reference, not a claim of
 published equivalence or scientific optimality.
 
+The retained post-publication `legacy` solver is not the operator used by the
+published HICAR releases and fails to converge for this national domain. A
+bounded current-stack adapter of the released v1.2 analytic operator passed
+small decomposed oracle tests but also failed the predeclared national
+initialization gate: its best true residual was `9.50e-4`, 1.91 times the
+required `4.98e-4`, after three 2500-iteration attempts, and the fallback
+solver diverged. No national output was produced. That research branch is
+retained as evidence, not selected for the campaign; resurrecting PETSc or an
+old full HICAR release would expand the experiment while regressing the current
+input, physics and I/O stack.
+
 ## Scientific reference
 
 The complete rationale and option-by-option specification is in
@@ -90,9 +101,8 @@ than a claimed optimum.
   monotone local all-surface RBF baseline. The unsupported-water mask and
   nearest same-surface candidate distance remain diagnostics; the remote value
   is not used. This is a defensible immediate approximation, not lake thermal
-  physics. Rebuild into the versioned forcing directory and repeat the finite
-  daylight smoke before launching the campaign; a prognostic lake model remains
-  future work.
+  physics. The corrected policy passed the finite two-hour daylight smoke; a
+  prognostic lake model remains future work.
 - Conditioned local RBF weights are required. An old nearly singular stencil
   produced a 320 m s-1 wind spike and is invalid. Operators with excessive L1
   amplification are rejected and vector bounds are checked.
@@ -159,6 +169,14 @@ than a claimed optimum.
   ratios were 2.5%, 2.1%, 1.6% and 9.4%, and 10 m vector-wind RMSE was
   8.7e-9 m s-1. Local extrema warrant monitoring, but this is numerical restart
   reproducibility adequate for the present wind assessment, not bit identity.
+- The final alpha-one, corrected-water daylight qualification completed all
+  continuous, full-list segmented and segment-local-list trajectories. The two
+  segmented modes were bit-identical in outputs and restart states; all fields
+  were finite. Continuous versus restarted wind was exact at the first
+  post-restart record and had vector RMSE `6.0e-9 m s-1` at the terminal
+  record. Across all 13 continuous output slices, 10 m wind maxima were
+  13.5--16.7 m s-1 and no cell exceeded 30 m s-1. This is the launch
+  qualification for the bounded alpha-one R&D configuration.
 
 ## Selected campaign experiment
 
@@ -192,7 +210,7 @@ SwissMetNet automatic stations are terrestrial. The evaluator records the
 unconstrained and selected cells and their displacement, rejects shifts above
 1 km, and keeps large overrides visible as representativeness warnings.
 
-## Remaining work before launch
+## Remaining work
 
 The final 15 km static is complete and contains HLM/SVF/slope/aspect computed
 with HORAYZON from a 20.2 km exterior REA-L terrain band, EGM2008 and 90
@@ -202,9 +220,10 @@ domains are complete. The clean final HICAR source is built with NVHPC/OpenACC
 and NCCL; the executable is pinned by checksum.
 
 1. Stream validated regular forcing records at segment granularity while the
-   smoke and campaign trajectories advance.
-2. Launch the four independent restart chains on `preemptible`, then evaluate
-   them against all usable SwissMetNet stations and native REA-L-CH1.
+   four independent restart chains run on `preemptible`.
+2. Evaluate the completed trajectories against all usable SwissMetNet stations
+   and native REA-L-CH1, then decide from those results whether the bounded
+   alpha-one projection provides useful downscaling or only a stable control.
 
 Do not tune individual parameters until this reference result identifies a
 specific scientific ambiguity. Do not resume open-ended RRTMGP debugging while
