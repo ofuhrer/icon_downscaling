@@ -227,7 +227,11 @@ def _prepare_hicar_forcing(args: argparse.Namespace) -> int:
     weights = RBFWeights.read(args.weights)
     vector_weights = VectorRBFWeights.read(args.vector_weights) if args.vector_weights else None
     state, diagnostics = transform_icon_state(
-        args.icon_state, args.static, weights, vector_weights=vector_weights
+        args.icon_state,
+        args.static,
+        weights,
+        vector_weights=vector_weights,
+        column_workers=args.column_workers,
     )
     state = convert_water_to_hicar_mixing_ratios(state)
     write_hicar_forcing_record(
@@ -474,6 +478,15 @@ def parser() -> argparse.ArgumentParser:
     forcing.add_argument("--output", type=Path, required=True)
     forcing.add_argument("--boundary", type=Path, required=True)
     forcing.add_argument("--boundary-width-m", type=float, default=10_000.0)
+    forcing.add_argument(
+        "--column-workers",
+        type=int,
+        default=1,
+        help=(
+            "independent fork workers for vertical column reconstruction; "
+            "one preserves the serial path"
+        ),
+    )
     forcing.add_argument("--manifest", type=Path)
     forcing.set_defaults(func=_prepare_hicar_forcing)
 

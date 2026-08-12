@@ -36,6 +36,8 @@ def campaign(
     seasons=None,
     segment_hours=12,
     max_active_inputs=2,
+    input_cpus=4,
+    input_column_workers=1,
 ) -> Campaign:
     config = {
         "root": str(tmp_path / "campaign"),
@@ -49,6 +51,8 @@ def campaign(
         "full_season_input_lists": full_season_input_lists,
         "segment_hours": segment_hours,
         "max_active_inputs": max_active_inputs,
+        "input_cpus": input_cpus,
+        "input_column_workers": input_column_workers,
         "radiation_update_interval": 600,
         "seasons": seasons or [{
             "name": "autumn",
@@ -101,6 +105,7 @@ def test_bounded_input_horizon_shares_endpoints_and_applies_backpressure(
         input_lookahead_segments=1,
         segment_hours=1,
         max_active_inputs=10,
+        input_column_workers=2,
         seasons=[{
             "name": "autumn",
             "start": "2020-10-02T00:00:00",
@@ -121,6 +126,7 @@ def test_bounded_input_horizon_shares_endpoints_and_applies_backpressure(
         "2020-10-02T01:00:00",
         "2020-10-02T02:00:00",
     ]
+    assert {item["HICARPREP_COLUMN_WORKERS"] for item in submitted} == {"2"}
 
     for when in hours(datetime(2020, 10, 2, 0), datetime(2020, 10, 2, 2)):
         forcing, boundary = configured.paths(configured.seasons[0], when)
@@ -186,6 +192,20 @@ def test_bounded_lookahead_rejects_full_season_lists(tmp_path) -> None:
         assert "segment-local" in str(error)
     else:
         raise AssertionError("bounded preparation accepted full-season model input lists")
+
+
+def test_input_column_workers_cannot_oversubscribe_allocated_cpus(tmp_path) -> None:
+    try:
+        campaign(
+            tmp_path,
+            full_season_input_lists=False,
+            input_cpus=4,
+            input_column_workers=8,
+        )
+    except ValueError as error:
+        assert "input_cpus" in str(error)
+    else:
+        raise AssertionError("column workers exceeded the producer CPU allocation")
 
 
 def test_inputs_only_override_can_prepare_beyond_bounded_horizon(

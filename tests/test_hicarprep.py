@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import multiprocessing as mp
 from pathlib import Path
 import tempfile
 import unittest
@@ -983,6 +984,24 @@ class ProductPipelineTests(unittest.TestCase):
             weights = build_rbf_weights(source_lat, source_lon, lat, lon, donors=10)
             weights.write(weight_path)
             state, diagnostics = transform_icon_state(source_path, static_path, weights)
+            self.assertEqual(diagnostics["column_workers_effective"], 1)
+            self.assertEqual(diagnostics["column_worker_start_method"], "serial")
+            for name in (
+                "timing_static_read_seconds",
+                "timing_horizontal_remap_seconds",
+                "timing_column_reconstruction_seconds",
+                "timing_vertical_velocity_seconds",
+                "timing_transform_total_seconds",
+            ):
+                self.assertGreaterEqual(diagnostics[name], 0.0)
+            if "fork" in mp.get_all_start_methods():
+                parallel_state, parallel_diagnostics = transform_icon_state(
+                    source_path, static_path, weights, column_workers=2
+                )
+                for name in state:
+                    np.testing.assert_array_equal(parallel_state[name], state[name])
+                self.assertEqual(parallel_diagnostics["column_workers_effective"], 2)
+                self.assertEqual(parallel_diagnostics["column_worker_start_method"], "fork")
             self.assertEqual(diagnostics["source_vertical_order"], "top_to_bottom")
             self.assertEqual(diagnostics["target_w_vertical_coordinate"], "authoritative_static_HFL")
             self.assertEqual(state["W"].shape, state["HFL"].shape)

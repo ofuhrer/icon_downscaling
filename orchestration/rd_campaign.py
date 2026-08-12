@@ -162,6 +162,9 @@ class Campaign:
         self.input_partitions = self.config.get("input_partitions", ["pp-short"])
         self.max_active_inputs = int(self.config.get("max_active_inputs", 2))
         self.input_cpus = int(self.config.get("input_cpus", 4))
+        self.input_column_workers = int(
+            self.config.get("input_column_workers", 1)
+        )
         self.input_memory = str(self.config.get("input_memory", "64G"))
         self.input_time = str(self.config.get("input_time", "01:00:00"))
         self.model_nodes = int(self.config.get("model_nodes", 2))
@@ -187,6 +190,7 @@ class Campaign:
             or self.max_attempts <= 0
             or self.max_active_inputs <= 0
             or self.input_cpus <= 0
+            or self.input_column_workers <= 0
             or self.model_nodes <= 0
             or self.radiation_update_interval <= 0
         ):
@@ -196,6 +200,8 @@ class Campaign:
             )
         if not self.input_partitions:
             raise ValueError("input_partitions must not be empty")
+        if self.input_column_workers > self.input_cpus:
+            raise ValueError("input_column_workers must not exceed input_cpus")
         if (
             self.input_lookahead_segments is not None
             and self.input_lookahead_segments < 0
@@ -334,6 +340,7 @@ class Campaign:
                     "HICAR_STATIC_DOMAIN": str(static),
                     "HICARPREP_RBF_WEIGHTS": self.config["rbf_weights"],
                     "HICARPREP_VECTOR_WEIGHTS": self.config.get("vector_weights", ""),
+                    "HICARPREP_COLUMN_WORKERS": str(self.input_column_workers),
                     "HICAR_PYTHON": self.config["python"],
                 },
                 "hp-" + when.strftime("%m%d%H"),

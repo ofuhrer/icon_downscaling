@@ -5,9 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 import datetime as dt
 import hashlib
+import multiprocessing as mp
 import os
 from pathlib import Path
 import tempfile
+import time
 
 import netCDF4
 import numpy as np
@@ -63,6 +65,21 @@ class SupplementalField:
     values: np.ndarray
     dimensions: tuple[str, ...]
     attributes: dict[str, object]
+
+
+@dataclass(frozen=True)
+class _ColumnWork:
+    source_hhl: np.ndarray
+    target_hhl: np.ndarray
+    remapped: dict[str, np.ndarray]
+    hydro: dict[str, np.ndarray]
+    source_w: np.ndarray
+    state: dict[str, np.ndarray]
+    target_w: np.ndarray
+    terrain_differences: np.ndarray
+
+
+_FORK_COLUMN_WORK: _ColumnWork | None = None
 
 
 def _normalized_time(value: str) -> dt.datetime:
@@ -686,13 +703,181 @@ def _remap_vertical_interfaces(
     }
 
 
+def _validate_column_workers(worker_count: int) -> None:
+    if isinstance(worker_count, bool) or not isinstance(worker_count, int):
+        raise ValueError("column workers must be an integer")
+    if worker_count < 1:
+        raise ValueError("column workers must be at least one")
+
+
+def _column_ranges(column_count: int, worker_count: int) -> list[tuple[int, int]]:
+    """Partition flattened target columns into deterministic contiguous ranges."""
+    _validate_column_workers(worker_count)
+    if column_count < 1:
+        raise ValueError("target grid must contain at least one column")
+    effective_workers = min(worker_count, column_count)
+    base, remainder = divmod(column_count, effective_workers)
+    ranges: list[tuple[int, int]] = []
+    start = 0
+    for worker in range(effective_workers):
+        stop = start + base + (1 if worker < remainder else 0)
+        ranges.append((start, stop))
+        start = stop
+    return ranges
+
+
+def _column_chunk(
+    work: _ColumnWork, bounds: tuple[int, int]
+) -> tuple[int, int, dict[str, int]]:
+    """Reconstruct one disjoint range without changing per-column arithmetic."""
+    start, stop = bounds
+    ny, nx = work.terrain_differences.shape
+    below_count = 0
+    buried_count = 0
+    cases = {"lower": 0, "matched": 0, "higher": 0}
+    for linear_index in range(start, stop):
+        row, col = divmod(linear_index, nx)
+        column, diagnostics = reconstruct_column_state(
+            source_hhl_m=work.source_hhl[:, row, col],
+            target_hhl_m=work.target_hhl[:, row, col],
+            temperature_k=work.remapped["T"][:, row, col],
+            pressure_pa=work.remapped["P"][:, row, col],
+            qv=work.remapped["QV"][:, row, col],
+            u_ms=work.remapped["U"][:, row, col],
+            v_ms=work.remapped["V"][:, row, col],
+            hydrometeors={
+                name: value[:, row, col] for name, value in work.hydro.items()
+            },
+        )
+        for name in work.state:
+            work.state[name][:, row, col] = column[name]
+        work.target_w[:, row, col] = interpolate_height_profile(
+            work.source_hhl[:, row, col],
+            work.source_w[:, row, col],
+            work.target_hhl[:, row, col],
+            lower_gradient_bounds=(0.0, 0.0),
+            monotone=True,
+        )
+        work.terrain_differences[row, col] = diagnostics.terrain_difference_m
+        below_count += diagnostics.below_source_level_count
+        buried_count += diagnostics.buried_source_level_count
+        cases[diagnostics.terrain_case] += 1
+    return below_count, buried_count, cases
+
+
+def _fork_column_chunk(bounds: tuple[int, int]) -> tuple[int, int, dict[str, int]]:
+    if _FORK_COLUMN_WORK is None:
+        raise RuntimeError("forked column worker was not initialized")
+    return _column_chunk(_FORK_COLUMN_WORK, bounds)
+
+
+def _shared_float64_array(
+    context: mp.context.BaseContext, shape: tuple[int, ...]
+) -> np.ndarray:
+    """Allocate an anonymous shared array whose ndarray keeps the owner alive."""
+    raw = context.RawArray("d", int(np.prod(shape, dtype=np.int64)))
+    return np.frombuffer(raw, dtype=np.float64).reshape(shape)
+
+
+def _reconstruct_target_columns(
+    *,
+    source_hhl: np.ndarray,
+    target_hhl: np.ndarray,
+    remapped: dict[str, np.ndarray],
+    hydro: dict[str, np.ndarray],
+    source_w: np.ndarray,
+    column_workers: int,
+) -> tuple[
+    dict[str, np.ndarray],
+    np.ndarray,
+    np.ndarray,
+    int,
+    int,
+    dict[str, int],
+    int,
+]:
+    """Run independent column reconstruction serially or with fork workers."""
+    ny, nx = target_hhl.shape[1:]
+    ranges = _column_ranges(ny * nx, column_workers)
+    effective_workers = len(ranges)
+    nz = target_hhl.shape[0] - 1
+    names = ("T", "P", "QV", "U", "V", "THETA", "RHO", *hydro)
+
+    if effective_workers == 1:
+        state = {
+            name: np.empty((nz, ny, nx), dtype=np.float64) for name in names
+        }
+        target_w = np.empty_like(target_hhl)
+        terrain_differences = np.empty((ny, nx), dtype=np.float64)
+        work = _ColumnWork(
+            source_hhl=source_hhl,
+            target_hhl=target_hhl,
+            remapped=remapped,
+            hydro=hydro,
+            source_w=source_w,
+            state=state,
+            target_w=target_w,
+            terrain_differences=terrain_differences,
+        )
+        summaries = [_column_chunk(work, ranges[0])]
+    else:
+        if "fork" not in mp.get_all_start_methods():
+            raise RuntimeError(
+                "multiple column workers require the fork multiprocessing start method"
+            )
+        context = mp.get_context("fork")
+        state = {
+            name: _shared_float64_array(context, (nz, ny, nx)) for name in names
+        }
+        target_w = _shared_float64_array(context, target_hhl.shape)
+        terrain_differences = _shared_float64_array(context, (ny, nx))
+        work = _ColumnWork(
+            source_hhl=source_hhl,
+            target_hhl=target_hhl,
+            remapped=remapped,
+            hydro=hydro,
+            source_w=source_w,
+            state=state,
+            target_w=target_w,
+            terrain_differences=terrain_differences,
+        )
+        global _FORK_COLUMN_WORK
+        _FORK_COLUMN_WORK = work
+        try:
+            with context.Pool(processes=effective_workers) as pool:
+                summaries = pool.map(_fork_column_chunk, ranges)
+        finally:
+            _FORK_COLUMN_WORK = None
+
+    below_count = sum(item[0] for item in summaries)
+    buried_count = sum(item[1] for item in summaries)
+    cases = {
+        name: sum(item[2][name] for item in summaries)
+        for name in ("lower", "matched", "higher")
+    }
+    return (
+        state,
+        target_w,
+        terrain_differences,
+        below_count,
+        buried_count,
+        cases,
+        effective_workers,
+    )
+
+
 def transform_icon_state(
     source_path: Path,
     static_path: Path,
     weights: RBFWeights,
     vector_weights: VectorRBFWeights | None = None,
+    *,
+    column_workers: int = 1,
 ) -> tuple[dict[str, np.ndarray], dict[str, float | int | str]]:
     """Transform one canonical native ICON timestamp to final target columns."""
+    _validate_column_workers(column_workers)
+    total_started = time.perf_counter()
+    static_started = time.perf_counter()
     with netCDF4.Dataset(static_path) as static:
         target_lat = np.asarray(static["lat"][:], dtype=np.float64)
         target_lon = np.asarray(static["lon"][:], dtype=np.float64)
@@ -700,6 +885,7 @@ def transform_icon_state(
         target_hfl = np.asarray(static["HFL"][:], dtype=np.float64)
         x = np.asarray(static["x"][:], dtype=np.float64)
         y = np.asarray(static["y"][:], dtype=np.float64)
+    static_seconds = time.perf_counter() - static_started
     if weights.target_fingerprint != grid_fingerprint(target_lat, target_lon):
         raise ValueError("cached weights do not belong to this HICAR target grid")
     ny, nx = target_lat.shape
@@ -709,6 +895,7 @@ def transform_icon_state(
         raise ValueError("HICAR static HFL must match the HHL mass-level shape")
     if not np.all(np.isfinite(target_hfl)) or not np.all(np.diff(target_hfl, axis=0) > 0.0):
         raise ValueError("HICAR static HFL must be finite and strictly bottom-to-top")
+    horizontal_started = time.perf_counter()
     with netCDF4.Dataset(source_path) as source:
         source_lat = read_coordinate(source, "clat")
         source_lon = read_coordinate(source, "clon")
@@ -801,43 +988,28 @@ def transform_icon_state(
         source_w = source_w[::-1]
         remapped = {name: value[::-1] for name, value in remapped.items()}
         hydro = {name: value[::-1] for name, value in hydro.items()}
+    horizontal_seconds = time.perf_counter() - horizontal_started
 
-    nz = target_hhl.shape[0] - 1
-    state = {
-        name: np.empty((nz, ny, nx), dtype=np.float64)
-        for name in ("T", "P", "QV", "U", "V", "THETA", "RHO", *hydro)
-    }
-    target_w = np.empty_like(target_hhl)
-    terrain_differences = np.empty((ny, nx), dtype=np.float64)
-    below_count = 0
-    buried_count = 0
-    cases = {"lower": 0, "matched": 0, "higher": 0}
-    for row in range(ny):
-        for col in range(nx):
-            column, diagnostics = reconstruct_column_state(
-                source_hhl_m=source_hhl[:, row, col],
-                target_hhl_m=target_hhl[:, row, col],
-                temperature_k=remapped["T"][:, row, col],
-                pressure_pa=remapped["P"][:, row, col],
-                qv=remapped["QV"][:, row, col],
-                u_ms=remapped["U"][:, row, col],
-                v_ms=remapped["V"][:, row, col],
-                hydrometeors={name: value[:, row, col] for name, value in hydro.items()},
-            )
-            for name in state:
-                state[name][:, row, col] = column[name]
-            target_w[:, row, col] = interpolate_height_profile(
-                source_hhl[:, row, col],
-                source_w[:, row, col],
-                target_hhl[:, row, col],
-                lower_gradient_bounds=(0.0, 0.0),
-                monotone=True,
-            )
-            terrain_differences[row, col] = diagnostics.terrain_difference_m
-            below_count += diagnostics.below_source_level_count
-            buried_count += diagnostics.buried_source_level_count
-            cases[diagnostics.terrain_case] += 1
+    columns_started = time.perf_counter()
+    (
+        state,
+        target_w,
+        terrain_differences,
+        below_count,
+        buried_count,
+        cases,
+        effective_column_workers,
+    ) = _reconstruct_target_columns(
+        source_hhl=source_hhl,
+        target_hhl=target_hhl,
+        remapped=remapped,
+        hydro=hydro,
+        source_w=source_w,
+        column_workers=column_workers,
+    )
+    column_seconds = time.perf_counter() - columns_started
 
+    vertical_velocity_started = time.perf_counter()
     dx_m = float(np.median(np.diff(x)))
     dy_m = float(np.median(np.diff(y)))
     if (
@@ -866,6 +1038,7 @@ def transform_icon_state(
         target_hfl_m=target_hfl,
         interface_w_ms=target_w,
     )
+    vertical_velocity_seconds = time.perf_counter() - vertical_velocity_started
     state.update(
         {
             "W": target_w_mass,
@@ -897,6 +1070,16 @@ def transform_icon_state(
         "terrain_columns_lower": cases["lower"],
         "terrain_columns_matched": cases["matched"],
         "terrain_columns_higher": cases["higher"],
+        "column_workers_requested": column_workers,
+        "column_workers_effective": effective_column_workers,
+        "column_worker_start_method": (
+            "serial" if effective_column_workers == 1 else "fork"
+        ),
+        "timing_static_read_seconds": static_seconds,
+        "timing_horizontal_remap_seconds": horizontal_seconds,
+        "timing_column_reconstruction_seconds": column_seconds,
+        "timing_vertical_velocity_seconds": vertical_velocity_seconds,
+        "timing_transform_total_seconds": time.perf_counter() - total_started,
     }
     return state, diagnostics
 
