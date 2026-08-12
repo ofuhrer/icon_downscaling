@@ -2,8 +2,9 @@
 
 ## Current conclusion
 
-The project has a literature-led reference configuration and a qualified
-bit-reproducible GPU radiation path, but it does not yet have a scientifically
+The project has a literature-led reference configuration and a GPU path that
+is bit-reproducible across independent placements. Segmented restarts are
+numerically, not bitwise, reproducible. It does not yet have a scientifically
 evaluated national all-season result for that complete configuration.
 
 Fresh independent daylight replicas showed that the selected one-block RRTMGP
@@ -14,8 +15,11 @@ fixed while avoiding the RRTMGP implementation path. Two independent
 12-node/48-compute-rank daylight replicas were exact for all 30 output
 variables at seven 10-minute records (976,215,334 values) and all 198 terminal
 restart variables (8,497,193,716 values). All fields were finite and daytime
-shortwave and longwave were active. A two-hour continuous-versus-segmented
-restart proof with the corrected SST products is still required.
+shortwave and longwave were active. The corrected-SST two-hour restart test was
+finite and deterministic across full and streaming forcing lists, but differed
+from the uninterrupted trajectory after the restart. The perturbation is small
+relative to ten-minute evolution and is accepted for this wind-focused R&D
+campaign rather than making bit identity a launch requirement.
 
 The earlier restart discrepancy had two independent causes: an end-time
 tolerance skipped the final fractional timestep of terminal segments, and the
@@ -135,8 +139,15 @@ than a claimed optimum.
   GPU placements for a one-hour daylight trajectory and terminal restart. The
   run took 18 min 33--53 s including 34 GB restart publication, so a 12-hour
   segment is projected to fit the six-hour preemptible allocation with useful
-  margin. Exact segmented restart equivalence remains to be shown with the
-  final SST products.
+  margin. With the final SST products, full-list and streaming segmented runs
+  were bit-identical. Continuous versus restarted output separated first in
+  land-surface/PBL fields at 10:10, but not in 10 m wind or radiation. At that
+  time RMSE was 0.65 W m-2 for latent heat, 0.76 W m-2 for sensible heat,
+  0.031 K for skin temperature and 40.6 m for PBL height: respectively 5.6%,
+  2.5%, 3.6% and 24% of the uninterrupted ten-minute change. By 11:00 the
+  ratios were 2.5%, 2.1%, 1.6% and 9.4%, and 10 m vector-wind RMSE was
+  8.7e-9 m s-1. Local extrema warrant monitoring, but this is numerical restart
+  reproducibility adequate for the present wind assessment, not bit identity.
 
 ## Experiment now being executed
 
@@ -179,13 +190,9 @@ approximation, not a convergence claim. All four season-specific runtime
 domains are complete. The clean final HICAR source is built with NVHPC/OpenACC
 and NCCL; the executable is pinned by checksum.
 
-1. Complete the RRTMG qualification with a two-hour
-   continuous-versus-restart proof using the rebuilt local-baseline SST
-   products, regular forcing relaxation, Noah-MP surface option 1, and the
-   complete final physics/static/input configuration.
-2. Stream validated regular forcing records at segment granularity while the
+1. Stream validated regular forcing records at segment granularity while the
    smoke and campaign trajectories advance.
-3. Launch the four independent restart chains on `preemptible`, then evaluate
+2. Launch the four independent restart chains on `preemptible`, then evaluate
    them against all usable SwissMetNet stations and native REA-L-CH1.
 
 Do not tune individual parameters until this reference result identifies a

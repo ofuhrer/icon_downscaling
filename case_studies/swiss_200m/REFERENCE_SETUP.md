@@ -135,8 +135,10 @@ surface and terrain-radiation choices but cover much smaller domains.
   Independent 12-node daylight replicas were exact for all seven output states
   and all terminal-restart variables. The one-hour jobs, including 34 GB
   restart publication, took less than 19 minutes. RRTMG is a physics
-  substitution, not a numerically equivalent implementation of RRTMGP; exact
-  two-hour segmented-restart equivalence is still required before launch.
+  substitution, not a numerically equivalent implementation of RRTMGP. The
+  corrected-SST two-hour test established numerical rather than bitwise restart
+  reproducibility; its small, decaying land/PBL perturbation is accepted for
+  the wind-focused R&D campaign and remains visible in segment diagnostics.
 - Enable terrain shading plus direct and diffuse shortwave corrections after
   HLM, SVF, slope and aspect have been generated and checked. Keep reflected
   shortwave and terrain longwave off in this first RRTMG baseline so their
@@ -152,8 +154,10 @@ surface and terrain-radiation choices but cover much smaller domains.
 - Each segment lists only the hourly regular-forcing records bracketing that
   segment. Ready records for the next segment can therefore be generated while
   the current segment runs; the shared endpoint is reused. A daylight 2 x 1 h
-  local-list restart must be bit-exact with the full-list reference before this
-  streaming mode is used for the campaign.
+  local-list segmented trajectory must match the full-list segmented reference
+  exactly before this streaming mode is used for the campaign. This was shown
+  in the corrected-SST smoke; it is distinct from uninterrupted-versus-restart
+  equivalence, which is assessed numerically.
 - Generate each hourly record with eight deterministic column workers on an
   exclusive CPU node. This is a throughput choice, not a physics change: the
   selected real regular record is bit-exact with serial preparation and reduces

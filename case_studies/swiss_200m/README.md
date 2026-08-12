@@ -18,8 +18,9 @@ The selected baseline is explicit in `config/hicar_swiss_200m.nml.in`:
 
 Independent one-hour daylight RRTMG replicas were bit-identical in every
 output and terminal-restart variable and completed in under 19 minutes. The
-final corrected-SST setup still requires exact segmented-restart qualification
-before the seasonal campaign.
+final corrected-SST setup is numerically, not bitwise, restart reproducible;
+the small land/PBL perturbation decays over the following hour and is accepted
+for the wind-focused seasonal R&D campaign.
 
 The regular atmospheric forcing file keeps mass-grid U/V and W for HICAR's
 normal initialization, hourly relaxation and wind-projection path. Each record

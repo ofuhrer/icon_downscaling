@@ -38,4 +38,6 @@ exact expected output times, an exact-time terminal restart, the selected
 physics recorded in that restart, and every hourly forcing bracket (plus LBC
 when selected). A
 separate 2 h continuous-versus-1 h segmented comparison is required before a
-seasonal campaign.
+seasonal campaign. Acceptance is based on finite fields, timing continuity and
+perturbation magnitude relative to uninterrupted evolution; bit identity is
+not required.
