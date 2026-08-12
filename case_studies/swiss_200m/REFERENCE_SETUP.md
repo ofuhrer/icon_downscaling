@@ -131,10 +131,12 @@ surface and terrain-radiation choices but cover much smaller domains.
 ## Radiation
 
 - Use RRTMG at 600 s, UTC, cloud-fraction option 3 and maximum-random overlap.
-  This bounded candidate avoids the unresolved RRTMGP daylight A/A divergence;
-  it remains subject to exact A/A and two-hour restart qualification before
-  the four-season launch. RRTMG is a physics substitution and its host/device
-  transfers must also be benchmarked against the six-hour segment allocation.
+  This bounded reference avoids the unresolved RRTMGP daylight A/A divergence.
+  Independent 12-node daylight replicas were exact for all seven output states
+  and all terminal-restart variables. The one-hour jobs, including 34 GB
+  restart publication, took less than 19 minutes. RRTMG is a physics
+  substitution, not a numerically equivalent implementation of RRTMGP; exact
+  two-hour segmented-restart equivalence is still required before launch.
 - Enable terrain shading plus direct and diffuse shortwave corrections after
   HLM, SVF, slope and aspect have been generated and checked. Keep reflected
   shortwave and terrain longwave off in this first RRTMG baseline so their

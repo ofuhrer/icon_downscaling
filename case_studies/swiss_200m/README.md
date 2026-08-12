@@ -2,27 +2,28 @@
 
 The selected baseline is explicit in `config/hicar_swiss_200m.nml.in`:
 
-- 80 levels, nominal 20 m lowest layer, 12 km top, SLEVE 2/6; terrain may
-  compress layers to 12 m but the static builder and renderer reject anything
-  thinner;
+- 80 levels, nominal 20 m lowest layer, 15 km ASL top, SLEVE 2/6; the selected
+  terrain compresses the minimum interface spacing to 17.008 m and the builder
+  rejects anything below 12 m;
 - native hicarprep P/T/U/V/W/QV/QC/QI forcing in dry-air mixing ratios,
   including terrain-adjusted W on the exact HFL mass levels;
 - hourly valid-time REA-L SKT as water-only `SST` in regular forcing;
-- sparse scalar T/P/QV/QC/QI target-grid lateral relaxation, with no sparse
-  wind insertion;
-- variational wind, Sx on, density advection, `alpha_const=1`;
+- literature-established regular full-domain forcing relaxation; sparse LBC is
+  retained only for controlled experiments;
+- adjoint variational wind, Sx on, density advection, dynamic Froude alpha;
 - Noah-MP with SMI initialization and four depth-varying soil textures;
 - ICON SWE, snow depth/density, and bulk snow temperature on cold starts;
 - RRTMG every 600 s, with terrain shading and direct/diffuse shortwave
   corrections on; reflected shortwave and terrain longwave are off.
 
-The selected RRTMG candidate still requires exact A/A and segmented-restart
-qualification plus a throughput check before the seasonal campaign.
+Independent one-hour daylight RRTMG replicas were bit-identical in every
+output and terminal-restart variable and completed in under 19 minutes. The
+final corrected-SST setup still requires exact segmented-restart qualification
+before the seasonal campaign.
 
-The atmospheric forcing file keeps mass-grid U/V and W for HICAR's normal
-initialization and wind-projection path. The paired sparse LBC contains only
-scalar mass-grid fields and matching HHL/HFL support; both products are
-validated before their ready markers are created.
+The regular atmospheric forcing file keeps mass-grid U/V and W for HICAR's
+normal initialization, hourly relaxation and wind-projection path. Each record
+is validated before its ready marker is created.
 
 The maintained scripts build HICAR, prepare atmospheric and land input, render
 the namelist, run one restartable segment, retrieve SwissMetNet data, and

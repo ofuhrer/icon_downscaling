@@ -2,17 +2,20 @@
 
 ## Current conclusion
 
-The project has a literature-led reference configuration, but it does not yet
-have a qualified bit-reproducible GPU radiation path or a scientifically
+The project has a literature-led reference configuration and a qualified
+bit-reproducible GPU radiation path, but it does not yet have a scientifically
 evaluated national all-season result for that complete configuration.
 
 Fresh independent daylight replicas showed that the selected one-block RRTMGP
 configuration still separates after repeated radiation calls, despite being
 exact through the first output times. The former one-block qualification is
-therefore withdrawn. A bounded RRTMG candidate now keeps the rest of the
-reference fixed while avoiding the RRTMGP implementation path. It is not yet a
-qualified campaign runtime: exact A/A, two-hour continuous-versus-segmented
-restart equivalence and segment-throughput checks are still required.
+therefore withdrawn. The bounded RRTMG reference keeps the rest of the setup
+fixed while avoiding the RRTMGP implementation path. Two independent
+12-node/48-compute-rank daylight replicas were exact for all 30 output
+variables at seven 10-minute records (976,215,334 values) and all 198 terminal
+restart variables (8,497,193,716 values). All fields were finite and daytime
+shortwave and longwave were active. A two-hour continuous-versus-segmented
+restart proof with the corrected SST products is still required.
 
 The earlier restart discrepancy had two independent causes: an end-time
 tolerance skipped the final fractional timestep of terminal segments, and the
@@ -124,8 +127,12 @@ than a claimed optimum.
   glacier history and slow Noah-MP states remain approximate.
 - Output/restart validators check exact expected times, selected physics,
   forcing turnover and terminal restart content.
-- The 12-node/48-compute-rank RRTMG candidate is pending A/A,
-  continuous-versus-segmented daylight and throughput qualification.
+- The 12-node/48-compute-rank RRTMG setup is bit-reproducible across independent
+  GPU placements for a one-hour daylight trajectory and terminal restart. The
+  run took 18 min 33--53 s including 34 GB restart publication, so a 12-hour
+  segment is projected to fit the six-hour preemptible allocation with useful
+  margin. Exact segmented restart equivalence remains to be shown with the
+  final SST products.
 
 ## Experiment now being executed
 
@@ -168,9 +175,9 @@ approximation, not a convergence claim. All four season-specific runtime
 domains are complete. The clean final HICAR source is built with NVHPC/OpenACC
 and NCCL; the executable is pinned by checksum.
 
-1. Qualify the RRTMG candidate with independent daylight A/A replicas, then a
-   two-hour continuous-versus-restart proof and a segment-throughput estimate,
-   all with regular forcing relaxation, Noah-MP surface option 1, and the
+1. Complete the RRTMG qualification with a two-hour
+   continuous-versus-restart proof using the rebuilt local-baseline SST
+   products, regular forcing relaxation, Noah-MP surface option 1, and the
    complete final physics/static/input configuration.
 2. Stream validated regular forcing records at segment granularity while the
    smoke and campaign trajectories advance.

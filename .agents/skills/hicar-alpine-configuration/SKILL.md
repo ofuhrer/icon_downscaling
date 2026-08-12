@@ -37,8 +37,10 @@ earth-relative. SST is hourly REA-L skin temperature over water support. Set
 full-domain forcing path for the selected reference. Sparse target-grid LBC is
 an optional experiment only; when used it contains mass-grid T/P/QV/QC/QI and
 must not insert sparse U/V/W after wind projection.
-The RRTMG candidate must pass exact A/A and segmented-restart checks and meet
-the segment wall-time bound before a seasonal launch.
+The selected 12-node RRTMG path is exact across independent one-hour daylight
+replicas and terminal restarts and meets the projected segment wall-time bound.
+It must still pass the two-hour continuous-versus-segmented check with the
+final corrected SST products before seasonal launch.
 
 ## Required interpretation checks
 
