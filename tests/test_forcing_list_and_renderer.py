@@ -157,6 +157,14 @@ def test_segment_wrapper_stages_both_radiation_support_sets() -> None:
     assert "for asset in NoahmpTable.TBL rrtmg_support rrtmgp_support mp_support" in text
 
 
+def test_segment_wrapper_uses_validated_build_provenance_for_hicar_identity() -> None:
+    text = SEGMENT_WRAPPER.read_text()
+    assert "build_provenance=${HICAR_BUILD_PROVENANCE:?}" in text
+    assert '"hicar_build_provenance": provenance' in text
+    assert 'r"[0-9a-f]{40}"' in text
+    assert 'commit = "unknown"' not in text
+
+
 def test_renderer_retains_explicit_sparse_lbc_support(tmp_path: Path) -> None:
     static = tmp_path / "static.nc"
     static_file(static)

@@ -436,6 +436,9 @@ class Campaign:
                     "REPO_ROOT": str(self.repo),
                     "HICAR_EXE": self.config["hicar_executable"],
                     "HICAR_SUPPORT_DIR": self.config["hicar_support_dir"],
+                    "HICAR_BUILD_PROVENANCE": self.config[
+                        "hicar_build_provenance"
+                    ],
                     "HICAR_STATIC_FILE": str(season.static),
                     "HICAR_PYTHON": self.config["python"],
                     "FORCING_FILE_LIST": str(forcing_list),

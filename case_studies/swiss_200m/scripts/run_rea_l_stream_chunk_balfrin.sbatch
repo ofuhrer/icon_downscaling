@@ -31,6 +31,7 @@ esac
 
 exe=${HICAR_EXE:?}
 support=${HICAR_SUPPORT_DIR:?}
+build_provenance=${HICAR_BUILD_PROVENANCE:?}
 static=${HICAR_STATIC_FILE:?}
 forcing_list=${FORCING_FILE_LIST:?}
 lbc_list=${SPARSE_LBC_FILE_LIST:-}
@@ -53,7 +54,8 @@ renderer="$repo_root/case_studies/swiss_200m/scripts/render_hicar_namelist.py"
 wrapper=${HICAR_RANK_WRAPPER:-"$repo_root/case_studies/swiss_200m/scripts/gpu_rank_wrapper.sh"}
 python=${HICAR_PYTHON:-python3}
 
-for path in "$exe" "$static" "$forcing_list" "$renderer" "$wrapper"; do
+for path in "$exe" "$build_provenance" "$build_provenance.ready" "$static" \
+  "$forcing_list" "$renderer" "$wrapper"; do
   test -e "$path" || { echo "missing input: $path" >&2; exit 2; }
 done
 if test -n "$lbc_list"; then
@@ -178,22 +180,23 @@ test -s "$restart" || { echo "missing terminal restart: $restart" >&2; exit 1; }
   "${input_validation_args[@]}" \
   >"$run/segment_validation.json"
 
-"$python" - "$run/segment.json" "$start" "$end" "$model_end" "$static" "$exe" "$restart" <<'PY'
-import json, pathlib, subprocess, sys
-report, start, end, model_end, static, exe, restart = sys.argv[1:]
-root = pathlib.Path(exe).resolve()
-commit = "unknown"
-for parent in (root, *root.parents):
-    if (parent / ".git").exists():
-        commit = subprocess.run(
-            ["git", "-C", str(parent), "rev-parse", "HEAD"],
-            check=True, text=True, stdout=subprocess.PIPE,
-        ).stdout.strip()
-        break
+"$python" - "$run/segment.json" "$start" "$end" "$model_end" "$static" \
+  "$exe" "$restart" "$build_provenance" <<'PY'
+import json, pathlib, re, sys
+report, start, end, model_end, static, exe, restart, provenance = sys.argv[1:]
+build = dict(
+    line.split("=", 1)
+    for line in pathlib.Path(provenance).read_text().splitlines()
+    if "=" in line and not line.startswith("---")
+)
+commit = build.get("source_commit", "")
+if re.fullmatch(r"[0-9a-f]{40}", commit) is None:
+    raise ValueError(f"invalid source_commit in HICAR build provenance: {commit!r}")
 validation = json.loads((pathlib.Path(report).parent / "segment_validation.json").read_text())
 validation.update({
     "start": start, "end": end, "model_end": model_end, "hicar_commit": commit,
     "static": static, "executable": exe, "restart": restart,
+    "hicar_build_provenance": provenance,
 })
 pathlib.Path(report).write_text(json.dumps(validation, indent=2, sort_keys=True) + "\n")
 PY
