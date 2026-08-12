@@ -105,6 +105,31 @@ def require_restart_state(dataset: netCDF4.Dataset) -> None:
         raise SystemExit("invalid terminal restart state: " + json.dumps(failures, sort_keys=True))
 
 
+def numeric_attribute_mismatches(
+    dataset: netCDF4.Dataset,
+    expected: dict[str, float],
+    *,
+    tolerance: float = 1.0e-8,
+) -> dict[str, dict[str, str | float]]:
+    """Return missing, non-numeric, non-finite, or unequal numeric attributes."""
+    mismatches: dict[str, dict[str, str | float]] = {}
+    for name, expected_value in expected.items():
+        if name not in dataset.ncattrs():
+            mismatches[name] = {"actual": "missing", "expected": expected_value}
+            continue
+        raw_value = getattr(dataset, name)
+        try:
+            actual_value = float(raw_value)
+        except (TypeError, ValueError):
+            mismatches[name] = {"actual": str(raw_value), "expected": expected_value}
+            continue
+        if not math.isfinite(actual_value) or not math.isclose(
+            actual_value, expected_value, rel_tol=0.0, abs_tol=tolerance
+        ):
+            mismatches[name] = {"actual": str(raw_value), "expected": expected_value}
+    return mismatches
+
+
 def expected_output_times(
     start: datetime, end: datetime, interval_seconds: int, *, continued: bool
 ) -> list[datetime]:
@@ -201,11 +226,7 @@ def main() -> int:
             "rad.terrain_refl_radius": 1500.0,
             "domain.height_lowest_level": 20.0,
         }
-        numeric_mismatches = {
-            name: str(getattr(restart, name, ""))
-            for name, expected_value in numeric_physics.items()
-            if abs(float(getattr(restart, name, "nan")) - expected_value) > 1.0e-8
-        }
+        numeric_mismatches = numeric_attribute_mismatches(restart, numeric_physics)
     if numeric_mismatches:
         raise SystemExit(
             "restart numeric physics mismatch: " + json.dumps(numeric_mismatches, sort_keys=True)

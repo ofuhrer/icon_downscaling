@@ -1,7 +1,9 @@
 from datetime import datetime
 import importlib.util
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
+import netCDF4
 import numpy as np
 
 
@@ -53,6 +55,30 @@ def test_reference_surface_coupling_is_required() -> None:
 def test_expected_radiation_scheme_is_selected_per_run() -> None:
     assert VALIDATOR.expected_physics("rrtmg")["physics.rad"] == "RRTMG"
     assert VALIDATOR.expected_physics("rrtmgp")["physics.rad"] == "RRTMGP"
+
+
+def test_numeric_restart_attributes_fail_closed() -> None:
+    with TemporaryDirectory() as directory:
+        path = Path(directory) / "restart.nc"
+        with netCDF4.Dataset(path, "w") as dataset:
+            dataset.setncattr("present", 20.0)
+            dataset.setncattr("nan_value", np.nan)
+            dataset.setncattr("text_value", "twenty")
+        with netCDF4.Dataset(path) as dataset:
+            mismatches = VALIDATOR.numeric_attribute_mismatches(
+                dataset,
+                {
+                    "present": 20.0,
+                    "missing": 20.0,
+                    "nan_value": 20.0,
+                    "text_value": 20.0,
+                },
+            )
+
+    assert "present" not in mismatches
+    assert mismatches["missing"]["actual"] == "missing"
+    assert mismatches["nan_value"]["actual"] == "nan"
+    assert mismatches["text_value"]["actual"] == "twenty"
 
 
 def test_restart_comparison_excludes_three_cell_guard_region() -> None:
