@@ -32,6 +32,21 @@ SEASONS = ("DJF", "MAM", "JJA", "SON")
 SOURCES = ("hicar", "rea_l")
 TIE_TOLERANCE = 1.0e-12
 MINIMUM_STATION_EVENT_PAIRS = 20
+MINIMUM_NATIONAL_WIND_STATIONS = 20
+MINIMUM_SAFEGUARD_STATIONS = 10
+WIND_METRICS = ("wind_vector", "wind_speed_10m_m_s")
+WIND_SAFEGUARDS = {
+    "terrain_ridge_relative_gt_150m": (
+        lambda row: row["terrain_class"] == "terrain_ridge_relative_gt_150m"
+    ),
+    "terrain_valley_relative_lt_minus_150m": (
+        lambda row: row["terrain_class"]
+        == "terrain_valley_relative_lt_minus_150m"
+    ),
+    "station_elevation_ge_1500m": (
+        lambda row: float(row["station_elevation_m"]) >= 1500.0
+    ),
+}
 
 FOOTPRINT_INPUT_CONTRACT = {
     "status": "not_computable_from_evaluator_aggregates",
@@ -681,6 +696,355 @@ def lead_hour_tables(
     return output, dict(sorted(exclusions.items()))
 
 
+def material_wind_change(hicar_rmse: float, rea_l_rmse: float) -> dict:
+    """Classify one preregistered HICAR-minus-REA-L wind RMSE difference."""
+    if not all(math.isfinite(value) and value >= 0.0 for value in (hicar_rmse, rea_l_rmse)):
+        raise ValueError("wind decision RMSE values must be finite and nonnegative")
+    delta = hicar_rmse - rea_l_rmse
+    threshold = max(0.10, 0.05 * rea_l_rmse)
+    classification = (
+        "material_improvement"
+        if delta < -threshold - TIE_TOLERANCE
+        else "material_degradation"
+        if delta > threshold + TIE_TOLERANCE
+        else "neutral"
+    )
+    return {
+        "hicar_rmse_m_s": hicar_rmse,
+        "rea_l_rmse_m_s": rea_l_rmse,
+        "delta_hicar_minus_rea_l_m_s": delta,
+        "material_threshold_m_s": threshold,
+        "classification": classification,
+    }
+
+
+def joint_wind_event_classification(vector: str, speed: str) -> str:
+    """Combine primary vector and co-primary speed material classifications."""
+    allowed = {"material_improvement", "neutral", "material_degradation"}
+    if vector not in allowed or speed not in allowed:
+        raise ValueError("unknown wind material classification")
+    if vector == "material_degradation":
+        return "degraded"
+    if vector == "material_improvement":
+        return {
+            "material_improvement": "strong",
+            "neutral": "qualified",
+            "material_degradation": "mixed",
+        }[speed]
+    return {
+        "material_improvement": "mixed",
+        "neutral": "neutral",
+        "material_degradation": "degraded",
+    }[speed]
+
+
+def delta_direction(value: float) -> str:
+    if value < -TIE_TOLERANCE:
+        return "improving"
+    if value > TIE_TOLERANCE:
+        return "degrading"
+    return "neutral"
+
+
+def wind_decision_readout(rows: list[dict]) -> dict:
+    """Apply the fixed four-event wind added-value rule without significance claims."""
+    required_fields = {
+        "season",
+        "event_name",
+        "station_key",
+        "station_elevation_m",
+        "terrain_class",
+        "metric",
+        "pair_count",
+        "hicar_rmse",
+        "rea_l_rmse",
+        "rmse_delta_hicar_minus_rea_l",
+    }
+    wind_rows = [row for row in rows if row.get("metric") in WIND_METRICS]
+    if not wind_rows:
+        raise ValueError("wind decision requires station-event wind rows")
+    for index, row in enumerate(wind_rows):
+        absent = sorted(required_fields - set(row))
+        if absent:
+            raise ValueError(
+                f"wind decision row {index} lacks required fields: {', '.join(absent)}"
+            )
+    grain = [
+        (row["season"], row["event_name"], row["station_key"], row["metric"])
+        for row in wind_rows
+    ]
+    if len(grain) != len(set(grain)):
+        raise ValueError("wind decision rows are not unique at station-event-metric grain")
+    if {row["season"] for row in wind_rows} != set(SEASONS):
+        raise ValueError("wind decision requires exactly one event in each season")
+    event_names = {
+        season: {row["event_name"] for row in wind_rows if row["season"] == season}
+        for season in SEASONS
+    }
+    if any(len(names) != 1 for names in event_names.values()):
+        raise ValueError("wind decision requires one event_name per season")
+    if len(set.union(*event_names.values())) != len(SEASONS):
+        raise ValueError("wind decision event_name values must be unique across seasons")
+
+    event_evidence = []
+    metric_statuses = {metric: [] for metric in WIND_METRICS}
+    for season in SEASONS:
+        by_metric = {
+            metric: [
+                row
+                for row in wind_rows
+                if row["season"] == season and row["metric"] == metric
+            ]
+            for metric in WIND_METRICS
+        }
+        station_keys = {metric: {row["station_key"] for row in values} for metric, values in by_metric.items()}
+        if station_keys["wind_vector"] != station_keys["wind_speed_10m_m_s"]:
+            raise ValueError(f"{season}: vector and speed station populations differ")
+        station_count = len(station_keys["wind_vector"])
+        if station_count < MINIMUM_NATIONAL_WIND_STATIONS:
+            raise ValueError(
+                f"{season}: wind decision has {station_count} paired stations; "
+                f"requires at least {MINIMUM_NATIONAL_WIND_STATIONS}"
+            )
+        metrics = {}
+        for metric, metric_rows in by_metric.items():
+            summary = summarize_group(metric_rows)
+            evidence = material_wind_change(
+                summary["equal_station_network_hicar_rmse"],
+                summary["equal_station_network_rea_l_rmse"],
+            )
+            evidence.update(
+                {
+                    "paired_station_count": summary["paired_station_count"],
+                    "pair_count_total": summary["pair_count_total"],
+                    "median_station_delta_m_s": summary[
+                        "median_station_rmse_delta_hicar_minus_rea_l"
+                    ],
+                }
+            )
+            metrics[metric] = evidence
+            metric_statuses[metric].append(evidence["classification"])
+        event_evidence.append(
+            {
+                "season": season,
+                "event_name": next(iter(event_names[season])),
+                "paired_station_count": station_count,
+                "metrics": metrics,
+                "classification": joint_wind_event_classification(
+                    metrics["wind_vector"]["classification"],
+                    metrics["wind_speed_10m_m_s"]["classification"],
+                ),
+            }
+        )
+
+    station_event = {}
+    leave_one_event_out = {}
+    for metric in WIND_METRICS:
+        metric_rows = [row for row in wind_rows if row["metric"] == metric]
+        deltas = [float(row["rmse_delta_hicar_minus_rea_l"]) for row in metric_rows]
+        if not all(math.isfinite(value) for value in deltas):
+            raise ValueError(f"wind decision {metric} station-event deltas are nonfinite")
+        station_median = median(deltas)
+        station_event[metric] = {
+            "station_event_count": len(deltas),
+            "median_delta_hicar_minus_rea_l_m_s": station_median,
+            "median_direction": delta_direction(station_median),
+            "minimum_delta_m_s": min(deltas),
+            "maximum_delta_m_s": max(deltas),
+        }
+        omitted = []
+        for season in SEASONS:
+            remaining = [
+                float(row["rmse_delta_hicar_minus_rea_l"])
+                for row in metric_rows
+                if row["season"] != season
+            ]
+            omitted_median = median(remaining)
+            omitted.append(
+                {
+                    "omitted_season": season,
+                    "station_event_count": len(remaining),
+                    "median_delta_hicar_minus_rea_l_m_s": omitted_median,
+                    "direction": delta_direction(omitted_median),
+                    "nondegrading": omitted_median <= TIE_TOLERANCE,
+                }
+            )
+        leave_one_event_out[metric] = {
+            "all_omissions_nondegrading": all(row["nondegrading"] for row in omitted),
+            "omissions": omitted,
+        }
+
+    safeguard_evidence = []
+    repeated_regression = False
+    vector_rows = [row for row in wind_rows if row["metric"] == "wind_vector"]
+    for stratum, predicate in WIND_SAFEGUARDS.items():
+        events = []
+        for season in SEASONS:
+            stratum_rows = [
+                row for row in vector_rows if row["season"] == season and predicate(row)
+            ]
+            if len(stratum_rows) < MINIMUM_SAFEGUARD_STATIONS:
+                raise ValueError(
+                    f"{season}/{stratum}: safeguard has {len(stratum_rows)} paired "
+                    f"stations; requires at least {MINIMUM_SAFEGUARD_STATIONS}"
+                )
+            summary = summarize_group(stratum_rows)
+            evidence = material_wind_change(
+                summary["equal_station_network_hicar_rmse"],
+                summary["equal_station_network_rea_l_rmse"],
+            )
+            events.append(
+                {
+                    "season": season,
+                    "event_name": next(iter(event_names[season])),
+                    "paired_station_count": len(stratum_rows),
+                    **evidence,
+                }
+            )
+        degradation_count = sum(
+            event["classification"] == "material_degradation" for event in events
+        )
+        stratum_repeated = degradation_count >= 2
+        repeated_regression = repeated_regression or stratum_repeated
+        safeguard_evidence.append(
+            {
+                "stratum": stratum,
+                "minimum_required_stations_per_event": MINIMUM_SAFEGUARD_STATIONS,
+                "material_degradation_event_count": degradation_count,
+                "repeated_broad_regression": stratum_repeated,
+                "status": "fail" if stratum_repeated else "pass",
+                "events": events,
+            }
+        )
+
+    event_counts = {}
+    for metric, statuses in metric_statuses.items():
+        event_counts[metric] = {
+            "material_improvement": statuses.count("material_improvement"),
+            "neutral": statuses.count("neutral"),
+            "material_degradation": statuses.count("material_degradation"),
+            "nondegradation": sum(status != "material_degradation" for status in statuses),
+        }
+    joint_event_counts = {
+        status: sum(event["classification"] == status for event in event_evidence)
+        for status in ("strong", "qualified", "neutral", "mixed", "degraded")
+    }
+    vector_gate = (
+        event_counts["wind_vector"]["nondegradation"] >= 3
+        and event_counts["wind_vector"]["material_improvement"] >= 2
+        and station_event["wind_vector"]["median_direction"] == "improving"
+        and not repeated_regression
+    )
+    speed_gate = (
+        event_counts["wind_speed_10m_m_s"]["nondegradation"] >= 3
+        and event_counts["wind_speed_10m_m_s"]["material_improvement"] >= 2
+        and station_event["wind_speed_10m_m_s"]["median_direction"] == "improving"
+    )
+    speed_supports_qualified = (
+        event_counts["wind_speed_10m_m_s"]["material_degradation"] == 0
+        and station_event["wind_speed_10m_m_s"]["median_direction"] != "degrading"
+    )
+    all_materially_neutral = all(
+        counts["material_improvement"] == 0 and counts["material_degradation"] == 0
+        for counts in event_counts.values()
+    )
+    repeated_primary_or_coprimary_degradation = (
+        repeated_regression
+        or event_counts["wind_vector"]["material_degradation"] >= 2
+        or event_counts["wind_speed_10m_m_s"]["material_degradation"] >= 2
+    )
+    classification = (
+        "degraded"
+        if repeated_primary_or_coprimary_degradation
+        else "strong"
+        if vector_gate and speed_gate and joint_event_counts["strong"] >= 2
+        else "qualified"
+        if vector_gate and speed_supports_qualified
+        else "neutral"
+        if all_materially_neutral
+        else "mixed"
+    )
+    return {
+        "schema_version": 1,
+        "classification": classification,
+        "rule": {
+            "estimand": (
+                "Per-event equal-station network RMSE, sqrt(mean station RMSE squared)"
+            ),
+            "delta_sign": "negative favors HICAR",
+            "material_threshold": "max(0.10 m s-1, 0.05 * REA-L RMSE)",
+            "threshold_boundary": "absolute delta equal to the threshold is neutral",
+            "event_classifications": {
+                "strong": "material vector and speed improvement",
+                "qualified": "material vector improvement and neutral speed",
+                "neutral": "neutral vector and speed",
+                "mixed": "vector improvement with speed degradation, or neutral vector with speed improvement",
+                "degraded": "material vector degradation, or neutral vector with speed degradation",
+            },
+            "campaign_classifications": {
+                "strong": (
+                    "vector and speed each pass replicated-improvement gates, at "
+                    "least two events are jointly strong, and safeguards pass"
+                ),
+                "qualified": "vector gate passes; speed has no material degradation and nondegrading median",
+                "neutral": "all eight event-metric changes are materially neutral",
+                "degraded": "repeated vector/speed degradation or a repeated safeguard regression",
+                "mixed": "all other combinations",
+            },
+            "required_event_counts": {
+                "event_count": 4,
+                "vector_nondegradation_minimum": 3,
+                "vector_material_improvement_minimum": 2,
+                "speed_nondegradation_minimum_for_strong": 3,
+                "speed_material_improvement_minimum_for_strong": 2,
+                "joint_strong_event_minimum_for_strong": 2,
+            },
+            "median_rule": "raw station-event median; negative is improving; no significance inference",
+            "safeguard_rule": (
+                "For vector RMSE, material broad degradation in the same sufficiently "
+                "populated stratum in at least two events fails the safeguard"
+            ),
+            "minimum_national_stations_per_event": MINIMUM_NATIONAL_WIND_STATIONS,
+            "minimum_safeguard_stations_per_event": MINIMUM_SAFEGUARD_STATIONS,
+            "leave_one_event_out_role": "reported robustness diagnostic; it does not override RMSE gates",
+        },
+        "event_counts": event_counts,
+        "joint_event_counts": joint_event_counts,
+        "requirements": {
+            "vector_nondegradation": {
+                "observed": event_counts["wind_vector"]["nondegradation"],
+                "required": 3,
+                "passes": event_counts["wind_vector"]["nondegradation"] >= 3,
+            },
+            "vector_material_improvement": {
+                "observed": event_counts["wind_vector"]["material_improvement"],
+                "required": 2,
+                "passes": event_counts["wind_vector"]["material_improvement"] >= 2,
+            },
+            "negative_vector_station_event_median": {
+                "observed_direction": station_event["wind_vector"]["median_direction"],
+                "passes": station_event["wind_vector"]["median_direction"] == "improving",
+            },
+            "safeguards": {"passes": not repeated_regression},
+            "vector_gate_passes": vector_gate,
+            "speed_gate_passes_for_strong": speed_gate,
+            "joint_strong_event_minimum_for_strong": {
+                "observed": joint_event_counts["strong"],
+                "required": 2,
+                "passes": joint_event_counts["strong"] >= 2,
+            },
+            "speed_supports_qualified": speed_supports_qualified,
+        },
+        "event_evidence": event_evidence,
+        "station_event_evidence": station_event,
+        "leave_one_event_out": leave_one_event_out,
+        "safeguards": {
+            "status": "fail" if repeated_regression else "pass",
+            "strata": safeguard_evidence,
+        },
+    }
+
+
 def selected_site_listings(rows: list[dict], metadata: dict[str, dict], worst_count: int) -> dict:
     wind_metrics = {"wind_speed_10m_m_s", "wind_vector"}
     wind_rows = [row for row in rows if row["metric"] in wind_metrics]
@@ -799,9 +1163,22 @@ def run(args: argparse.Namespace) -> dict:
                 )
 
     selected_metrics = set(args.metric) if args.metric else None
-    rows, station_exclusions, metadata = station_season_rows(reports, common_keys, selected_metrics)
+    rows, station_exclusions, metadata = station_season_rows(
+        reports, common_keys, selected_metrics
+    )
     if not rows:
         raise ValueError("no valid paired station-season RMSE rows")
+    wind_rows, wind_exclusions, _ = station_season_rows(
+        reports, common_keys, set(WIND_METRICS)
+    )
+    wind_decision = wind_decision_readout(wind_rows)
+    wind_decision["data_quality"] = {
+        "station_event_exclusions": wind_exclusions,
+        "population_policy": (
+            "Excluded rows remain visible; each event must retain identical vector/speed "
+            "station keys and meet national and safeguard population minima."
+        ),
+    }
     lead_tables, lead_exclusions = lead_hour_tables(reports, selected_metrics)
     coverage = {
         season: {
@@ -880,6 +1257,7 @@ def run(args: argparse.Namespace) -> dict:
                 "physical_lead_hour preserves elapsed time from simulation start."
             ),
             "rmse_delta_sign": "negative improves on REA-L; positive degrades",
+            "wind_decision": wind_decision["rule"],
             "terrain_ridge_definition": (
                 "HICAR terrain exceeds the median in an approximately 10-km-wide "
                 "square (5-km half-width) by 150 m"
@@ -910,6 +1288,7 @@ def run(args: argparse.Namespace) -> dict:
         "station_season_csv": str(args.output_csv.resolve()),
         "station_season_row_count": len(rows),
         "metrics": sorted({row["metric"] for row in rows}),
+        "wind_decision_readout": wind_decision,
         "equal_station_summaries": equal_station_summaries(
             rows, common_keys is not None, national_metric_four_season_keys
         ),

@@ -46,8 +46,8 @@ def make_report(path, season, site_count=67, common_count=65, mismatch=False):
     site_metrics = {}
     for index in range(site_count):
         key = f"S{index:03d}:{index + 1}"
-        elevation = 3100.0 if index == 0 else 1200.0 if index == 1 else 450.0
-        relative = 200.0 if index in (0, 1) else -200.0 if index == 2 else 0.0
+        elevation = 3100.0 if index == 0 else 1600.0 if index < 15 else 450.0
+        relative = 200.0 if index < 12 else -200.0 if index < 24 else 0.0
         sites.append(
             {
                 "key": key,
@@ -74,6 +74,7 @@ def make_report(path, season, site_count=67, common_count=65, mismatch=False):
                     bias=1.0 + index / 100.0,
                 ),
                 "wind_vector": metric(3.0 + index / 100.0, vector=True),
+                "wind_speed_10m_m_s": metric(2.0 + index / 100.0),
             },
             "rea_l": {
                 "temperature_2m_height_adjusted_k": metric(
@@ -84,6 +85,7 @@ def make_report(path, season, site_count=67, common_count=65, mismatch=False):
                     bias=1.5,
                 ),
                 "wind_vector": metric(2.5, vector=True),
+                "wind_speed_10m_m_s": metric(2.5),
             },
         }
     lead = {
@@ -98,6 +100,7 @@ def make_report(path, season, site_count=67, common_count=65, mismatch=False):
                         bias=1.0,
                     ),
                     "wind_vector": metric(3.0, site_count, vector=True),
+                    "wind_speed_10m_m_s": metric(2.0, site_count),
                 },
                 "terrain_ridge_relative_gt_150m": {
                     "temperature_2m_height_adjusted_k": metric(
@@ -108,6 +111,7 @@ def make_report(path, season, site_count=67, common_count=65, mismatch=False):
                         bias=2.0,
                     ),
                     "wind_vector": metric(4.0, 2, vector=True),
+                    "wind_speed_10m_m_s": metric(2.0, 2),
                 }
             },
             "rea_l": {
@@ -120,6 +124,7 @@ def make_report(path, season, site_count=67, common_count=65, mismatch=False):
                         bias=1.5,
                     ),
                     "wind_vector": metric(2.5, site_count, vector=True),
+                    "wind_speed_10m_m_s": metric(2.5, site_count),
                 },
                 "terrain_ridge_relative_gt_150m": {
                     "temperature_2m_height_adjusted_k": metric(
@@ -130,6 +135,7 @@ def make_report(path, season, site_count=67, common_count=65, mismatch=False):
                         bias=1.0,
                     ),
                     "wind_vector": metric(3.0, 2, vector=True),
+                    "wind_speed_10m_m_s": metric(2.5, 2),
                 }
             },
         }
@@ -211,6 +217,7 @@ def test_national_summary_and_exact_common_65(tmp_path):
     assert summary["national_four_season_intersection"]["site_count"] == 67
     assert summary["coverage"]["metric_eligible_four_season_intersection_counts"] == {
         "temperature_2m_height_adjusted_k": 66,
+        "wind_speed_10m_m_s": 67,
         "wind_vector": 67,
     }
     assert (
@@ -227,7 +234,7 @@ def test_national_summary_and_exact_common_65(tmp_path):
     )
     assert summary["common_65"]["site_count"] == 65
     assert summary["common_65"]["site_keys"][0] == "S000:1"
-    assert len(rows) == 4 * 67 * 2 - 1
+    assert len(rows) == 4 * 67 * 3 - 1
     assert summary["data_quality"]["station_season_exclusions"] == {
         "unequal_pair_count:SON:temperature_2m_height_adjusted_k": 1
     }
@@ -326,8 +333,10 @@ def test_national_summary_and_exact_common_65(tmp_path):
         for item in summary["lead_hour_tables"]["JJA"]
     } == {
         ("all_sites", "temperature_2m_height_adjusted_k"),
+        ("all_sites", "wind_speed_10m_m_s"),
         ("all_sites", "wind_vector"),
         ("terrain_ridge_relative_gt_150m", "temperature_2m_height_adjusted_k"),
+        ("terrain_ridge_relative_gt_150m", "wind_speed_10m_m_s"),
         ("terrain_ridge_relative_gt_150m", "wind_vector"),
     }
     ridge_wind = next(
@@ -340,7 +349,34 @@ def test_national_summary_and_exact_common_65(tmp_path):
     assert ridge_wind["hicar_rmse"] == pytest.approx(4.0)
     assert ridge_wind["rea_l_rmse"] == pytest.approx(3.0)
     assert len(summary["selected_site_listings"]["station_elevation_ge_3000m"]) == 1
-    assert len(summary["selected_site_listings"]["terrain_ridge_relative_gt_150m"]) == 2
+    assert len(summary["selected_site_listings"]["terrain_ridge_relative_gt_150m"]) == 12
+    decision = summary["wind_decision_readout"]
+    assert decision["classification"] == "degraded"
+    assert decision["event_counts"]["wind_vector"] == {
+        "material_improvement": 0,
+        "neutral": 0,
+        "material_degradation": 4,
+        "nondegradation": 0,
+    }
+    assert decision["event_counts"]["wind_speed_10m_m_s"] == {
+        "material_improvement": 4,
+        "neutral": 0,
+        "material_degradation": 0,
+        "nondegradation": 4,
+    }
+    assert {event["classification"] for event in decision["event_evidence"]} == {
+        "degraded"
+    }
+    assert decision["station_event_evidence"]["wind_vector"][
+        "median_direction"
+    ] == "degrading"
+    assert decision["leave_one_event_out"]["wind_vector"][
+        "all_omissions_nondegrading"
+    ] is False
+    assert decision["safeguards"]["status"] == "fail"
+    assert {
+        item["stratum"] for item in decision["safeguards"]["strata"]
+    } == set(MODULE.WIND_SAFEGUARDS)
     assert summary["footprint_sensitivity"]["status"] == (
         "not_computable_from_evaluator_aggregates"
     )
@@ -385,6 +421,101 @@ def test_network_pooled_rmse_uses_pair_counts_and_preserves_equal_station_mean()
     assert summary["network_pooled_rmse_delta_hicar_minus_rea_l"] == pytest.approx(
         7.0**0.5 - 13.0**0.5
     )
+
+
+def make_wind_decision_rows(event_deltas):
+    rows = []
+    for season, (vector_delta, speed_delta) in zip(
+        MODULE.SEASONS, event_deltas, strict=True
+    ):
+        for index in range(30):
+            terrain = (
+                "terrain_ridge_relative_gt_150m"
+                if index < 10
+                else "terrain_valley_relative_lt_minus_150m"
+                if index < 20
+                else "terrain_neutral_relative_pm_150m"
+            )
+            for metric_name, delta in (
+                ("wind_vector", vector_delta),
+                ("wind_speed_10m_m_s", speed_delta),
+            ):
+                rows.append(
+                    {
+                        "season": season,
+                        "event_name": f"event-{season}",
+                        "station_key": f"S{index:03d}:1",
+                        "station_elevation_m": 1600.0 if index < 10 else 500.0,
+                        "terrain_class": terrain,
+                        "metric": metric_name,
+                        "pair_count": 24,
+                        "hicar_rmse": 2.0 + delta,
+                        "rea_l_rmse": 2.0,
+                        "rmse_delta_hicar_minus_rea_l": delta,
+                        "outcome": "improved" if delta < 0 else "degraded" if delta > 0 else "tied",
+                    }
+                )
+    return rows
+
+
+@pytest.mark.parametrize(
+    ("event_deltas", "expected"),
+    [
+        ([(-0.2, -0.2)] * 4, "strong"),
+        ([(-0.2, 0.0)] * 4, "qualified"),
+        ([(0.0, 0.0)] * 4, "neutral"),
+        ([(-0.2, 0.0), (0.0, 0.0), (0.0, 0.0), (0.0, 0.0)], "mixed"),
+        ([(0.2, 0.0), (0.2, 0.0), (0.0, 0.0), (0.0, 0.0)], "degraded"),
+    ],
+)
+def test_preregistered_wind_campaign_classifications(event_deltas, expected):
+    decision = MODULE.wind_decision_readout(make_wind_decision_rows(event_deltas))
+
+    assert decision["classification"] == expected
+    assert len(decision["event_evidence"]) == 4
+    assert all(
+        len(values["omissions"]) == 4
+        for values in decision["leave_one_event_out"].values()
+    )
+
+
+def test_material_threshold_boundary_is_neutral_and_raw_values_are_retained():
+    evidence = MODULE.material_wind_change(2.1, 2.0)
+
+    assert evidence == {
+        "hicar_rmse_m_s": 2.1,
+        "rea_l_rmse_m_s": 2.0,
+        "delta_hicar_minus_rea_l_m_s": pytest.approx(0.1),
+        "material_threshold_m_s": pytest.approx(0.1),
+        "classification": "neutral",
+    }
+
+
+def test_wind_decision_fails_closed_on_population_or_metric_loss():
+    rows = make_wind_decision_rows([(-0.2, 0.0)] * 4)
+    missing_speed = [
+        row
+        for row in rows
+        if not (
+            row["season"] == "DJF"
+            and row["station_key"] == "S000:1"
+            and row["metric"] == "wind_speed_10m_m_s"
+        )
+    ]
+    with pytest.raises(ValueError, match="vector and speed station populations differ"):
+        MODULE.wind_decision_readout(missing_speed)
+
+    insufficient_ridge = [dict(row) for row in rows]
+    for row in insufficient_ridge:
+        if row["station_key"] == "S009:1":
+            row["terrain_class"] = "terrain_neutral_relative_pm_150m"
+    with pytest.raises(ValueError, match="safeguard has 9 paired stations"):
+        MODULE.wind_decision_readout(insufficient_ridge)
+
+    missing_schema = [dict(row) for row in rows]
+    del missing_schema[0]["rea_l_rmse"]
+    with pytest.raises(ValueError, match="lacks required fields: rea_l_rmse"):
+        MODULE.wind_decision_readout(missing_schema)
 
 
 def test_lead_hours_are_evaluation_relative_and_preserve_physical_lead(tmp_path):
