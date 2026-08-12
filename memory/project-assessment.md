@@ -301,8 +301,9 @@ approximation, not a convergence claim. All four season-specific runtime
 domains are complete. The clean final HICAR source is built with NVHPC/OpenACC
 and NCCL; the executable is pinned by checksum.
 
-1. Stream validated regular forcing records at segment granularity while the
-   four restart chains advance one qualified segment at a time on `normal`.
+1. All 196 hourly regular-forcing records are validated and ready. Advance the
+   remaining restart-chain segments one qualified 12-node segment at a time on
+   `normal`; six of sixteen segments are complete.
 2. Evaluate the completed trajectories against all usable SwissMetNet stations
    and native REA-L-CH1, then decide from those results whether the bounded
    alpha-one projection provides useful downscaling or only a stable control.
