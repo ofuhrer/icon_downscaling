@@ -220,6 +220,23 @@ SwissMetNet automatic stations are terrestrial. The evaluator records the
 unconstrained and selected cells and their displacement, rejects shifts above
 1 km, and keeps large overrides visible as representativeness warnings.
 
+The evaluation decision rule is fixed before seeing the campaign scores.
+Vector-wind RMSE is primary and speed RMSE is co-primary; for
+`delta = RMSE(HICAR) - RMSE(REA-L)`, only changes larger than
+`max(0.10 m s-1, 5% of REA-L RMSE)` are material. Strong added value requires
+material improvement in both; qualified added value permits material vector
+improvement with neutral speed, but never material vector degradation. Require
+vector non-degradation in at least three of four events, material improvement
+in at least two, a negative median station-event delta, and no repeated broad
+regression in a sufficiently populated ridge, valley or >=1500 m stratum.
+MAE, station-bias/centered-error decomposition, component correlation and
+speed-variance ratio explain the primary result but cannot overturn worse
+RMSE. Report event ranges and leave-one-event-out direction without p-values
+or climatological claims. Neutral or mixed national results trigger an
+identically sampled interpolation-only control. Run one further physics or
+wind sensitivity only if the diagnostics identify one coherent mechanism; do
+not reopen a tuning matrix.
+
 ## Remaining work
 
 The final 15 km static is complete and contains HLM/SVF/slope/aspect computed
