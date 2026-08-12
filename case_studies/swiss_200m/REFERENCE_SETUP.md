@@ -109,10 +109,9 @@ surface and terrain-radiation choices but cover much smaller domains.
 ## Physical parameterizations
 
 - Morrison two-moment microphysics, YSU PBL, Noah-MP land, revised-MM5
-  atmospheric surface layer, prescribed simple-water SST, RRTMGP radiation
+  atmospheric surface layer, prescribed simple-water SST, RRTMG radiation
   and Noah-MP's internal snow model. Microphysics and YSU run every timestep
-  on all levels; YSU top-down radiative mixing is off for the selected
-  RRTMGP path.
+  on all levels; YSU top-down radiative mixing remains explicitly off.
 - Noah-MP uses USGS classes, four soil layers and a 300 s update. The untuned
   option vector is `dveg=3`, `crs=1`, `btr=2`, `runsrf=1`, `runsub=1`,
   `infdv=1`, `tksno=1`, `scf=1`, `compact=1`, `frz=1`, `inf=1`, `rad=3`,
@@ -131,13 +130,15 @@ surface and terrain-radiation choices but cover much smaller domains.
 
 ## Radiation
 
-- RRTMGP at 600 s, UTC, cloud-fraction option 3 and maximum-random overlap.
-  `rrtmgp_block_N=256` gives one radiation block per compute rank on the
-  selected 12-node/48-compute-rank layout and is the bit-reproducible path.
-- Enable direct, diffuse and reflected shortwave terrain corrections and
-  terrain longwave with a 1500 m reflection/emission neighbourhood after HLM,
-  SVF, slope and aspect have been generated and checked. The repaired
-  reflected-shortwave accumulation is part of the selected HICAR source.
+- Use RRTMG at 600 s, UTC, cloud-fraction option 3 and maximum-random overlap.
+  This bounded candidate avoids the unresolved RRTMGP daylight A/A divergence;
+  it remains subject to exact A/A and two-hour restart qualification before
+  the four-season launch. RRTMG is a physics substitution and its host/device
+  transfers must also be benchmarked against the six-hour segment allocation.
+- Enable terrain shading plus direct and diffuse shortwave corrections after
+  HLM, SVF, slope and aspect have been generated and checked. Keep reflected
+  shortwave and terrain longwave off in this first RRTMG baseline so their
+  less-established neighbourhood terms do not confound the radiation change.
 
 ## Runs and verification
 

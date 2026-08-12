@@ -173,6 +173,9 @@ class Campaign:
         self.radiation_update_interval = float(
             self.config.get("radiation_update_interval", 600.0)
         )
+        self.radiation_scheme = str(
+            self.config.get("radiation_scheme", "rrtmgp")
+        ).lower()
         self.use_sparse_lbc = bool(self.config.get("use_sparse_lbc", True))
         self.full_season_input_lists = bool(
             self.config.get("full_season_input_lists", False)
@@ -202,6 +205,8 @@ class Campaign:
             )
         if not self.input_partitions:
             raise ValueError("input_partitions must not be empty")
+        if self.radiation_scheme not in {"rrtmgp", "rrtmg"}:
+            raise ValueError("radiation_scheme must be rrtmgp or rrtmg")
         if self.input_column_workers > self.input_cpus:
             raise ValueError("input_column_workers must not exceed input_cpus")
         if (
@@ -446,6 +451,7 @@ class Campaign:
                     "HICAR_RADIATION_UPDATE_INTERVAL": str(
                         self.radiation_update_interval
                     ),
+                    "HICAR_RADIATION_SCHEME": self.radiation_scheme,
                     "HICAR_DISABLE_SX": "1" if self.config.get("disable_sx", False) else "0",
                     "HICAR_ALPHA_CONST": str(self.config.get("alpha_const", -1.0)),
                     "HICAR_ALLOW_INPUT_SUPERSET": (

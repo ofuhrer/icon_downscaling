@@ -74,6 +74,9 @@ def main() -> int:
     parser.add_argument("--output-interval", type=int, default=600)
     parser.add_argument("--radiation-update-interval", type=float, default=600.0)
     parser.add_argument(
+        "--radiation-scheme", choices=("rrtmgp", "rrtmg"), default="rrtmgp"
+    )
+    parser.add_argument(
         "--output-profile", choices=("station", "evaluation", "debug"), default="evaluation"
     )
     parser.add_argument("--model-debug", action="store_true")
@@ -251,6 +254,12 @@ def main() -> int:
             "'precipitation', 'psfc', 'taix', 'u10m', 'v10m'"
         ),
     }
+    rrtmgp_block_stanza = ""
+    if args.radiation_scheme == "rrtmgp":
+        rrtmgp_block_stanza = (
+            "  ! The selected 48-compute-rank national layout uses one RRTMGP block per rank.\n"
+            "  rrtmgp_block_N = 256"
+        )
     values = {
         "@START_DATE@": args.start_date,
         "@END_DATE@": args.end_date,
@@ -271,7 +280,9 @@ def main() -> int:
         "@RESTART_DIR@": f"{args.restart_dir.resolve()}/",
         "@RESTART_LINES@": restart_lines,
         "@OUTPUT_INTERVAL@": str(args.output_interval),
+        "@RADIATION_SCHEME@": args.radiation_scheme,
         "@RADIATION_UPDATE_INTERVAL@": str(args.radiation_update_interval),
+        "@RRTMGP_BLOCK_STANZA@": rrtmgp_block_stanza,
         "@OUTPUT_VARS@": output_variables[args.output_profile],
     }
     rendered = TEMPLATE.read_text()

@@ -27,8 +27,10 @@ The JSON configuration supplies `root`, `repo_root`, `forcing_dir`,
 `hicar_executable`, `hicar_support_dir`, `hicar_build_provenance`, `python`,
 RBF weights, and `seasons` with `name`, `start`, `end`, and the valid-time
 runtime-domain file. `use_sparse_lbc` defaults to true for old experiment
-configs; the selected regular-relaxation reference sets it false. Each season
-has its own forcing cache because records embed the runtime-domain identity.
+configs; the selected regular-relaxation reference sets it false.
+`radiation_scheme` selects `rrtmgp` or `rrtmg` and is passed through to both
+namelist rendering and restart validation. Each season has its own forcing
+cache because records embed the runtime-domain identity.
 
 The controller refuses dirty coordinator/HICAR trees and refuses executables
 built from an uncommitted HICAR patch. Each completed segment must contain the

@@ -45,6 +45,14 @@ def test_restart_output_omits_predecessor_terminal_time() -> None:
 def test_reference_surface_coupling_is_required() -> None:
     assert VALIDATOR.REQUIRED_PHYSICS["lsm.nmp_opt_sfc"] == "1"
     assert VALIDATOR.REQUIRED_PHYSICS["sfc.iz0tlnd"] == "1"
+    assert VALIDATOR.REQUIRED_PHYSICS["pbl.ysu_topdown_pblmix"] == "0"
+    assert VALIDATOR.REQUIRED_PHYSICS["rad.terrain_reflected_sw"] == "F"
+    assert VALIDATOR.REQUIRED_PHYSICS["rad.terrain_longwave"] == "F"
+
+
+def test_expected_radiation_scheme_is_selected_per_run() -> None:
+    assert VALIDATOR.expected_physics("rrtmg")["physics.rad"] == "RRTMG"
+    assert VALIDATOR.expected_physics("rrtmgp")["physics.rad"] == "RRTMGP"
 
 
 def test_restart_comparison_excludes_three_cell_guard_region() -> None:

@@ -40,6 +40,7 @@ def campaign(
     input_column_workers=1,
     input_exclusive=False,
     use_sparse_lbc=True,
+    radiation_scheme="rrtmgp",
 ) -> Campaign:
     config = {
         "root": str(tmp_path / "campaign"),
@@ -58,6 +59,7 @@ def campaign(
         "input_exclusive": input_exclusive,
         "use_sparse_lbc": use_sparse_lbc,
         "radiation_update_interval": 600,
+        "radiation_scheme": radiation_scheme,
         "seasons": seasons or [{
             "name": "autumn",
             "start": "2020-10-02T00:00:00",
@@ -323,10 +325,12 @@ def test_inputs_only_override_can_prepare_beyond_bounded_horizon(
     ]
 
 
-def test_radiation_update_interval_is_explicit_in_model_environment(
+def test_radiation_configuration_is_explicit_in_model_environment(
     tmp_path, monkeypatch
 ) -> None:
-    configured = campaign(tmp_path, full_season_input_lists=False)
+    configured = campaign(
+        tmp_path, full_season_input_lists=False, radiation_scheme="rrtmg"
+    )
     configured.config["seasons"][0]["end"] = "2020-10-02T01:00:00"
     configured.seasons = [
         rd_campaign.Season(
@@ -353,3 +357,17 @@ def test_radiation_update_interval_is_explicit_in_model_environment(
     monkeypatch.setattr(rd_campaign, "submit", fake_submit)
     assert configured.submit_segments() == 1
     assert submitted[0]["HICAR_RADIATION_UPDATE_INTERVAL"] == "600.0"
+    assert submitted[0]["HICAR_RADIATION_SCHEME"] == "rrtmg"
+
+
+def test_unknown_radiation_scheme_is_rejected(tmp_path) -> None:
+    try:
+        campaign(
+            tmp_path,
+            full_season_input_lists=False,
+            radiation_scheme="unknown",
+        )
+    except ValueError as error:
+        assert "radiation_scheme" in str(error)
+    else:
+        raise AssertionError("unknown radiation scheme was accepted")

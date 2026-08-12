@@ -84,7 +84,7 @@
   lsm = 'noahmp'
   sfc = 'revmm5'
   water = 'simple'
-  rad = 'rrtmgp'
+  rad = '@RADIATION_SCHEME@'
   sm = 'none'
 /
 &time_parameters
@@ -148,9 +148,7 @@
 /
 &rad_parameters
   update_interval_rad = @RADIATION_UPDATE_INTERVAL@
-  ! The selected 48-compute-rank national layout is reproducible with one
-  ! RRTMGP block per rank; the default block size creates two and is not.
-  rrtmgp_block_N = 256
+@RRTMGP_BLOCK_STANZA@
   ! Simulation and forcing timestamps are UTC.
   tzone = 0.0
   icloud = 3
@@ -159,8 +157,8 @@
   terrain_shading = .True.
   terrain_direct_sw = .True.
   terrain_diffuse_sw = .True.
-  terrain_reflected_sw = .True.
-  terrain_longwave = .True.
+  terrain_reflected_sw = .False.
+  terrain_longwave = .False.
   terrain_refl_radius = 1500.0
 /
 &pbl_parameters

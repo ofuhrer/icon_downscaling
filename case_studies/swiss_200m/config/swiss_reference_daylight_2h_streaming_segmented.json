@@ -1,5 +1,5 @@
 {
-  "root": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/smoke/autumn_daylight_regular_relaxation_hourly/streaming_segmented",
+  "root": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/smoke/autumn_daylight_regular_relaxation_hourly_rrtmg_v1/streaming_segmented",
   "repo_root": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/source/coordinator",
   "forcing_dir": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/input/forcing_sst_local_baseline_v1",
   "python": "/scratch/mch/olifu/icon_hicar/venv_static/bin/python",
@@ -22,6 +22,7 @@
   "output_profile": "evaluation",
   "output_interval": 600,
   "radiation_update_interval": 600,
+  "radiation_scheme": "rrtmg",
   "alpha_const": -1.0,
   "seasons": [
     {

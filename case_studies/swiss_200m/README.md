@@ -13,12 +13,11 @@ The selected baseline is explicit in `config/hicar_swiss_200m.nml.in`:
 - variational wind, Sx on, density advection, `alpha_const=1`;
 - Noah-MP with SMI initialization and four depth-varying soil textures;
 - ICON SWE, snow depth/density, and bulk snow temperature on cold starts;
-- RRTMGP every 600 s with `rrtmgp_block_N=256`, which gives one block per
-  compute rank on the selected 48-rank national layout; terrain radiation off.
+- RRTMG every 600 s, with terrain shading and direct/diffuse shortwave
+  corrections on; reflected shortwave and terrain longwave are off.
 
-The one-block setting is qualified only for this domain and decomposition.
-Recheck the block count and repeatability if either changes; HICAR's global
-default remains unchanged.
+The selected RRTMG candidate still requires exact A/A and segmented-restart
+qualification plus a throughput check before the seasonal campaign.
 
 The atmospheric forcing file keeps mass-grid U/V and W for HICAR's normal
 initialization and wind-projection path. The paired sparse LBC contains only

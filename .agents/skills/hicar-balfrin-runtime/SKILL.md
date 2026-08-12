@@ -41,7 +41,7 @@ two `pp-short` jobs.
 
 ## Runtime essentials
 
-Link `NoahmpTable.TBL`, `rrtmgp_support`, and `mp_support` into the run
+Link `NoahmpTable.TBL`, `rrtmg_support`, `rrtmgp_support`, and `mp_support` into the run
 directory. Provide a valid-time runtime domain, continuous hourly hicarprep
 forcing and sparse LBC lists, and an existing predecessor restart for every
 continuation. Keep HICAR initialization/projection enabled once at the start

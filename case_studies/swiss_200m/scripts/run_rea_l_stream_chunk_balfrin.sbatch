@@ -42,6 +42,7 @@ restart_input=${RESTART_INPUT:-}
 profile=${OUTPUT_PROFILE:-evaluation}
 output_interval=${OUTPUT_INTERVAL:-600}
 radiation_update_interval=${HICAR_RADIATION_UPDATE_INTERVAL:-600.0}
+radiation_scheme=${HICAR_RADIATION_SCHEME:-rrtmgp}
 model_debug=${HICAR_MODEL_DEBUG:-0}
 disable_sx=${HICAR_DISABLE_SX:-0}
 alpha_const=${HICAR_ALPHA_CONST:--1.0}
@@ -124,6 +125,7 @@ fi
   "${debug_args[@]}" \
   "${sx_args[@]}" \
   --output-interval "$output_interval" \
+  --radiation-scheme "$radiation_scheme" \
   --radiation-update-interval "$radiation_update_interval" \
   --restart-interval "$restart_records" \
   "${restart_args[@]}" \
@@ -131,7 +133,7 @@ fi
   --restart-dir "$run/restart" \
   --output "$run/input.nml"
 
-for asset in NoahmpTable.TBL rrtmgp_support mp_support; do
+for asset in NoahmpTable.TBL rrtmg_support rrtmgp_support mp_support; do
   test -e "$support/$asset" || { echo "missing HICAR support asset: $asset" >&2; exit 2; }
   test -e "$run/$asset" || ln -s "$support/$asset" "$run/$asset"
 done
@@ -169,6 +171,7 @@ test -s "$restart" || { echo "missing terminal restart: $restart" >&2; exit 1; }
   --output-dir "$run/output" --restart "$restart" --start "$start" --end "$model_end" \
   --restart-time "$end" \
   --output-interval "$output_interval" --forcing-list "$forcing_list" \
+  --radiation-scheme "$radiation_scheme" \
   --radiation-update-interval "$radiation_update_interval" \
   --alpha-const "$alpha_const" \
   "${boundary_validation_args[@]}" "${validation_restart_args[@]}" \

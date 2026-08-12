@@ -18,13 +18,28 @@ REQUIRED_PHYSICS = {
     "physics.mp": "morrison",
     "physics.pbl": "ysu",
     "physics.lsm": "noahmp",
-    "physics.rad": "RRTMGP",
     "lsm.nmp_opt_sfc": "1",
     "sfc.iz0tlnd": "1",
+    "pbl.ysu_topdown_pblmix": "0",
+    "rad.icloud": "3",
+    "rad.cldovrlp": "2",
+    "rad.read_ghg": "F",
+    "rad.terrain_shading": "T",
+    "rad.terrain_direct_sw": "T",
+    "rad.terrain_diffuse_sw": "T",
+    "rad.terrain_reflected_sw": "F",
+    "rad.terrain_longwave": "F",
     "wind.wind_solver_iterations": "2500",
     "adv.advect_density": "T",
     "domain.nz": "80",
 }
+
+
+def expected_physics(radiation_scheme: str) -> dict[str, str]:
+    return {
+        **REQUIRED_PHYSICS,
+        "physics.rad": radiation_scheme.upper(),
+    }
 
 
 def decode_times(path: Path) -> list[datetime]:
@@ -119,6 +134,9 @@ def main() -> int:
     )
     parser.add_argument("--output-interval", type=int, required=True)
     parser.add_argument("--radiation-update-interval", type=float, default=600.0)
+    parser.add_argument(
+        "--radiation-scheme", choices=("rrtmgp", "rrtmg"), default="rrtmgp"
+    )
     parser.add_argument("--alpha-const", type=float, default=1.0)
     parser.add_argument("--forcing-list", type=Path, required=True)
     parser.add_argument(
@@ -166,10 +184,11 @@ def main() -> int:
     if restart_times != [restart_time]:
         raise SystemExit(f"checkpoint time is {restart_times}, expected {[restart_time]}")
     with netCDF4.Dataset(args.restart) as restart:
+        required_physics = expected_physics(args.radiation_scheme)
         require_restart_state(restart)
         mismatches = {
             name: {"actual": str(getattr(restart, name, "")), "expected": expected_value}
-            for name, expected_value in REQUIRED_PHYSICS.items()
+            for name, expected_value in required_physics.items()
             if str(getattr(restart, name, "")) != expected_value
         }
     if mismatches:
@@ -178,6 +197,8 @@ def main() -> int:
         numeric_physics = {
             "wind.alpha_const": args.alpha_const,
             "rad.update_interval_rad": args.radiation_update_interval,
+            "rad.tzone": 0.0,
+            "rad.terrain_refl_radius": 1500.0,
             "domain.height_lowest_level": 20.0,
         }
         numeric_mismatches = {
@@ -220,6 +241,7 @@ def main() -> int:
         "forcing_records": len(forcing),
         "boundary_records": len(boundaries) if boundaries is not None else 0,
         "boundary_relaxation": "sparse_lbc" if boundaries is not None else "regular_forcing",
+        "radiation_scheme": args.radiation_scheme,
         "input_list_policy": "bracketing_superset" if args.allow_input_superset else "exact_segment",
     }, indent=2, sort_keys=True))
     return 0

@@ -12,6 +12,7 @@ from preprocessing.hicarprep.cli import parser as hicarprep_parser
 
 ROOT = Path(__file__).resolve().parents[1]
 RENDERER = ROOT / "case_studies/swiss_200m/scripts/render_hicar_namelist.py"
+SEGMENT_WRAPPER = ROOT / "case_studies/swiss_200m/scripts/run_rea_l_stream_chunk_balfrin.sbatch"
 
 
 def test_hicarprep_sparse_boundary_output_is_optional() -> None:
@@ -114,13 +115,46 @@ def test_renderer_has_one_explicit_hicarprep_configuration(tmp_path: Path) -> No
         "nmp_dveg = 3", "nmp_opt_soil = 2",
         "Sx = .True.", "advect_density = .True.", "alpha_const = -1.0",
         "Sx_dmax = 600.0", "TPI_dmax = 4000.0", "TPI_scale = 200.0",
-        "terrain_shading = .True.", "terrain_longwave = .True.",
+        "rad = 'rrtmgp'", "terrain_shading = .True.",
+        "terrain_direct_sw = .True.", "terrain_diffuse_sw = .True.",
+        "terrain_reflected_sw = .False.", "terrain_longwave = .False.",
         "height_lowest_level = 20.0", "model_top_height = 15000.0",
         "cfl_reduction_factor = 1.6", "update_interval_rad = 600.0",
         "rrtmgp_block_N = 256",
     ):
         assert setting in text
     assert "sparse_lbc_file_list" not in text
+
+
+def test_renderer_selects_rrtmg_without_rrtmgp_block_stanza(tmp_path: Path) -> None:
+    static = tmp_path / "static.nc"
+    static_file(static)
+    pairs = [input_pair(tmp_path, hour) for hour in range(2)]
+    forcing_list = tmp_path / "forcing.txt"
+    forcing_list.write_text("".join(f'"{forcing}"\n' for forcing, _ in pairs))
+    namelist = tmp_path / "input.nml"
+    result = subprocess.run(
+        [
+            sys.executable, str(RENDERER), "--static-file", str(static),
+            "--forcing-file-list", str(forcing_list),
+            "--start-date", "2020-01-01 00:00:00",
+            "--end-date", "2020-01-01 01:00:00",
+            "--radiation-scheme", "rrtmg",
+            "--output-dir", str(tmp_path / "output"),
+            "--restart-dir", str(tmp_path / "restart"),
+            "--output", str(namelist),
+        ],
+        text=True, capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    text = namelist.read_text()
+    assert "rad = 'rrtmg'" in text
+    assert "rrtmgp_block_N" not in text
+
+
+def test_segment_wrapper_stages_both_radiation_support_sets() -> None:
+    text = SEGMENT_WRAPPER.read_text()
+    assert "for asset in NoahmpTable.TBL rrtmg_support rrtmgp_support mp_support" in text
 
 
 def test_renderer_retains_explicit_sparse_lbc_support(tmp_path: Path) -> None:

@@ -22,12 +22,11 @@ result identifies a specific scientific ambiguity.
 - Sx on with 600 m search, 30 degree scale and 500 m smoothing; TPI search
   4 km and scale 200;
 - Morrison microphysics, YSU PBL, Noah-MP surface-exchange option 1 with the
-  revised-MM5 atmospheric surface layer, prescribed simple-water SST, and RRTMGP every
-  600 s with `rrtmgp_block_N=256` (one block per compute rank for the selected
-  national 48-rank decomposition);
+  revised-MM5 atmospheric surface layer, prescribed simple-water SST, and RRTMG
+  every 600 s, with YSU top-down radiative mixing explicitly off;
 - four-layer depth-varying soil texture with SMI land initialization;
-- direct, diffuse and reflected shortwave terrain corrections and terrain
-  longwave on, using validated HLM/SVF/slope/aspect geometry.
+- terrain shading and direct/diffuse shortwave corrections on, using validated
+  HLM/SVF/slope/aspect geometry; reflected shortwave and terrain longwave off.
 
 Atmospheric forcing is hicarprep P/T/U/V/W/QV/QC/QI plus SST in dry-air mixing
 ratios. W is supplied on the authoritative target HFL levels; its terrain
@@ -38,8 +37,8 @@ earth-relative. SST is hourly REA-L skin temperature over water support. Set
 full-domain forcing path for the selected reference. Sparse target-grid LBC is
 an optional experiment only; when used it contains mass-grid T/P/QV/QC/QI and
 must not insert sparse U/V/W after wind projection.
-The RRTMGP block setting is topology-specific: recompute the local block count
-and requalify reproducibility if the domain or compute decomposition changes.
+The RRTMG candidate must pass exact A/A and segmented-restart checks and meet
+the segment wall-time bound before a seasonal launch.
 
 ## Required interpretation checks
 
@@ -61,11 +60,11 @@ hypotheses.
 
 ## Terrain radiation
 
-The reference uses all terrain-radiation components after HLM/SVF/slope/aspect
-are generated from the exact static terrain and validated. The source fix that
-caches reflected shortwave between 600 s radiation updates is required. Before
-seasonal launch, a daylight continuous-versus-segmented proof must exercise
-repeated radiation calls and show exact restart/output equivalence.
+The reference uses terrain shading and direct/diffuse shortwave corrections
+after HLM/SVF/slope/aspect are generated from the exact static terrain and
+validated. Reflected shortwave and terrain longwave remain off. Before seasonal
+launch, a daylight continuous-versus-segmented proof must exercise repeated
+radiation calls and show exact restart/output equivalence.
 
 ## Useful references
 

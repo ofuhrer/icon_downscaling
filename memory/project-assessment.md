@@ -2,18 +2,17 @@
 
 ## Current conclusion
 
-The project has a practical, bit-reproducible GPU runtime and a literature-led
-reference configuration, but it does not yet have a scientifically evaluated
-national all-season result for that complete configuration.
+The project has a literature-led reference configuration, but it does not yet
+have a qualified bit-reproducible GPU radiation path or a scientifically
+evaluated national all-season result for that complete configuration.
 
-The GPU nondeterminism was triggered by using multiple RRTMGP column blocks per
-compute rank. On the selected 2061 x 1431 domain and 12-node/48-compute-rank
-layout, `rrtmgp_block_N=256` gives one block per rank. Four independent one-hour
-replicas were bit-exact in every output slice and all 196 restart variables. A
-00--08 UTC continuous run and a 00--04 + 04--08 segmented run were also
-bit-exact, including after sunrise. This is the campaign runtime; the default
-two-block path remains unqualified. The literal block size is topology-specific
-and must be rechecked if the domain or decomposition changes.
+Fresh independent daylight replicas showed that the selected one-block RRTMGP
+configuration still separates after repeated radiation calls, despite being
+exact through the first output times. The former one-block qualification is
+therefore withdrawn. A bounded RRTMG candidate now keeps the rest of the
+reference fixed while avoiding the RRTMGP implementation path. It is not yet a
+qualified campaign runtime: exact A/A, two-hour continuous-versus-segmented
+restart equivalence and segment-throughput checks are still required.
 
 The earlier restart discrepancy had two independent causes: an end-time
 tolerance skipped the final fractional timestep of terminal segments, and the
@@ -90,17 +89,17 @@ than a claimed optimum.
   two passes, cap 2500, hourly updates; thermal and linear-theory corrections
   off.
 - Morrison, YSU, Noah-MP, revised-MM5, simple prescribed-water temperature,
-  RRTMGP and Noah-MP internal snow; no cumulus scheme.
+  RRTMG and Noah-MP internal snow; no cumulus scheme. YSU top-down radiative
+  mixing remains explicitly disabled.
 - Noah-MP keeps untuned table phenology (`dveg=3`) and diagnosed albedo
   (`alb=2`), so external LAI/VEGFRA/static albedo are not campaign inputs.
 - HICAR's revised-MM5 atmospheric surface layer is retained, while modular
   Noah-MP uses its supported surface-exchange option 1. The restored option 3
   is no longer part of the campaign baseline and need not be qualified before
   launch.
-- RRTMGP runs every 600 s with one block per rank. Direct, diffuse and reflected
-  shortwave plus terrain longwave are enabled after HLM/SVF/slope/aspect are
-  generated. The reflected-shortwave cadence defect is fixed in the selected
-  HICAR source.
+- RRTMG runs every 600 s. Terrain shading and direct/diffuse shortwave
+  corrections are enabled after HLM/SVF/slope/aspect are generated; reflected
+  shortwave and terrain longwave are disabled for the bounded first baseline.
 
 ## Established engineering foundations
 
@@ -125,8 +124,8 @@ than a claimed optimum.
   glacier history and slow Noah-MP states remain approximate.
 - Output/restart validators check exact expected times, selected physics,
   forcing turnover and terminal restart content.
-- The 12-node/48-compute-rank one-block GPU path is qualified for A/A and
-  continuous-versus-segmented daylight execution.
+- The 12-node/48-compute-rank RRTMG candidate is pending A/A,
+  continuous-versus-segmented daylight and throughput qualification.
 
 ## Experiment now being executed
 
@@ -169,14 +168,15 @@ approximation, not a convergence claim. All four season-specific runtime
 domains are complete. The clean final HICAR source is built with NVHPC/OpenACC
 and NCCL; the executable is pinned by checksum.
 
-1. Re-run the daylight turnover and continuous-versus-restart proof with
-   regular forcing relaxation, Noah-MP surface option 1, and the complete
-   final physics/static/input configuration.
+1. Qualify the RRTMG candidate with independent daylight A/A replicas, then a
+   two-hour continuous-versus-restart proof and a segment-throughput estimate,
+   all with regular forcing relaxation, Noah-MP surface option 1, and the
+   complete final physics/static/input configuration.
 2. Stream validated regular forcing records at segment granularity while the
    smoke and campaign trajectories advance.
 3. Launch the four independent restart chains on `preemptible`, then evaluate
    them against all usable SwissMetNet stations and native REA-L-CH1.
 
 Do not tune individual parameters until this reference result identifies a
-specific scientific ambiguity. Do not reopen the multi-block RRTMGP mapping
-investigation unless the selected topology can no longer use one block/rank.
+specific scientific ambiguity. Do not resume open-ended RRTMGP debugging while
+the bounded RRTMG qualification can answer the campaign decision directly.
