@@ -61,6 +61,8 @@ than a claimed optimum.
   using a provisional 10 km shoulder and 3600 s timescale. Sparse U/V were
   removed because they were inserted earth-relative into grid-relative winds
   after projection; sparse W is excluded to preserve the balanced field.
+  HICAR now treats staggered sparse U/V as an optional all-or-none legacy pair;
+  scalar-only products never allocate or transfer their support arrays.
 - Missing QI is explicitly zero; QR/QS/QG are not invented. Supersaturation is
   retained. Cold-cloud and precipitation spin-up remain interpretation limits.
 - The former blank `sst_var` held every lake at 280 K. The reference prescribes
@@ -112,6 +114,12 @@ than a claimed optimum.
   product are kept separate and are joined explicitly during initialization.
 - Forcing and sparse boundaries are jointly validated before ready markers;
   cache identity includes the complete runtime-domain hash.
+- National input transformation uses eight deterministic fork workers on one
+  exclusive 456 GB CPU node per record. The selected real-record benchmark
+  fell from about 80 min serial to 15 min 58 s, with 239 GB peak RSS; every
+  regular-forcing and LBC variable was bit-exact. Two and four workers took
+  34 min 06 s and 21 min 32 s. Horizontal RBF remapping is now the largest
+  remaining preprocessing target, but is not a launch blocker.
 - Target HFL is preserved exactly. The serialized top mass level includes the
   one-float32-ULP allowance needed to cover HICAR's runtime reconstruction.
 - Land initialization uses native REA-L TERRA soil temperature/water, deep-soil

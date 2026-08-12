@@ -149,6 +149,11 @@ surface and terrain-radiation choices but cover much smaller domains.
   current segment runs; the shared endpoint is reused. A daylight 2 x 1 h
   local-list restart must be bit-exact with the full-list reference before this
   streaming mode is used for the campaign.
+- Generate each hourly pair with eight deterministic column workers on an
+  exclusive CPU node. This is a throughput choice, not a physics change: the
+  selected real record is bit-exact with serial preparation and reduces wall
+  time from about 80 to 16 min. Keep streaming at segment granularity because
+  the sparse-LBC reader validates its complete list during initialization.
 - Write the essential two-dimensional station-comparison and surface-process
   fields every 600 s. For each ending civil hour, aggregate the six HICAR
   ten-minute samples to the SwissMetNet `h0` definitions; inverse-rotate HICAR
