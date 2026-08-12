@@ -24,12 +24,15 @@ Detailed compiler commands and measured scaling are in
 
 ## Segmented campaigns
 
-Use `orchestration/rd_campaign.py` and 24-hour simulation segments by default.
+Use `orchestration/rd_campaign.py`. The selected national 200 m setup uses
+12-hour simulation segments on the exact 12-node topology qualified by the
+daylight smoke; do not change that decomposition merely to pack more chains.
 Each model attempt:
 
 - names `preemptible` explicitly and checks live group access;
-- uses at most six hours wall time and two nodes for the current 200 m case;
-- writes hourly output and a terminal restart;
+- uses at most six hours wall time and 12 nodes for the selected national
+  200 m case;
+- writes 600 s evaluation output and a terminal restart;
 - runs in a new attempt directory;
 - creates `segment.complete` only after HICAR success and restart/output checks.
 
@@ -43,9 +46,10 @@ two `pp-short` jobs.
 
 Link `NoahmpTable.TBL`, `rrtmg_support`, `rrtmgp_support`, and `mp_support` into the run
 directory. Provide a valid-time runtime domain, continuous hourly hicarprep
-forcing and sparse LBC lists, and an existing predecessor restart for every
-continuation. Keep HICAR initialization/projection enabled once at the start
-of each chain; restarts must restore the full model state.
+regular forcing, and an existing predecessor restart for every continuation.
+Sparse LBC is optional experimental input, not part of the selected reference.
+Keep HICAR initialization/projection enabled once at the start of each chain;
+restarts must restore the full model state.
 
 Success requires HICAR's completion message, nonempty output, and the expected
 terminal restart. For scientific assessment also inspect solver residuals,

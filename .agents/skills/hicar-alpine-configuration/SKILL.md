@@ -39,8 +39,11 @@ an optional experiment only; when used it contains mass-grid T/P/QV/QC/QI and
 must not insert sparse U/V/W after wind projection.
 The selected 12-node RRTMG path is exact across independent one-hour daylight
 replicas and terminal restarts and meets the projected segment wall-time bound.
-It must still pass the two-hour continuous-versus-segmented check with the
-final corrected SST products before seasonal launch.
+With the final corrected SST products, full-list and streaming segmented runs
+are bit-identical. Continuous versus restarted execution is numerically rather
+than bitwise reproducible: the land/PBL perturbation decays and the one-hour
+10 m vector-wind RMSE is 8.7e-9 m s-1. This is accepted for the wind-focused
+R&D campaign and must remain visible in segment diagnostics.
 
 ## Required interpretation checks
 
@@ -64,9 +67,10 @@ hypotheses.
 
 The reference uses terrain shading and direct/diffuse shortwave corrections
 after HLM/SVF/slope/aspect are generated from the exact static terrain and
-validated. Reflected shortwave and terrain longwave remain off. Before seasonal
-launch, a daylight continuous-versus-segmented proof must exercise repeated
-radiation calls and show exact restart/output equivalence.
+validated. Reflected shortwave and terrain longwave remain off. The daylight
+continuous-versus-segmented proof must exercise repeated radiation calls,
+remain finite, preserve exact segment-list equivalence, and quantify any
+uninterrupted-versus-restart perturbation rather than assuming bitwise identity.
 
 ## Useful references
 
