@@ -1,10 +1,33 @@
 from datetime import datetime
 
 import json
+import multiprocessing
+import os
 from pathlib import Path
+import socket
 
+import pytest
 import orchestration.rd_campaign as rd_campaign
-from orchestration.rd_campaign import Campaign, hours, segments
+from orchestration.rd_campaign import (
+    Campaign,
+    ControllerLockError,
+    WatchControllerLock,
+    hours,
+    segments,
+)
+
+
+def hold_watch_lock(root, config, ready, release) -> None:
+    with WatchControllerLock(Path(root), Path(config)):
+        ready.set()
+        release.wait(10)
+
+
+def die_with_watch_lock(root, config, ready) -> None:
+    lock = WatchControllerLock(Path(root), Path(config))
+    lock.__enter__()
+    ready.set()
+    os._exit(0)
 
 
 def test_hours_bracket_off_hour_segment() -> None:
@@ -26,6 +49,66 @@ def test_fractional_segment_length() -> None:
         (datetime(2020, 2, 10, 0, 0), datetime(2020, 2, 10, 1, 30)),
         (datetime(2020, 2, 10, 1, 30), datetime(2020, 2, 10, 2, 0)),
     ]
+
+
+def test_watch_lock_rejects_a_second_process_without_disturbing_owner(
+    tmp_path,
+) -> None:
+    context = multiprocessing.get_context("spawn")
+    ready = context.Event()
+    release = context.Event()
+    root = tmp_path / "campaign"
+    config = tmp_path / "campaign.json"
+    config.write_text("{}")
+    process = context.Process(
+        target=hold_watch_lock,
+        args=(str(root), str(config), ready, release),
+    )
+    process.start()
+    try:
+        assert ready.wait(10)
+        owner_pid = int((root / "controller.pid").read_text())
+        owner_host = (root / "controller.host").read_text().strip()
+        assert owner_pid == process.pid
+        with pytest.raises(ControllerLockError) as caught:
+            with WatchControllerLock(root, config):
+                pass
+        assert f"pid {process.pid}" in str(caught.value)
+        assert owner_host in str(caught.value)
+        assert process.is_alive()
+        assert int((root / "controller.pid").read_text()) == process.pid
+    finally:
+        release.set()
+        process.join(10)
+        if process.is_alive():
+            process.terminate()
+            process.join(10)
+    assert process.exitcode == 0
+
+
+def test_watch_lock_recovers_after_ungraceful_owner_death(tmp_path) -> None:
+    context = multiprocessing.get_context("spawn")
+    ready = context.Event()
+    root = tmp_path / "campaign"
+    config = tmp_path / "campaign.json"
+    config.write_text("{}")
+    process = context.Process(
+        target=die_with_watch_lock,
+        args=(str(root), str(config), ready),
+    )
+    process.start()
+    assert ready.wait(10)
+    process.join(10)
+    assert process.exitcode == 0
+    assert int((root / "controller.pid").read_text()) == process.pid
+
+    with WatchControllerLock(root, config):
+        owner = json.loads((root / "controller.lock").read_text())
+        assert owner["pid"] == os.getpid()
+        assert owner["host"] == socket.gethostname()
+        assert int((root / "controller.pid").read_text()) == os.getpid()
+    assert not (root / "controller.pid").exists()
+    assert not (root / "controller.host").exists()
 
 
 def campaign(

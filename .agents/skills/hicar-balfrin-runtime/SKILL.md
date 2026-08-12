@@ -27,6 +27,13 @@ Detailed compiler commands and measured scaling are in
 Use `orchestration/rd_campaign.py`. The selected national 200 m setup uses
 12-hour simulation segments on the exact 12-node topology qualified by the
 daylight smoke; do not change that decomposition merely to pack more chains.
+Run only one persistent `--watch` controller per campaign root. Watch mode
+holds the shared-filesystem POSIX lock `controller.lock`; that kernel lock is
+the ownership authority across login nodes and is released automatically when
+the owner dies. `controller.pid` and `controller.host` are operator-friendly
+mirrors only and can be stale after an ungraceful exit. A second watcher must
+fail without submitting or reconciling anything; one-shot invocations remain
+non-exclusive.
 Each model attempt:
 
 - names its configured partition explicitly, validates live exact-group access,

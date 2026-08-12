@@ -4,17 +4,126 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import fcntl
 import hashlib
 import json
+import os
 from pathlib import Path
+import socket
 import subprocess
 import time
 from typing import Iterator
 
 
 TIME = "%Y-%m-%dT%H:%M:%S"
+
+
+class ControllerLockError(RuntimeError):
+    """Raised when another watch controller owns a campaign."""
+
+
+def atomic_write_text(path: Path, text: str) -> None:
+    """Replace a small controller metadata file without exposing partial text."""
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    with temporary.open("w") as stream:
+        stream.write(text)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, path)
+
+
+class WatchControllerLock(AbstractContextManager["WatchControllerLock"]):
+    """Kernel-managed singleton lock for one campaign's watch controller.
+
+    The lock file deliberately remains on disk. Its POSIX advisory lock, not
+    its contents or the compatibility pid file, is the ownership authority.
+    Kernel lock release makes recovery safe after normal exit, exceptions, or
+    an ungraceful process death, including when another login node takes over.
+    """
+
+    def __init__(self, root: Path, config_path: Path):
+        self.root = root
+        self.config_path = config_path.resolve()
+        self.path = root / "controller.lock"
+        self.pid_path = root / "controller.pid"
+        self.host_path = root / "controller.host"
+        self.hostname = socket.gethostname()
+        self.pid = os.getpid()
+        self._stream = None
+
+    def __enter__(self) -> "WatchControllerLock":
+        self.root.mkdir(parents=True, exist_ok=True)
+        stream = self.path.open("a+")
+        try:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            stream.seek(0)
+            owner_text = stream.read().strip()
+            stream.close()
+            try:
+                owner = json.loads(owner_text)
+                detail = (
+                    f"pid {owner.get('pid', 'unknown')} on "
+                    f"{owner.get('host', 'unknown host')} since "
+                    f"{owner.get('started_at', 'unknown time')}"
+                )
+            except (json.JSONDecodeError, TypeError):
+                detail = "owner metadata is not yet available"
+            raise ControllerLockError(
+                f"campaign watch controller already active ({detail}); "
+                f"lock: {self.path}"
+            ) from None
+
+        self._stream = stream
+        owner = {
+            "config": str(self.config_path),
+            "host": self.hostname,
+            "pid": self.pid,
+            "started_at": datetime.now().astimezone().isoformat(),
+        }
+        try:
+            stream.seek(0)
+            stream.truncate()
+            json.dump(owner, stream, indent=2, sort_keys=True)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+            # These files are compatibility conveniences for operators. They
+            # may be stale after SIGKILL; controller.lock remains authoritative.
+            atomic_write_text(self.pid_path, f"{self.pid}\n")
+            atomic_write_text(self.host_path, f"{self.hostname}\n")
+        except BaseException:
+            try:
+                self._remove_compatibility_metadata()
+            finally:
+                self._unlock()
+            raise
+        return self
+
+    def _remove_compatibility_metadata(self) -> None:
+        expected = ((self.pid_path, str(self.pid)), (self.host_path, self.hostname))
+        for path, value in expected:
+            try:
+                if path.read_text().strip() == value:
+                    path.unlink()
+            except FileNotFoundError:
+                pass
+
+    def _unlock(self) -> None:
+        if self._stream is None:
+            return
+        fcntl.flock(self._stream.fileno(), fcntl.LOCK_UN)
+        self._stream.close()
+        self._stream = None
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        try:
+            self._remove_compatibility_metadata()
+        finally:
+            self._unlock()
 
 
 def parse_time(value: str) -> datetime:
@@ -558,19 +667,31 @@ def main() -> int:
     parser.add_argument("--poll-seconds", type=int, default=60)
     args = parser.parse_args()
     campaign = Campaign(args.config)
-    campaign.initialize()
-    while True:
-        # --inputs-only retains its established meaning of preparing the full
-        # campaign. A bounded horizon advances only through completed model
-        # segments and would otherwise stall forever in inputs-only mode.
-        campaign.prepare_inputs(bounded=not args.inputs_only)
-        if not args.inputs_only:
-            campaign.submit_segments()
-        print(json.dumps(campaign.status(), indent=2, sort_keys=True), flush=True)
-        done = campaign.inputs_complete() if args.inputs_only else campaign.complete()
-        if done or not args.watch:
-            return 0
-        time.sleep(args.poll_seconds)
+
+    def operate() -> int:
+        campaign.initialize()
+        while True:
+            # --inputs-only retains its established meaning of preparing the full
+            # campaign. A bounded horizon advances only through completed model
+            # segments and would otherwise stall forever in inputs-only mode.
+            campaign.prepare_inputs(bounded=not args.inputs_only)
+            if not args.inputs_only:
+                campaign.submit_segments()
+            print(json.dumps(campaign.status(), indent=2, sort_keys=True), flush=True)
+            done = campaign.inputs_complete() if args.inputs_only else campaign.complete()
+            if done or not args.watch:
+                return 0
+            time.sleep(args.poll_seconds)
+
+    # One-shot commands retain their existing composable behavior. Only a
+    # persistent reconciler claims exclusive campaign-controller ownership.
+    if not args.watch:
+        return operate()
+    try:
+        with WatchControllerLock(campaign.root, campaign.config_path):
+            return operate()
+    except ControllerLockError as error:
+        parser.error(str(error))
 
 
 if __name__ == "__main__":
