@@ -100,6 +100,10 @@ than a claimed optimum.
   Noah-MP uses its supported surface-exchange option 1. The restored option 3
   is no longer part of the campaign baseline and need not be qualified before
   launch.
+- Simple-water fluxes convert revised-MM5's exchange velocity to physical
+  fluxes as `rho*CHS*dq` and `rho*cp_moist*CHS*dT`. The prior code treated CHS
+  as dimensionless, multiplied wind a second time and omitted density, causing
+  multi-kW m-2 latent fluxes over exposed lakes.
 - RRTMG runs every 600 s. Terrain shading and direct/diffuse shortwave
   corrections are enabled after HLM/SVF/slope/aspect are generated; reflected
   shortwave and terrain longwave are disabled for the bounded first baseline.
