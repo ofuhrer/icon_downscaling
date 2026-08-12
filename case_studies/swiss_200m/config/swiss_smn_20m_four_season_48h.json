@@ -9,6 +9,7 @@
   "rbf_weights": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/input/weights/rea_l_to_smn_40km_200m_reference.nc",
   "segment_hours": 12,
   "full_season_input_lists": false,
+  "input_lookahead_segments": 1,
   "acc_synchronous": false,
   "max_attempts": 4,
   "input_partitions": ["pp-long"],
