@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import csv
 from collections import defaultdict
+from datetime import datetime, timezone
 from hashlib import sha256
 import json
 import math
@@ -615,10 +616,41 @@ def lead_hour_tables(
     exclusions: dict[str, int] = defaultdict(int)
     for season in SEASONS:
         report = reports[season][1]
+        sampling = report.get("sampling", {})
+        try:
+            simulation_start = datetime.fromisoformat(
+                sampling["simulation_start"].replace("Z", "+00:00")
+            )
+            evaluation_start = datetime.fromisoformat(
+                sampling["evaluation_start_inclusive"].replace("Z", "+00:00")
+            )
+        except (AttributeError, KeyError, ValueError) as error:
+            raise ValueError(
+                f"{reports[season][0]}: evaluator sampling lacks valid simulation "
+                "and evaluation start times"
+            ) from error
+        if simulation_start.tzinfo is None:
+            simulation_start = simulation_start.replace(tzinfo=timezone.utc)
+        if evaluation_start.tzinfo is None:
+            evaluation_start = evaluation_start.replace(tzinfo=timezone.utc)
+        offset_seconds = (evaluation_start - simulation_start).total_seconds()
+        if offset_seconds < 0.0 or offset_seconds % 3600.0:
+            raise ValueError(
+                f"{reports[season][0]}: evaluation start is not a nonnegative "
+                "whole-hour lead from simulation start"
+            )
+        evaluation_start_lead_hour = int(offset_seconds // 3600.0)
         season_rows = []
         for raw_hour, values in sorted(
             report["lead_time_metrics"].items(), key=lambda item: int(item[0])
         ):
+            physical_lead_hour = int(raw_hour)
+            lead_hour = physical_lead_hour - evaluation_start_lead_hour
+            if lead_hour < 0:
+                raise ValueError(
+                    f"{reports[season][0]}: physical lead {physical_lead_hour} "
+                    "precedes the evaluation window"
+                )
             hicar_strata = values.get("hicar", {})
             rea_l_strata = values.get("rea_l", {})
             for stratum in sorted(set(hicar_strata) & set(rea_l_strata)):
@@ -638,7 +670,8 @@ def lead_hour_tables(
                         continue
                     season_rows.append(
                         {
-                            "lead_hour": int(raw_hour),
+                            "physical_lead_hour": physical_lead_hour,
+                            "lead_hour": lead_hour,
                             "stratum": stratum,
                             "metric": metric,
                             **comparison,
@@ -842,7 +875,9 @@ def run(args: argparse.Namespace) -> dict:
             ),
             "lead_hour_aggregation": (
                 "Lead-hour rows reproduce the evaluator's pooled-pair RMSE for every "
-                "reported spatial stratum; they are not equal-station averages."
+                "reported spatial stratum; they are not equal-station averages. "
+                "lead_hour is elapsed time from the evaluation-window start, while "
+                "physical_lead_hour preserves elapsed time from simulation start."
             ),
             "rmse_delta_sign": "negative improves on REA-L; positive degrades",
             "terrain_ridge_definition": (

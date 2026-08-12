@@ -112,7 +112,10 @@ def load_evidence(inputs_path):
     if set(event["season"] for event in campaign["seasonal_campaign"]["events"]) != set(SEASONS):
         raise ValueError("campaign evidence must cover all four seasons")
     for season, report in evidence["footprint_reports"].items():
-        if not report["data_quality"]["model_times_exactly_match_evaluator"] or not report["sites"]:
+        if (
+            not report["data_quality"].get("required_ten_minute_samples_complete")
+            or not report["sites"]
+        ):
             raise ValueError(f"{season} footprint evidence is incomplete or time-mismatched")
     assessment = evidence["reviewed_assessment"]
     if set(assessment["findings"]) != set(FINDINGS):
@@ -261,7 +264,8 @@ def derive_datasets(evidence):
             if metric not in METRICS or row.get("stratum", "all_sites") != "all_sites":
                 continue
             hicar, rea_l = float(row["hicar_rmse"]), float(row["rea_l_rmse"])
-            item = {"season": season, "lead_hour": int(row["lead_hour"]), "metric": metric,
+            item = {"season": season, "lead_hour": int(row["lead_hour"]),
+                    "physical_lead_hour": int(row["physical_lead_hour"]), "metric": metric,
                     "metric_label": METRICS[metric][0], "unit": METRICS[metric][1],
                     "metric_order": list(METRICS).index(metric), "pair_count": int(row["pair_count"]),
                     "hicar_rmse": hicar, "rea_l_rmse": rea_l, "rmse_delta": hicar - rea_l,
@@ -272,7 +276,7 @@ def derive_datasets(evidence):
     for season in SEASONS:
         for metric in METRICS:
             hours = [row["lead_hour"] for row in lead if row["season"] == season and row["metric"] == metric]
-            expected = set(range(1, 25)) if metric == "precipitation_interval_kg_m2" else set(range(25))
+            expected = set(range(1, 25))
             if len(hours) != len(expected) or set(hours) != expected:
                 raise ValueError(f"{season}/{metric} lead hours must be exactly {sorted(expected)}; got {sorted(hours)}")
 
@@ -287,6 +291,7 @@ def derive_datasets(evidence):
             ridge_lead.append({
                 "season": season,
                 "lead_hour": hour,
+                "physical_lead_hour": int(row["physical_lead_hour"]),
                 "segment": "first" if hour <= 12 else "restarted",
                 "turnover_relative_hour": hour - 12,
                 "stratum": stratum,
@@ -302,6 +307,19 @@ def derive_datasets(evidence):
     } - {(row["season"], row["stratum"]) for row in ridge_lead}
     if missing_ridge:
         raise ValueError(f"ridge/high-elevation wind-vector lead evidence is missing: {sorted(missing_ridge)}")
+    for season in SEASONS:
+        for stratum in RIDGE_LEAD_STRATA:
+            hours = [
+                row["lead_hour"]
+                for row in ridge_lead
+                if row["season"] == season and row["stratum"] == stratum
+            ]
+            expected = set(range(1, 25))
+            if len(hours) != len(expected) or set(hours) != expected:
+                raise ValueError(
+                    f"{season}/{stratum} wind-vector lead hours must be exactly "
+                    f"{sorted(expected)}; got {sorted(hours)}"
+                )
 
     station = []
     for row in evidence["station_rows"]:
@@ -453,6 +471,7 @@ def build_artifact(evidence):
              "color": encoding("season", "Season", "nominal"),
              "facet": encoding("metric_label", "Metric", "nominal"),
              "tooltip": [encoding("pair_count", "Paired observations"),
+                         encoding("physical_lead_hour", "Physical simulation lead", unit="h"),
                          encoding("unit", "Native unit", "text")]}},
         {"id": "ridge_lead_metrics", "title": "Ridge/high-elevation wind-vector skill around restart turnover",
          "subtitle": "Lead 12 is the first segment endpoint; lead 13 is the first unique restarted-segment output",
@@ -462,6 +481,7 @@ def build_artifact(evidence):
              "color": encoding("stratum_label", "Spatial stratum", "nominal"),
              "facet": encoding("season", "Season", "nominal"),
              "tooltip": [encoding("pair_count", "Paired observations"),
+                         encoding("physical_lead_hour", "Physical simulation lead", unit="h"),
                          encoding("segment", "Segment", "text"),
                          encoding("hicar_rmse", "HICAR vector RMSE", unit="m s^-1"),
                          encoding("rea_l_rmse", "REA-L vector RMSE", unit="m s^-1")]}},
@@ -578,7 +598,7 @@ def build_artifact(evidence):
         {"id": "scope", "type": "markdown", "sourceId": "national_file",
          "body": f"## Scope, comparison basis, and definitions\n\nThe four reports contain {coverage['station_key_union_count']} distinct SwissMetNet keys, but eligibility is metric- and season-specific; every result therefore carries its own paired-station or paired-observation count. Primary seasonal summaries use every eligible station available in that season. The exact four-season key intersection is reported separately as a station-population sensitivity. Normalized RMSE difference is (HICAR - REA-L)/(HICAR + REA-L); negative values favor HICAR."},
         {"id": "methods", "type": "markdown", "sourceId": "national_file",
-         "body": f"## Validation and aggregation design\n\n**Station grain.** {assessment_method['station_grain']}.\n\n**Pairing.** {assessment_method['pairing_rule']}\n\n**Aggregation.** {assessment_method['aggregation']}\n\n**Lead hours.** {assessment_method['lead_hour_aggregation']} The first precipitation interval may be absent because accumulated precipitation needs a preceding model output. Lead hour remains confounded with valid time, diurnal phase, and event evolution.\n\nFootprint means diagnose point-to-grid sensitivity and do not replace the nearest-cell score."},
+         "body": f"## Validation and aggregation design\n\n**Station grain.** {assessment_method['station_grain']}.\n\n**Pairing.** {assessment_method['pairing_rule']}\n\n**Aggregation.** {assessment_method['aggregation']}\n\n**Lead hours.** {assessment_method['lead_hour_aggregation']} The first ending-hour score is evaluation lead 1 because evaluation lead 0 initializes the REA-L interval baseline. Lead hour remains confounded with valid time, diurnal phase, and event evolution.\n\nFootprint means diagnose point-to-grid sensitivity and do not replace the nearest-cell score."},
         {"id": "limitations", "type": "markdown", "sourceId": "assessment_file",
          "body": "## Limitations and uncertainty\n\n" + bullets(assessment["limitations"])},
         {"id": "next", "type": "markdown", "sourceId": "assessment_file",

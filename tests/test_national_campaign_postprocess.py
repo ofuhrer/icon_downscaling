@@ -87,7 +87,7 @@ def make_report(path, season, site_count=67, common_count=65, mismatch=False):
             },
         }
     lead = {
-        "0": {
+        "25": {
             "hicar": {
                 "all_sites": {
                     "temperature_2m_height_adjusted_k": metric(
@@ -138,6 +138,10 @@ def make_report(path, season, site_count=67, common_count=65, mismatch=False):
         "schema_version": 1,
         "common_triplet_accounting": {"metrics": {}},
         "event_name": f"event-{season}",
+        "sampling": {
+            "simulation_start": "2020-01-01T00:00:00+00:00",
+            "evaluation_start_inclusive": "2020-01-02T00:00:00+00:00",
+        },
         "matched_model_times": ["2020-01-01T00:00:00+00:00"],
         "station_mapping": {"sites": sites},
         "site_metrics": site_metrics,
@@ -315,6 +319,8 @@ def test_national_summary_and_exact_common_65(tmp_path):
     assert lead_temperature["hicar_observation_mean"] == pytest.approx(280.0)
     assert lead_temperature["rea_l_observation_mean"] == pytest.approx(280.0)
     assert lead_temperature["observation_mean"] == pytest.approx(280.0)
+    assert lead_temperature["lead_hour"] == 1
+    assert lead_temperature["physical_lead_hour"] == 25
     assert {
         (item["stratum"], item["metric"])
         for item in summary["lead_hour_tables"]["JJA"]
@@ -379,6 +385,42 @@ def test_network_pooled_rmse_uses_pair_counts_and_preserves_equal_station_mean()
     assert summary["network_pooled_rmse_delta_hicar_minus_rea_l"] == pytest.approx(
         7.0**0.5 - 13.0**0.5
     )
+
+
+def test_lead_hours_are_evaluation_relative_and_preserve_physical_lead(tmp_path):
+    reports = {}
+    for season in MODULE.SEASONS:
+        path = make_report(tmp_path / f"{season}.json", season)
+        report = json.loads(path.read_text())
+        report["lead_time_metrics"]["48"] = report["lead_time_metrics"]["25"]
+        path.write_text(json.dumps(report))
+        reports[season] = (path, MODULE.load_report(path))
+
+    tables, exclusions = MODULE.lead_hour_tables(
+        reports, {"temperature_2m_height_adjusted_k"}
+    )
+
+    assert exclusions == {}
+    assert {
+        (row["lead_hour"], row["physical_lead_hour"])
+        for row in tables["DJF"]
+        if row["stratum"] == "all_sites"
+    } == {(1, 25), (24, 48)}
+
+
+def test_lead_hour_normalization_rejects_non_hourly_evaluation_offset(tmp_path):
+    reports = {}
+    for season in MODULE.SEASONS:
+        path = make_report(tmp_path / f"{season}.json", season)
+        report = json.loads(path.read_text())
+        report["sampling"]["evaluation_start_inclusive"] = (
+            "2020-01-02T00:30:00+00:00"
+        )
+        path.write_text(json.dumps(report))
+        reports[season] = (path, MODULE.load_report(path))
+
+    with pytest.raises(ValueError, match="not a nonnegative whole-hour lead"):
+        MODULE.lead_hour_tables(reports, None)
 
 
 def test_national_four_season_intersection_is_distinct_from_per_season(tmp_path):

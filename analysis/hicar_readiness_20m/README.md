@@ -42,8 +42,9 @@ shows its actual station or observation count, and wind results include counts
 by elevation and terrain class. Seasonal headline results use every eligible
 station available in that season; each metric's exact four-season eligible
 station intersection is retained as a population-sensitivity table. For each
-24-hour event the report requires leads 0--24 for instantaneous metrics and
-1--24 for interval precipitation.
+24-hour event the report requires evaluation-relative leads 1--24 for all six
+ending-hour headline metrics. Physical simulation lead is retained separately;
+evaluation lead 0 initializes the REA-L interval baseline and is not scored.
 Wind-vector lead trajectories are also retained for terrain-ridge and
 at-least-2000 m station strata so the 11--14 h transition around the restart
 can be inspected directly. The few stations at or above 3000 m remain named

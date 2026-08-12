@@ -78,9 +78,9 @@ def fixture(tmp_path):
                         "equal_station_mean_rea_l_model_mean": 10.2 + metric_index,
                         "equal_station_mean_observation": 10.1 + metric_index})
                 summaries.append(summary)
-            first_hour = 1 if metric == "precipitation_interval_kg_m2" else 0
-            for hour in range(first_hour, 25):
-                lead = {"lead_hour": hour, "metric": metric, "pair_count": 96,
+            for hour in range(1, 25):
+                lead = {"lead_hour": hour, "physical_lead_hour": hour + 24,
+                    "metric": metric, "pair_count": 96,
                     "hicar_rmse": hicar + hour / 50, "rea_l_rmse": rea_l + hour / 100}
                 if metric in MODULE.ERROR_ANATOMY_METRICS:
                     lead.update({"hicar_bias": -0.1, "rea_l_bias": 0.1,
@@ -92,9 +92,9 @@ def fixture(tmp_path):
                         "observation_mean": 10.1 + metric_index})
                 leads[season].append(lead)
         for stratum_index, stratum in enumerate(MODULE.RIDGE_LEAD_STRATA):
-            for hour in range(25):
+            for hour in range(1, 25):
                 leads[season].append({
-                    "lead_hour": hour,
+                    "lead_hour": hour, "physical_lead_hour": hour + 24,
                     "stratum": stratum,
                     "metric": "wind_vector",
                     "pair_count": 24,
@@ -149,7 +149,7 @@ def fixture(tmp_path):
             "footprint_mean_vector": {"pair_count": 8, "vector_rmse_m_s": 2.8 + season_index / 10 + float(radius) / 10},
             "geometry": {"coverage_fraction": 1, "actual_cell_count": 13 if radius == "0.4" else 81}}
             for radius in ("0.4", "1")}
-        dump(results / f"footprint_{season}.json", {"data_quality": {"model_times_exactly_match_evaluator": True},
+        dump(results / f"footprint_{season}.json", {"data_quality": {"required_ten_minute_samples_complete": True},
             "sites": [{"site_key": "S2:1", "station_elevation_m": 2800,
                 "terrain_relative_elevation_m": 200, "footprints": footprints}]})
         files["footprint_reports"][season] = f"results/footprint_{season}.json"
@@ -170,6 +170,17 @@ def test_missing_results_are_reported_together(tmp_path):
     assert str(error.value).count("\n- ") == 10
 
 
+def test_footprint_completeness_uses_producer_schema(tmp_path):
+    inputs = fixture(tmp_path)
+    footprint = tmp_path / "results" / "footprint_DJF.json"
+    payload = json.loads(footprint.read_text())
+    payload["data_quality"]["required_ten_minute_samples_complete"] = False
+    dump(footprint, payload)
+
+    with pytest.raises(ValueError, match="footprint evidence is incomplete"):
+        MODULE.load_evidence(inputs)
+
+
 def test_artifact_is_deterministic_and_canonical(tmp_path):
     evidence = MODULE.load_evidence(fixture(tmp_path))
     first, second = MODULE.build_artifact(evidence), MODULE.build_artifact(evidence)
@@ -178,7 +189,7 @@ def test_artifact_is_deterministic_and_canonical(tmp_path):
     assert first["snapshot"]["status"] == "ready"
     assert {name: len(rows) for name, rows in first["snapshot"]["datasets"].items()} == {
         "seasonal_metrics": 24, "seasonal_population_sensitivity": 48,
-        "lead_metrics": 596, "ridge_lead_metrics": 200, "station_wind": 96,
+        "lead_metrics": 576, "ridge_lead_metrics": 192, "station_wind": 96,
         "elevation_counts": 32, "footprint_wind": 8}
     seasonal = first["snapshot"]["datasets"]["seasonal_metrics"]
     assert {row["metric"] for row in seasonal} == set(MODULE.METRICS)
@@ -195,6 +206,9 @@ def test_artifact_is_deterministic_and_canonical(tmp_path):
     ridge_lead = first["snapshot"]["datasets"]["ridge_lead_metrics"]
     assert {row["stratum"] for row in ridge_lead} == set(MODULE.RIDGE_LEAD_STRATA)
     assert {row["segment"] for row in ridge_lead} == {"first", "restarted"}
+    lead = first["snapshot"]["datasets"]["lead_metrics"]
+    assert {row["lead_hour"] for row in lead} == set(range(1, 25))
+    assert {row["physical_lead_hour"] for row in lead} == set(range(25, 49))
     assert all(row["hicar_bias"] is not None for row in seasonal
         if row["metric"] in MODULE.ERROR_ANATOMY_METRICS)
     sensitivity = first["snapshot"]["datasets"]["seasonal_population_sensitivity"]
@@ -225,7 +239,7 @@ def test_artifact_is_deterministic_and_canonical(tmp_path):
     incomplete = json.loads(json.dumps(national))
     incomplete["lead_hour_tables"]["DJF"] = [
         row for row in incomplete["lead_hour_tables"]["DJF"]
-        if not (row["metric"] == "temperature_2m_height_adjusted_k" and row["lead_hour"] == 0)
+        if not (row["metric"] == "temperature_2m_height_adjusted_k" and row["lead_hour"] == 1)
     ]
     dump(national_path, incomplete)
     with pytest.raises(ValueError, match="lead hours must be exactly"):
