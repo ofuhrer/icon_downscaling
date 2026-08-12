@@ -75,11 +75,13 @@ surface and terrain-radiation choices but cover much smaller domains.
   earth-relative. HICAR rotates U/V to its staggered grid before applying the
   diagnostic wind solver. Available REA-L W is the published-2023-like initial
   guess; it is never inserted as a sparse boundary value.
-- Sparse lateral relaxation contains only T, P, QV, QC and QI on the mass
-  grid. U/V are deliberately excluded: the previous path inserted
-  earth-relative values into grid-relative staggered winds after projection.
-  W is excluded because a sparse insertion would break the balanced wind
-  field. The provisional shoulder is 10 km with a 3600 s time scale.
+- Use HICAR's established full-domain forcing relaxation (`relax_filters=true`)
+  and do not configure a sparse-LBC list in the untuned reference. This is the
+  boundary path used by published long HICAR integrations and it relaxes the
+  same regular P/T/QV/QC/QI/U/V/W state used for initialization and hourly
+  turnover. The newer sparse target-grid path remains available for controlled
+  experiments, but its 10 km shoulder, 3600 s time scale and scalar-only state
+  are not literature-qualified national defaults.
 - Prescribed SST is used only on water cells. The former blank `sst_var`
   silently held every lake at 280 K and is not scientifically acceptable.
   HICAR's simple-water lower bound of 273.15 K means frozen-lake physics is
@@ -121,11 +123,11 @@ surface and terrain-radiation choices but cover much smaller domains.
 - `dveg=3` uses the class/date-interpolated Noah-MP LAI table and diagnoses
   FVEG. `alb=2` diagnoses soil/snow albedo. External LAI, VEGFRA and static
   ALBEDO are therefore not campaign requirements under this reference.
-- Use the published HICAR revised-MM5 land surface-drag option 3. The missing
-  modular Noah-MP implementation is restored from archived HICAR v2 code by a
-  checksum-pinned patch; stable, neutral and unstable 12/20 m scalar cases
-  match that archived implementation bit-for-bit. The exact NVHPC/OpenACC
-  build and restart trajectory are rechecked before campaign launch.
+- Retain HICAR's revised-MM5 atmospheric surface-layer scheme and use the
+  pinned modular Noah-MP's supported surface-exchange resistance option 1.
+  The restored option-3 implementation is useful as an explicit sensitivity,
+  but it is not required by the published national reference and is removed
+  from the campaign baseline.
 
 ## Radiation
 
@@ -144,16 +146,16 @@ surface and terrain-radiation choices but cover much smaller domains.
   the following 24 h reproduce the selected winter, spring, summer and autumn
   evaluation events. A final daylight turnover and continuous-versus-restart
   check is required after the complete setup changes, not for tuning it.
-- Each segment lists only the hourly records bracketing that segment. Ready
-  forcing/LBC pairs for the next segment can therefore be generated while the
-  current segment runs; the shared endpoint is reused. A daylight 2 x 1 h
+- Each segment lists only the hourly regular-forcing records bracketing that
+  segment. Ready records for the next segment can therefore be generated while
+  the current segment runs; the shared endpoint is reused. A daylight 2 x 1 h
   local-list restart must be bit-exact with the full-list reference before this
   streaming mode is used for the campaign.
-- Generate each hourly pair with eight deterministic column workers on an
+- Generate each hourly record with eight deterministic column workers on an
   exclusive CPU node. This is a throughput choice, not a physics change: the
-  selected real record is bit-exact with serial preparation and reduces wall
-  time from about 80 to 16 min. Keep streaming at segment granularity because
-  the sparse-LBC reader validates its complete list during initialization.
+  selected real regular record is bit-exact with serial preparation and reduces
+  wall time from about 80 to 16 min. Keep streaming at segment granularity to
+  preserve the bounded, restartable campaign workflow.
 - Write the essential two-dimensional station-comparison and surface-process
   fields every 600 s. For each ending civil hour, aggregate the six HICAR
   ten-minute samples to the SwissMetNet `h0` definitions; inverse-rotate HICAR

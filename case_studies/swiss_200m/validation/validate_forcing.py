@@ -29,7 +29,11 @@ REQUIRED = (
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--forcing-file", type=Path, required=True)
-    parser.add_argument("--boundary-file", type=Path, required=True)
+    parser.add_argument(
+        "--boundary-file",
+        type=Path,
+        help="optional sparse-LBC companion when that relaxation path is selected",
+    )
     parser.add_argument("--static-file", type=Path, required=True)
     parser.add_argument("--expected-valid-time")
     args = parser.parse_args()
@@ -202,20 +206,25 @@ def main() -> int:
             forcing["lon_1"][:], static["lon"][:]
         ):
             raise SystemExit("forcing grid differs from the HICAR runtime domain")
-    boundary = validate_boundary_sequence([args.boundary_file], minimum_states=1)
-    with netCDF4.Dataset(args.boundary_file) as boundary_file:
-        if str(getattr(boundary_file, "initial_condition_sha256", "")) != forcing_sha256:
-            raise SystemExit("sparse LBC does not belong to the supplied forcing record")
-        if str(getattr(boundary_file, "static_sha256", "")) != static_sha256:
-            raise SystemExit("sparse LBC does not belong to the supplied runtime domain")
-    boundary_time = datetime.fromisoformat(
-        str(boundary["first_valid_time"]).replace("Z", "+00:00")
-    ).replace(tzinfo=None)
-    if boundary_time != valid:
-        raise SystemExit(
-            f"boundary time is {boundary_time.isoformat()}, forcing time is {valid.isoformat()}"
-        )
-    print(f"PASS {args.forcing_file} {args.boundary_file} {valid.isoformat()}")
+    if args.boundary_file is not None:
+        boundary = validate_boundary_sequence([args.boundary_file], minimum_states=1)
+        with netCDF4.Dataset(args.boundary_file) as boundary_file:
+            if str(getattr(boundary_file, "initial_condition_sha256", "")) != forcing_sha256:
+                raise SystemExit("sparse LBC does not belong to the supplied forcing record")
+            if str(getattr(boundary_file, "static_sha256", "")) != static_sha256:
+                raise SystemExit("sparse LBC does not belong to the supplied runtime domain")
+        boundary_time = datetime.fromisoformat(
+            str(boundary["first_valid_time"]).replace("Z", "+00:00")
+        ).replace(tzinfo=None)
+        if boundary_time != valid:
+            raise SystemExit(
+                f"boundary time is {boundary_time.isoformat()}, forcing time is {valid.isoformat()}"
+            )
+    print(
+        f"PASS {args.forcing_file}"
+        + (f" {args.boundary_file}" if args.boundary_file is not None else "")
+        + f" {valid.isoformat()}"
+    )
     return 0
 
 

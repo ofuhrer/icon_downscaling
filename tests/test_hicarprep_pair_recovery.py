@@ -110,3 +110,47 @@ def test_producer_validates_complete_unmarked_pair_before_publishing(tmp_path) -
     invocation = log.read_text()
     assert f"--forcing-file {forcing}" in invocation
     assert f"--boundary-file {boundary}" in invocation
+
+
+def test_producer_reuses_ready_regular_forcing_without_boundary(tmp_path) -> None:
+    forcing = tmp_path / "forcing.nc"
+    static = tmp_path / "static.nc"
+    forcing.touch()
+    static.touch()
+    Path(f"{forcing}.ready").touch()
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    log = tmp_path / "python.log"
+    commands = {
+        "module": "#!/bin/sh\nexit 0\n",
+        "scontrol": "#!/bin/sh\necho 'PartitionName=pp-short AllowGroups=ALL'\n",
+        "python": f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> {log}\nexit 0\n",
+    }
+    for name, source in commands.items():
+        path = fake_bin / name
+        path.write_text(source)
+        path.chmod(0o755)
+
+    result = subprocess.run(
+        ["bash", str(PRODUCER)],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env={
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "REPO_ROOT": str(ROOT),
+            "VALID_TIME": "2020-10-02T00:00:00",
+            "HICAR_FORCING_OUTPUT": str(forcing),
+            "HICAR_STATIC_DOMAIN": str(static),
+            "HICARPREP_RBF_WEIGHTS": str(tmp_path / "unused-weights.nc"),
+            "HICARPREP_WRITE_LBC": "0",
+            "HICAR_PYTHON": "python",
+            "SLURM_JOB_ID": "89",
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    assert not Path(f"{forcing.with_suffix('.lbc.nc')}.ready").exists()
+    invocation = log.read_text()
+    assert f"--forcing-file {forcing}" in invocation
+    assert "--boundary-file" not in invocation

@@ -178,14 +178,14 @@ def write_hicar_forcing_record(
     static_path: Path,
     source_path: Path,
     target_sst_path: Path,
+    lateral_relaxation_authority: str = "hicarprep sparse_lbc_file_list",
 ) -> None:
     """Write one target-grid HICAR forcing/clock record from a hicarprep state.
 
     The regular HICAR forcing reader is still required to initialize the root
-    atmospheric state and advance forcing-event time.  This record prevents
-    that interface from silently falling back to a separately regridded
-    atmosphere. Lateral relaxation remains authoritative in the
-    sparse-LBC sequence produced from the same transformed state.
+    atmospheric state, advance forcing-event time, and optionally provide the
+    established regular-grid boundary relaxation.  ``lateral_relaxation_authority``
+    records whether that regular path or a sparse-LBC sequence is selected.
     """
     required = {"T", "P", "QV", "QC", "QI", "U", "V", "W", "HHL", "HFL", "lat", "lon"}
     missing = sorted(required - set(state))
@@ -438,7 +438,7 @@ def write_hicar_forcing_record(
             )
             dataset.target_w_vertical_coordinate = target_w_vertical_coordinate
             dataset.target_w_terrain_wind_basis = target_w_terrain_wind_basis
-            dataset.lateral_relaxation_authority = "hicarprep sparse_lbc_file_list"
+            dataset.lateral_relaxation_authority = lateral_relaxation_authority
             dataset.source_path = str(source_path)
             dataset.source_sha256 = sha256(source_path)
             dataset.static_sha256 = static_digest

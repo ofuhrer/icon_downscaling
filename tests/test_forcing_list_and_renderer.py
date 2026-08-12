@@ -7,9 +7,30 @@ import sys
 import netCDF4
 import numpy as np
 
+from preprocessing.hicarprep.cli import parser as hicarprep_parser
+
 
 ROOT = Path(__file__).resolve().parents[1]
 RENDERER = ROOT / "case_studies/swiss_200m/scripts/render_hicar_namelist.py"
+
+
+def test_hicarprep_sparse_boundary_output_is_optional() -> None:
+    args = hicarprep_parser().parse_args(
+        [
+            "prepare-hicar-forcing",
+            "--icon-state",
+            "native.nc",
+            "--static",
+            "static.nc",
+            "--target-sst",
+            "sst.nc",
+            "--weights",
+            "weights.nc",
+            "--output",
+            "forcing.nc",
+        ]
+    )
+    assert args.boundary is None
 
 
 def static_file(path: Path, *, land_climatology: bool = False) -> None:
@@ -77,7 +98,6 @@ def test_renderer_has_one_explicit_hicarprep_configuration(tmp_path: Path) -> No
         [
             sys.executable, str(RENDERER), "--static-file", str(static),
             "--forcing-file-list", str(forcing_list),
-            "--sparse-lbc-file-list", str(boundary_list),
             "--start-date", "2020-01-01 00:00:00", "--end-date", "2020-01-01 02:00:00",
             "--output-profile", "debug", "--output-dir", str(tmp_path / "output"),
             "--restart-dir", str(tmp_path / "restart"), "--output", str(namelist),
@@ -89,8 +109,8 @@ def test_renderer_has_one_explicit_hicarprep_configuration(tmp_path: Path) -> No
     for setting in (
         "debug = .False.", "qcvar = 'QC'", "qivar = 'QI'", "wvar = 'W'",
         "sst_var = 'SST'",
-        "qv_is_spec_humidity = .False.", "relax_filters = .False.",
-        "soiltexture_var = 'soil_type_layer'", "nmp_opt_sfc = 3",
+        "qv_is_spec_humidity = .False.", "relax_filters = .True.",
+        "soiltexture_var = 'soil_type_layer'", "nmp_opt_sfc = 1",
         "nmp_dveg = 3", "nmp_opt_soil = 2",
         "Sx = .True.", "advect_density = .True.", "alpha_const = -1.0",
         "Sx_dmax = 600.0", "TPI_dmax = 4000.0", "TPI_scale = 200.0",
@@ -100,7 +120,44 @@ def test_renderer_has_one_explicit_hicarprep_configuration(tmp_path: Path) -> No
         "rrtmgp_block_N = 256",
     ):
         assert setting in text
-    assert str(boundary_list.resolve()) in text
+    assert "sparse_lbc_file_list" not in text
+
+
+def test_renderer_retains_explicit_sparse_lbc_support(tmp_path: Path) -> None:
+    static = tmp_path / "static.nc"
+    static_file(static)
+    pairs = [input_pair(tmp_path, hour) for hour in range(2)]
+    forcing_list = tmp_path / "forcing.txt"
+    boundary_list = tmp_path / "lbc.txt"
+    forcing_list.write_text("".join(f'"{forcing}"\n' for forcing, _ in pairs))
+    boundary_list.write_text("".join(f'"{boundary}"\n' for _, boundary in pairs))
+    namelist = tmp_path / "input.nml"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(RENDERER),
+            "--static-file",
+            str(static),
+            "--forcing-file-list",
+            str(forcing_list),
+            "--sparse-lbc-file-list",
+            str(boundary_list),
+            "--start-date",
+            "2020-01-01 00:00:00",
+            "--end-date",
+            "2020-01-01 01:00:00",
+            "--output-dir",
+            str(tmp_path / "output"),
+            "--restart-dir",
+            str(tmp_path / "restart"),
+            "--output",
+            str(namelist),
+        ],
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert f"sparse_lbc_file_list = '{boundary_list.resolve()}'" in namelist.read_text()
 
 
 def test_renderer_accepts_a_causal_radiation_cadence(tmp_path: Path) -> None:

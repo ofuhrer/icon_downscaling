@@ -19,7 +19,7 @@ REQUIRED_PHYSICS = {
     "physics.pbl": "ysu",
     "physics.lsm": "noahmp",
     "physics.rad": "RRTMGP",
-    "lsm.nmp_opt_sfc": "3",
+    "lsm.nmp_opt_sfc": "1",
     "sfc.iz0tlnd": "1",
     "wind.wind_solver_iterations": "2500",
     "adv.advect_density": "T",
@@ -121,7 +121,11 @@ def main() -> int:
     parser.add_argument("--radiation-update-interval", type=float, default=600.0)
     parser.add_argument("--alpha-const", type=float, default=1.0)
     parser.add_argument("--forcing-list", type=Path, required=True)
-    parser.add_argument("--boundary-list", type=Path, required=True)
+    parser.add_argument(
+        "--boundary-list",
+        type=Path,
+        help="optional sparse-LBC list when sparse relaxation is selected",
+    )
     parser.add_argument(
         "--allow-input-superset",
         action="store_true",
@@ -187,9 +191,17 @@ def main() -> int:
         )
 
     forcing = [line.strip().strip('"') for line in args.forcing_list.read_text().splitlines() if line.strip()]
-    boundaries = [line.strip().strip('"') for line in args.boundary_list.read_text().splitlines() if line.strip()]
+    boundaries = (
+        [
+            line.strip().strip('"')
+            for line in args.boundary_list.read_text().splitlines()
+            if line.strip()
+        ]
+        if args.boundary_list is not None
+        else None
+    )
     expected_inputs = math.ceil((end - start).total_seconds() / 3600) + 1
-    if len(forcing) != len(boundaries):
+    if boundaries is not None and len(forcing) != len(boundaries):
         raise SystemExit("forcing and LBC lists have different record counts")
     if args.allow_input_superset:
         valid_count = len(forcing) >= expected_inputs
@@ -206,7 +218,8 @@ def main() -> int:
         "output_times": len(output_times),
         "restart": str(args.restart),
         "forcing_records": len(forcing),
-        "boundary_records": len(boundaries),
+        "boundary_records": len(boundaries) if boundaries is not None else 0,
+        "boundary_relaxation": "sparse_lbc" if boundaries is not None else "regular_forcing",
         "input_list_policy": "bracketing_superset" if args.allow_input_superset else "exact_segment",
     }, indent=2, sort_keys=True))
     return 0

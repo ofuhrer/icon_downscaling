@@ -173,6 +173,7 @@ class Campaign:
         self.radiation_update_interval = float(
             self.config.get("radiation_update_interval", 600.0)
         )
+        self.use_sparse_lbc = bool(self.config.get("use_sparse_lbc", True))
         self.full_season_input_lists = bool(
             self.config.get("full_season_input_lists", False)
         )
@@ -312,7 +313,9 @@ class Campaign:
         for season, when, static in self.input_candidates(bounded=bounded):
             season_name = season.name
             forcing, boundary = self.paths(season, when)
-            if Path(f"{forcing}.ready").is_file() and Path(f"{boundary}.ready").is_file():
+            if Path(f"{forcing}.ready").is_file() and (
+                not self.use_sparse_lbc or Path(f"{boundary}.ready").is_file()
+            ):
                 continue
             directory = input_jobs / season_name / stamp(when)
             directory.mkdir(parents=True, exist_ok=True)
@@ -342,6 +345,7 @@ class Campaign:
                     "HICARPREP_RBF_WEIGHTS": self.config["rbf_weights"],
                     "HICARPREP_VECTOR_WEIGHTS": self.config.get("vector_weights", ""),
                     "HICARPREP_COLUMN_WORKERS": str(self.input_column_workers),
+                    "HICARPREP_WRITE_LBC": "1" if self.use_sparse_lbc else "0",
                     "HICAR_PYTHON": self.config["python"],
                 },
                 "hp-" + when.strftime("%m%d%H"),
@@ -361,7 +365,7 @@ class Campaign:
     def inputs_complete(self) -> bool:
         return all(
             Path(f"{forcing}.ready").is_file()
-            and Path(f"{boundary}.ready").is_file()
+            and (not self.use_sparse_lbc or Path(f"{boundary}.ready").is_file())
             for season in self.seasons
             for when in hours(season.start, season.end)
             for forcing, boundary in (self.paths(season, when),)
@@ -401,11 +405,20 @@ class Campaign:
                 records, forcing_list, boundary_list = self.segment_input_plan(
                     season, segment_root, start, end
                 )
-                if not all(Path(f"{forcing}.ready").is_file() and Path(f"{boundary}.ready").is_file()
-                           for forcing, boundary in records):
+                if not all(
+                    Path(f"{forcing}.ready").is_file()
+                    and (
+                        not self.use_sparse_lbc
+                        or Path(f"{boundary}.ready").is_file()
+                    )
+                    for forcing, boundary in records
+                ):
                     break
                 forcing_list.write_text("".join(f'"{item[0]}"\n' for item in records))
-                boundary_list.write_text("".join(f'"{item[1]}"\n' for item in records))
+                if self.use_sparse_lbc:
+                    boundary_list.write_text("".join(f'"{item[1]}"\n' for item in records))
+                else:
+                    boundary_list.unlink(missing_ok=True)
                 previous = submitted_attempt(segment_root, self.max_attempts)
                 if previous and previous[1] in {"PENDING", "RUNNING", "CONFIGURING", "COMPLETING"}:
                     break
@@ -421,7 +434,9 @@ class Campaign:
                     "HICAR_STATIC_FILE": str(season.static),
                     "HICAR_PYTHON": self.config["python"],
                     "FORCING_FILE_LIST": str(forcing_list),
-                    "SPARSE_LBC_FILE_LIST": str(boundary_list),
+                    "SPARSE_LBC_FILE_LIST": (
+                        str(boundary_list) if self.use_sparse_lbc else ""
+                    ),
                     "SEGMENT_START": start.strftime(TIME),
                     "SEGMENT_END": end.strftime(TIME),
                     "SEGMENT_RUN_DIR": str(run_dir),

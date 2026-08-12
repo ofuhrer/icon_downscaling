@@ -49,7 +49,7 @@
 /
 &forcing
   forcing_file_list = '@FORCING_FILE_LIST@'
-  sparse_lbc_file_list = '@SPARSE_LBC_FILE_LIST@'
+@SPARSE_LBC_LINE@
   wait_for_ready_file = .True.
   ready_file_timeout = 1800
   inputinterval = 3600
@@ -75,7 +75,7 @@
   t_is_potential = .False.
   z_is_geopotential = .False.
   time_varying_z = .False.
-  relax_filters = .False.
+  relax_filters = .True.
 /
 &physics
   wind = 'variational solver'
@@ -114,9 +114,8 @@
   ! HICAR's generic USGS default leaves glaciers disabled. WorldCover snow/ice
   ! is mapped to USGS category 24, so select Noah-MP glacier physics explicitly.
   ice_category = 24
-  ! Freeze HICAR's effective default rather than relying on namelist fallback.
-  ! The pinned Noah-MP implements surface resistances for options 1 and 2.
-  nmp_opt_sfc = 3
+  ! Use the supported Monin-Obukhov surface-exchange resistance path.
+  nmp_opt_sfc = 1
   nmp_dveg = 3
   nmp_opt_crs = 1
   nmp_opt_btr = 2

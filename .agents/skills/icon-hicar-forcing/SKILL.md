@@ -38,7 +38,8 @@ are stale. Sparse LBC contains only T/P/QV/QC/QI and mass-grid geometry; it
 never inserts winds. REA-L SKT is remapped separately with
 same-surface water support and written as hourly regular-forcing `SST`; require
 exact time, target grid, static checksum, and water mask. Set
-`relax_filters=.False.`.
+`relax_filters=.True.` for the selected regular-forcing reference. Sparse LBC
+is retained only as an explicit experimental output.
 
 Scalar RBF caches must come from the conditioned builder: each stencil solve
 has condition number at most `1e10` after the smallest needed diagonal nugget,
@@ -54,12 +55,14 @@ clipped to the local donor component range; it must not create new wind extrema.
 - finite hourly SST and 180--350 K on every static-domain water cell;
 - target horizontal-wind speed no greater than the gross `200 m s-1` guard;
 - dry-air moisture representation;
-- identical sparse schema, point indices, geometry, and relaxation weights;
-- strictly ordered, gap-free hourly forcing and LBC times that bracket the
-  model segment.
+- for sparse experiments, identical schema, point indices, geometry, and
+  relaxation weights;
+- strictly ordered, gap-free hourly forcing times that bracket the model
+  segment; sparse experiments require the same LBC timestamps.
 
 Use atomic NetCDF creation. Add `<file>.ready` only because campaign readers
-may overlap preprocessing. One campaign manifest records source and
+may overlap preprocessing. Publish a sparse companion only when the run selects
+that path. One campaign manifest records source and
 configuration; do not create per-frame certificates or promotion reports.
 
 Maintained entry points are `scripts/hicarprep.py`, the Swiss decoder and

@@ -3,8 +3,9 @@
 `hicarprep` is the only maintained ICON-to-HICAR preprocessor in this project.
 It decodes native REA-L fields, maps them directly to the HICAR grid, performs
 terrain-aware vertical reconstruction, converts all water species jointly to
-dry-air mixing ratios, and writes both the regular HICAR forcing record and a
-sparse lateral-boundary frame from the same transformed state.
+dry-air mixing ratios, and writes the regular HICAR forcing record. It can also
+write a sparse lateral-boundary frame from the same transformed state for an
+explicit sparse-relaxation experiment.
 
 Atmospheric fields are P, T, U, V, QV, QC, QI, HHL and W from native REA-L.
 Operational REA-L lacks QI, so `source-absent-zero` is an explicit source-data
@@ -23,18 +24,21 @@ python scripts/hicarprep.py decode-icon-atmosphere \
 python scripts/hicarprep.py prepare-hicar-forcing \
   --icon-state native.nc --static runtime_domain.nc \
   --weights rbf.nc --vector-weights vector_rbf.nc --target-sst target_sst.nc \
-  --output forcing.nc --boundary forcing.lbc.nc
+  --output forcing.nc
 ```
+
+Add `--boundary forcing.lbc.nc` only for a sparse-LBC experiment.
 
 `target_sst.nc` is produced for the same exact valid time from REA-L `SKT`.
 Its water cells use same-surface source support; its static-domain checksum,
 grid fingerprint, water mask, and valid time must all match the atmospheric
 record. HICAR reads this field as `SST` from every hourly regular record.
 
-The regular record initializes HICAR and advances its forcing clock. Sparse
-LBC is the sole lateral relaxation path; the namelist disables the old regular
-forcing shoulder. Required checks are schema, finite/plausible values, exact
-target grid, fixed LBC geometry/schema, and continuous ordered times.
+The regular record initializes HICAR, advances its forcing clock and is the
+selected literature-established lateral-relaxation path with
+`relax_filters=true`. Required checks are schema, finite/plausible values,
+exact target grid and continuous ordered times. Sparse experiments additionally
+require fixed LBC geometry/schema and matching ordered timestamps.
 
 Land initialization uses native REA-L soil/snow fields:
 

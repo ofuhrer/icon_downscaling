@@ -234,6 +234,11 @@ def _prepare_hicar_forcing(args: argparse.Namespace) -> int:
         column_workers=args.column_workers,
     )
     state = convert_water_to_hicar_mixing_ratios(state)
+    lateral_relaxation_authority = (
+        "hicarprep sparse_lbc_file_list"
+        if args.boundary is not None
+        else "HICAR regular forcing relax_filters"
+    )
     write_hicar_forcing_record(
         args.output,
         state,
@@ -241,20 +246,22 @@ def _prepare_hicar_forcing(args: argparse.Namespace) -> int:
         static_path=args.static,
         source_path=args.icon_state,
         target_sst_path=args.target_sst,
+        lateral_relaxation_authority=lateral_relaxation_authority,
     )
-    with netCDF4.Dataset(args.static) as static:
-        x = np.asarray(static["x"][:], dtype=np.float64)
-        y = np.asarray(static["y"][:], dtype=np.float64)
-    write_boundary_condition(
-        args.boundary,
-        state,
-        x=x,
-        y=y,
-        boundary_width_m=args.boundary_width_m,
-        initial_condition_path=args.output,
-        valid_time=str(diagnostics["valid_time"]),
-        water_representation="dry-air mixing ratio",
-    )
+    if args.boundary is not None:
+        with netCDF4.Dataset(args.static) as static:
+            x = np.asarray(static["x"][:], dtype=np.float64)
+            y = np.asarray(static["y"][:], dtype=np.float64)
+        write_boundary_condition(
+            args.boundary,
+            state,
+            x=x,
+            y=y,
+            boundary_width_m=args.boundary_width_m,
+            initial_condition_path=args.output,
+            valid_time=str(diagnostics["valid_time"]),
+            water_representation="dry-air mixing ratio",
+        )
     manifest = {
         "schema": "hicarprep-target-forcing-manifest-v1",
         "status": "PASS",
@@ -269,11 +276,15 @@ def _prepare_hicar_forcing(args: argparse.Namespace) -> int:
         "output": {"path": str(args.output), "sha256": sha256(args.output)},
         "forcing_file": str(args.output),
         "forcing_sha256": sha256(args.output),
-        "boundary": {"path": str(args.boundary), "sha256": sha256(args.boundary)},
         "diagnostics": diagnostics,
         "water_representation": "dry-air mixing ratio",
-        "lateral_relaxation_authority": "hicarprep sparse LBC",
+        "lateral_relaxation_authority": lateral_relaxation_authority,
     }
+    if args.boundary is not None:
+        manifest["boundary"] = {
+            "path": str(args.boundary),
+            "sha256": sha256(args.boundary),
+        }
     if args.vector_weights:
         manifest["vector_weights"] = {
             "path": str(args.vector_weights),
@@ -476,7 +487,11 @@ def parser() -> argparse.ArgumentParser:
     forcing.add_argument("--weights", type=Path, required=True)
     forcing.add_argument("--vector-weights", type=Path)
     forcing.add_argument("--output", type=Path, required=True)
-    forcing.add_argument("--boundary", type=Path, required=True)
+    forcing.add_argument(
+        "--boundary",
+        type=Path,
+        help="optional sparse-LBC output for experiments that select sparse relaxation",
+    )
     forcing.add_argument("--boundary-width-m", type=float, default=10_000.0)
     forcing.add_argument(
         "--column-workers",

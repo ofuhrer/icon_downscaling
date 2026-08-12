@@ -33,8 +33,10 @@ def test_hicarprep_record_is_validated_before_publication() -> None:
         ROOT
         / "case_studies/swiss_200m/scripts/produce_hicarprep_target_record_balfrin.sbatch"
     ).read_text()
-    assert '--output "$staged_output" --boundary "$staged_boundary"' in text
-    assert '--forcing-file "$staged_output" --boundary-file "$staged_boundary"' in text
+    assert 'boundary_args=(--boundary "$staged_boundary")' in text
+    assert 'validation_boundary_args=(--boundary-file "$staged_boundary")' in text
+    assert '--output "$staged_output" "${boundary_args[@]}"' in text
+    assert '--forcing-file "$staged_output" "${validation_boundary_args[@]}"' in text
     validation = text.index('--forcing-file "$staged_output"')
     publish_forcing = text.index('mv "$staged_output" "$output"')
     publish_boundary = text.index('mv "$staged_boundary" "$boundary"')

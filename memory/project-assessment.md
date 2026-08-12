@@ -57,12 +57,11 @@ than a claimed optimum.
   Terrain-following W uses U/V rotated into the target-grid basis for the slope
   dot product, while serialized U/V remain earth-relative. HICAR rotates those
   horizontal winds and applies the diagnostic projection.
-- Sparse lateral relaxation supplies only T/P/QV/QC/QI on mass-grid support,
-  using a provisional 10 km shoulder and 3600 s timescale. Sparse U/V were
-  removed because they were inserted earth-relative into grid-relative winds
-  after projection; sparse W is excluded to preserve the balanced field.
-  HICAR now treats staggered sparse U/V as an optional all-or-none legacy pair;
-  scalar-only products never allocate or transfer their support arrays.
+- The campaign uses HICAR's literature-established regular full-domain forcing
+  relaxation with `relax_filters=true`; it does not configure or generate
+  sparse LBC. The newer sparse path remains available for controlled
+  experiments, but its scalar-only state, 10 km shoulder and 3600 s timescale
+  are not sufficiently established to define the national reference.
 - Missing QI is explicitly zero; QR/QS/QG are not invented. Supersaturation is
   retained. Cold-cloud and precipitation spin-up remain interpretation limits.
 - The former blank `sst_var` held every lake at 280 K. The reference prescribes
@@ -94,12 +93,10 @@ than a claimed optimum.
   RRTMGP and Noah-MP internal snow; no cumulus scheme.
 - Noah-MP keeps untuned table phenology (`dveg=3`) and diagnosed albedo
   (`alb=2`), so external LAI/VEGFRA/static albedo are not campaign inputs.
-- Land drag uses the published revised-MM5 option 3. Its missing modular
-  Noah-MP implementation is restored by a checksum-pinned HICAR patch and
-  matches archived HICAR v2 scalar results bit-for-bit. The clean final
-  NVHPC/OpenACC/NCCL executable is built; its option-3 runtime fields and the
-  complete-physics restart trajectory remain to be checked in the daylight
-  smoke test.
+- HICAR's revised-MM5 atmospheric surface layer is retained, while modular
+  Noah-MP uses its supported surface-exchange option 1. The restored option 3
+  is no longer part of the campaign baseline and need not be qualified before
+  launch.
 - RRTMGP runs every 600 s with one block per rank. Direct, diffuse and reflected
   shortwave plus terrain longwave are enabled after HLM/SVF/slope/aspect are
   generated. The reflected-shortwave cadence defect is fixed in the selected
@@ -112,8 +109,9 @@ than a claimed optimum.
 - Static construction is reproducible and includes authoritative HHL/HFL.
   Invariant terrain/mask/soil fields and the WorldCover 2021 epoch land-use
   product are kept separate and are joined explicitly during initialization.
-- Forcing and sparse boundaries are jointly validated before ready markers;
-  cache identity includes the complete runtime-domain hash.
+- Each selected regular forcing record is validated before its ready marker;
+  sparse experiments still validate and publish the forcing/LBC pair jointly.
+  Cache identity includes the complete runtime-domain hash.
 - National input transformation uses eight deterministic fork workers on one
   exclusive 456 GB CPU node per record. The selected real-record benchmark
   fell from about 80 min serial to 15 min 58 s, with 239 GB peak RSS; every
@@ -171,12 +169,11 @@ approximation, not a convergence claim. All four season-specific runtime
 domains are complete. The clean final HICAR source is built with NVHPC/OpenACC
 and NCCL; the executable is pinned by checksum.
 
-1. Finish and validate one real hourly W/SST/scalar-LBC product, including the
-   spatial impact of SST global fallbacks and HICAR ingestion, before producing
-   all 196 seasonal hours.
-2. Repeat a daylight turnover and continuous-versus-restart proof with the
-   complete final physics/static/input configuration; also verify the restored
-   revised-MM5 option-3 state identities in the resulting restart.
+1. Re-run the daylight turnover and continuous-versus-restart proof with
+   regular forcing relaxation, Noah-MP surface option 1, and the complete
+   final physics/static/input configuration.
+2. Stream validated regular forcing records at segment granularity while the
+   smoke and campaign trajectories advance.
 3. Launch the four independent restart chains on `preemptible`, then evaluate
    them against all usable SwissMetNet stations and native REA-L-CH1.
 

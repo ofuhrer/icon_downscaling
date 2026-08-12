@@ -39,6 +39,7 @@ def campaign(
     input_cpus=4,
     input_column_workers=1,
     input_exclusive=False,
+    use_sparse_lbc=True,
 ) -> Campaign:
     config = {
         "root": str(tmp_path / "campaign"),
@@ -55,6 +56,7 @@ def campaign(
         "input_cpus": input_cpus,
         "input_column_workers": input_column_workers,
         "input_exclusive": input_exclusive,
+        "use_sparse_lbc": use_sparse_lbc,
         "radiation_update_interval": 600,
         "seasons": seasons or [{
             "name": "autumn",
@@ -226,6 +228,67 @@ def test_input_exclusive_adds_slurm_placement_option(tmp_path, monkeypatch) -> N
     monkeypatch.setattr(rd_campaign, "submit", fake_submit)
     assert configured.prepare_inputs() == 1
     assert options and "--exclusive" in options[0]
+
+
+def test_regular_relaxation_publishes_and_requires_only_forcing(
+    tmp_path, monkeypatch
+) -> None:
+    configured = campaign(
+        tmp_path,
+        full_season_input_lists=False,
+        use_sparse_lbc=False,
+        max_active_inputs=1,
+    )
+    submitted = []
+
+    def fake_submit(script, environment, job_name, *, partition, sbatch_options=()):
+        submitted.append(environment)
+        return "3999"
+
+    monkeypatch.setattr(rd_campaign, "submit", fake_submit)
+    assert configured.prepare_inputs() == 1
+    assert submitted[0]["HICARPREP_WRITE_LBC"] == "0"
+
+    for when in hours(configured.seasons[0].start, configured.seasons[0].end):
+        forcing, _ = configured.paths(configured.seasons[0], when)
+        forcing.parent.mkdir(parents=True, exist_ok=True)
+        Path(f"{forcing}.ready").touch()
+    assert configured.inputs_complete()
+    assert configured.prepare_inputs() == 0
+
+
+def test_regular_relaxation_submits_segment_without_boundary_list(
+    tmp_path, monkeypatch
+) -> None:
+    configured = campaign(
+        tmp_path,
+        full_season_input_lists=False,
+        use_sparse_lbc=False,
+        segment_hours=1,
+        seasons=[{
+            "name": "autumn",
+            "start": "2020-10-02T00:00:00",
+            "end": "2020-10-02T01:00:00",
+            "static": "autumn.nc",
+        }],
+    )
+    for when in hours(configured.seasons[0].start, configured.seasons[0].end):
+        forcing, _ = configured.paths(configured.seasons[0], when)
+        forcing.parent.mkdir(parents=True, exist_ok=True)
+        Path(f"{forcing}.ready").touch()
+
+    submitted = []
+
+    def fake_submit(script, environment, job_name, *, partition, sbatch_options=()):
+        submitted.append(environment)
+        return "4000"
+
+    monkeypatch.setattr(rd_campaign, "submit", fake_submit)
+    assert configured.submit_segments() == 1
+    assert submitted[0]["SPARSE_LBC_FILE_LIST"] == ""
+    segment = configured.root / "autumn" / "000_20201002_0000_20201002_0100"
+    assert (segment / "forcing.txt").is_file()
+    assert not (segment / "lbc.txt").exists()
 
 
 def test_inputs_only_override_can_prepare_beyond_bounded_horizon(

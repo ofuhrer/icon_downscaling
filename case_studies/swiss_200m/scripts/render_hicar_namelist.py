@@ -60,7 +60,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--static-file", type=Path, required=True)
     parser.add_argument("--forcing-file-list", type=Path, required=True)
-    parser.add_argument("--sparse-lbc-file-list", type=Path, required=True)
+    parser.add_argument(
+        "--sparse-lbc-file-list",
+        type=Path,
+        help="optional sparse target-grid boundary list; omit for regular-forcing relaxation",
+    )
     parser.add_argument("--start-date", required=True)
     parser.add_argument("--end-date", required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -203,11 +207,21 @@ def main() -> int:
             raise SystemExit("runtime domain violates the selected SLEVE geometry bounds")
 
     forcing = listed_paths(args.forcing_file_list)
-    boundaries = listed_paths(args.sparse_lbc_file_list)
     forcing_times = [forcing_time(path) for path in forcing]
-    boundary_times = [boundary_time(path) for path in boundaries]
-    if len(forcing_times) < 2 or forcing_times != boundary_times:
-        raise SystemExit("forcing and sparse LBC lists must contain the same two or more times")
+    if len(forcing_times) < 2:
+        raise SystemExit("forcing list must contain two or more times")
+    sparse_lbc_line = ""
+    if args.sparse_lbc_file_list is not None:
+        boundaries = listed_paths(args.sparse_lbc_file_list)
+        boundary_times = [boundary_time(path) for path in boundaries]
+        if forcing_times != boundary_times:
+            raise SystemExit(
+                "forcing and sparse LBC lists must contain the same two or more times"
+            )
+        sparse_lbc_line = (
+            "  sparse_lbc_file_list = "
+            f"'{args.sparse_lbc_file_list.resolve()}'"
+        )
     if forcing_times[0] > start or forcing_times[-1] < end:
         raise SystemExit("input sequence must bracket the complete simulation segment")
     if any(right - left != timedelta(hours=1) for left, right in zip(forcing_times, forcing_times[1:])):
@@ -252,7 +266,7 @@ def main() -> int:
         "@MONTHLY_VEGFRAC@": ".True." if monthly_vegfrac else ".False.",
         "@STATIC_FILE@": str(args.static_file.resolve()),
         "@FORCING_FILE_LIST@": str(args.forcing_file_list.resolve()),
-        "@SPARSE_LBC_FILE_LIST@": str(args.sparse_lbc_file_list.resolve()),
+        "@SPARSE_LBC_LINE@": sparse_lbc_line,
         "@OUTPUT_DIR@": f"{args.output_dir.resolve()}/",
         "@RESTART_DIR@": f"{args.restart_dir.resolve()}/",
         "@RESTART_LINES@": restart_lines,

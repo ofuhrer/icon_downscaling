@@ -21,8 +21,8 @@ result identifies a specific scientific ambiguity.
   0.1--1, two passes and a 2500-iteration cap;
 - Sx on with 600 m search, 30 degree scale and 500 m smoothing; TPI search
   4 km and scale 200;
-- Morrison microphysics, YSU PBL, Noah-MP with restored revised-MM5 surface
-  resistance option 3, prescribed simple-water SST, and RRTMGP every
+- Morrison microphysics, YSU PBL, Noah-MP surface-exchange option 1 with the
+  revised-MM5 atmospheric surface layer, prescribed simple-water SST, and RRTMGP every
   600 s with `rrtmgp_block_N=256` (one block per compute rank for the selected
   national 48-rank decomposition);
 - four-layer depth-varying soil texture with SMI land initialization;
@@ -34,9 +34,10 @@ ratios. W is supplied on the authoritative target HFL levels; its terrain
 correction uses grid-relative U/V even though serialized U/V stay
 earth-relative. SST is hourly REA-L skin temperature over water support. Set
 `qv_is_spec_humidity=.False.`,
-`wvar='W'`, `sst_var='SST'`, and `relax_filters=.False.`. Sparse target-grid
-LBC contains mass-grid T/P/QV/QC/QI only; do not insert sparse U/V/W after wind
-projection.
+`wvar='W'`, `sst_var='SST'`, and `relax_filters=.True.`. Use the regular
+full-domain forcing path for the selected reference. Sparse target-grid LBC is
+an optional experiment only; when used it contains mass-grid T/P/QV/QC/QI and
+must not insert sparse U/V/W after wind projection.
 The RRTMGP block setting is topology-specific: recompute the local block count
 and requalify reproducibility if the domain or compute decomposition changes.
 

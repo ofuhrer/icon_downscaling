@@ -33,7 +33,7 @@ exe=${HICAR_EXE:?}
 support=${HICAR_SUPPORT_DIR:?}
 static=${HICAR_STATIC_FILE:?}
 forcing_list=${FORCING_FILE_LIST:?}
-lbc_list=${SPARSE_LBC_FILE_LIST:?}
+lbc_list=${SPARSE_LBC_FILE_LIST:-}
 start=${SEGMENT_START:?}
 end=${SEGMENT_END:?}
 model_end=${SEGMENT_MODEL_END:-$end}
@@ -52,9 +52,12 @@ renderer="$repo_root/case_studies/swiss_200m/scripts/render_hicar_namelist.py"
 wrapper=${HICAR_RANK_WRAPPER:-"$repo_root/case_studies/swiss_200m/scripts/gpu_rank_wrapper.sh"}
 python=${HICAR_PYTHON:-python3}
 
-for path in "$exe" "$static" "$forcing_list" "$lbc_list" "$renderer" "$wrapper"; do
+for path in "$exe" "$static" "$forcing_list" "$renderer" "$wrapper"; do
   test -e "$path" || { echo "missing input: $path" >&2; exit 2; }
 done
+if test -n "$lbc_list"; then
+  test -e "$lbc_list" || { echo "missing input: $lbc_list" >&2; exit 2; }
+fi
 
 mkdir -p "$run/output" "$run/restart"
 base=$(basename "${static%.nc}")
@@ -102,11 +105,17 @@ input_validation_args=()
 if [[ "$allow_input_superset" == 1 ]]; then
   input_validation_args=(--allow-input-superset)
 fi
+sparse_lbc_args=()
+boundary_validation_args=()
+if test -n "$lbc_list"; then
+  sparse_lbc_args=(--sparse-lbc-file-list "$lbc_list")
+  boundary_validation_args=(--boundary-list "$lbc_list")
+fi
 
 "$python" "$renderer" \
   --static-file "$static" \
   --forcing-file-list "$forcing_list" \
-  --sparse-lbc-file-list "$lbc_list" \
+  "${sparse_lbc_args[@]}" \
   --start-date "${start/T/ }" \
   --end-date "${model_end/T/ }" \
   --output-profile "$profile" \
@@ -162,7 +171,7 @@ test -s "$restart" || { echo "missing terminal restart: $restart" >&2; exit 1; }
   --output-interval "$output_interval" --forcing-list "$forcing_list" \
   --radiation-update-interval "$radiation_update_interval" \
   --alpha-const "$alpha_const" \
-  --boundary-list "$lbc_list" "${validation_restart_args[@]}" \
+  "${boundary_validation_args[@]}" "${validation_restart_args[@]}" \
   "${input_validation_args[@]}" \
   >"$run/segment_validation.json"
 
