@@ -239,28 +239,58 @@ completeness contract as the evaluator, so the final artifact no longer relies
 on stale instantaneous-time fields.
 
 The evaluation decision rule is fixed before seeing the campaign scores.
-Vector-wind RMSE is primary and speed RMSE is co-primary; for
-`delta = RMSE(HICAR) - RMSE(REA-L)`, only changes larger than
-`max(0.10 m s-1, 5% of REA-L RMSE)` are material. Strong added value requires
-material improvement in both; qualified added value permits material vector
-improvement with neutral speed, but never material vector degradation. Require
-vector non-degradation in at least three of four events, material improvement
-in at least two, a negative median station-event delta, and no repeated broad
-regression in a sufficiently populated ridge, valley or >=1500 m stratum.
+Vector-wind RMSE is primary and speed RMSE is co-primary. The decision cohort
+is the exact intersection of station keys with exactly 24 common ending-hour
+observation/HICAR/REA-L pairs for both metrics in all four events. It must
+contain at least 20 stations. Each source report must independently show the
+25 ordered inclusive hourly endpoints spanning the evaluation day, physical
+lead-time metrics exactly 25--48 and therefore evaluation-relative leads
+exactly 1--24. Station, aggregate and common-triplet counts must reconcile.
+Missing or unequal evidence removes a station from the intersection; an
+under-sized cohort or inconsistent source report fails the decision closed.
+
+For each event and metric, the estimand is the equal-station network RMSE,
+`sqrt(mean_i(RMSE_i^2))`, over that one fixed cohort. For
+`delta = RMSE(HICAR) - RMSE(REA-L)`, only changes strictly larger than
+`max(0.10 m s-1, 5% of REA-L RMSE)` are material; equality is neutral. Event
+classification is strong for material vector/material speed improvement,
+qualified for material vector improvement/neutral speed, neutral when both
+are neutral, mixed for vector improvement/speed degradation or neutral
+vector/speed improvement, and degraded for any material vector degradation or
+for neutral vector/speed degradation. Speed cannot rescue a vector-degraded
+event.
+
+The campaign vector gate requires non-degradation in at least three of four
+events, material improvement in at least two, a negative median over the fixed
+cohort's station-event deltas, non-degrading vector medians in all four
+leave-one-event-out views, and passing safeguards. One vector-degraded event
+is therefore explicitly tolerated only when all those requirements still
+hold; two vector-degraded events classify the campaign as degraded. The speed
+gate used for strong added value requires non-degradation in at least three
+events, material improvement in at least two and a negative fixed-cohort
+station-event median. Strong added value requires both gates and at least two
+jointly strong events. Qualified added value requires the vector gate, no
+material speed degradation in any event and a non-degrading speed
+station-event median. Repeated speed degradation alone does not force the
+`degraded` label; without vector or safeguard degradation it is mixed.
+
+Safeguards use the same fixed cohort. Ridge, valley and station elevation
+>=1500 m must each retain at least 10 stations in every event. A safeguard
+fails when equal-station vector RMSE degrades materially in the same stratum
+in at least two events. A repeated safeguard failure or at least two national
+vector-degraded events classifies the campaign as degraded. Degraded, neutral
+and mixed outcomes all trigger the identically sampled interpolation-only
+control next, with any safeguard failure reported; none opens a tuning matrix.
 MAE, station-bias/centered-error decomposition, component correlation and
 speed-variance ratio explain the primary result but cannot overturn worse
-RMSE. Report event ranges and leave-one-event-out direction without p-values
-or climatological claims. Neutral or mixed national results trigger an
-identically sampled interpolation-only control. Run one further physics or
-wind sensitivity only if the diagnostics identify one coherent mechanism; do
-not reopen a tuning matrix.
+RMSE. Event ranges and leave-one-event-out directions are descriptive, without
+p-values or climatological claims. One further physics or wind sensitivity is
+run only if the diagnostics identify one coherent mechanism.
 
-The national postprocessor now evaluates this rule directly and fails closed
-when required evidence is absent. It records per-event material thresholds and
-classifications, station-event median direction, leave-one-event-out behavior,
-and the repeated ridge, valley and >=1500 m safeguards; it does not add
-significance or climatological claims. This implementation was fixed before
-the seasonal scores were available.
+The national postprocessor evaluates these exact rules and fails closed when
+required evidence is absent. The executable truth table, thresholds, cohort,
+source reconciliation, leave-one-event-out gate and safeguards were fixed
+before the seasonal scores were available.
 
 ## Remaining work
 

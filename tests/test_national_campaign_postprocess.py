@@ -1,4 +1,5 @@
 import csv
+from datetime import datetime, timedelta, timezone
 import importlib.util
 import json
 from pathlib import Path
@@ -30,15 +31,32 @@ def metric(
                 "observation_mean": observation_mean,
                 "bias": bias,
                 "mean_absolute_error": abs(bias),
-                "centered_root_mean_squared_error": (
-                    max(rmse**2 - bias**2, 0.0) ** 0.5
-                ),
+                "centered_root_mean_squared_error": (max(rmse**2 - bias**2, 0.0) ** 0.5),
                 "model_standard_deviation": 1.2,
                 "observation_standard_deviation": 1.0,
                 "correlation": 0.8,
             }
         )
     return result
+
+
+def refresh_wind_report_totals(report):
+    accounting = {}
+    aggregate = {source: {"all_sites": {}} for source in MODULE.SOURCES}
+    for metric_name in MODULE.WIND_METRICS:
+        accepted = sum(
+            values["hicar"][metric_name]["count"] for values in report["site_metrics"].values()
+        )
+        accounting[metric_name] = {
+            "candidate_station_time_count": accepted,
+            "accepted_common_triplet_count": accepted,
+            "excluded_station_time_count": 0,
+            "exclusions": {},
+        }
+        for source in MODULE.SOURCES:
+            aggregate[source]["all_sites"][metric_name] = {"count": accepted}
+    report["common_triplet_accounting"] = {"metrics": accounting}
+    report["metrics"] = aggregate
 
 
 def make_report(path, season, site_count=67, common_count=65, mismatch=False):
@@ -88,8 +106,7 @@ def make_report(path, season, site_count=67, common_count=65, mismatch=False):
                 "wind_speed_10m_m_s": metric(2.5),
             },
         }
-    lead = {
-        "25": {
+    lead_template = {
             "hicar": {
                 "all_sites": {
                     "temperature_2m_height_adjusted_k": metric(
@@ -112,7 +129,7 @@ def make_report(path, season, site_count=67, common_count=65, mismatch=False):
                     ),
                     "wind_vector": metric(4.0, 2, vector=True),
                     "wind_speed_10m_m_s": metric(2.0, 2),
-                }
+            },
             },
             "rea_l": {
                 "all_sites": {
@@ -136,24 +153,31 @@ def make_report(path, season, site_count=67, common_count=65, mismatch=False):
                     ),
                     "wind_vector": metric(3.0, 2, vector=True),
                     "wind_speed_10m_m_s": metric(2.5, 2),
-                }
+            },
             },
         }
+    lead = {
+        str(physical_lead): lead_template for physical_lead in MODULE.REQUIRED_WIND_PHYSICAL_LEADS
     }
+    evaluation_start = datetime(2020, 1, 2, tzinfo=timezone.utc)
     report = {
         "schema_version": 1,
-        "common_triplet_accounting": {"metrics": {}},
         "event_name": f"event-{season}",
         "sampling": {
             "simulation_start": "2020-01-01T00:00:00+00:00",
-            "evaluation_start_inclusive": "2020-01-02T00:00:00+00:00",
+            "evaluation_start_inclusive": evaluation_start.isoformat(),
+            "evaluation_end_inclusive": (evaluation_start + timedelta(hours=24)).isoformat(),
         },
-        "matched_model_times": ["2020-01-01T00:00:00+00:00"],
+        "matched_model_times": [
+            (evaluation_start + timedelta(hours=index)).isoformat()
+            for index in range(MODULE.REQUIRED_WIND_MATCHED_ENDPOINT_COUNT)
+        ],
         "station_mapping": {"sites": sites},
         "site_metrics": site_metrics,
         "lead_time_metrics": lead,
         "issues": [],
     }
+    refresh_wind_report_totals(report)
     path.write_text(json.dumps(report))
     return path
 
@@ -221,9 +245,9 @@ def test_national_summary_and_exact_common_65(tmp_path):
         "wind_vector": 67,
     }
     assert (
-        summary["national_metric_four_season_intersections"][
-            "temperature_2m_height_adjusted_k"
-        ]["site_count"]
+        summary["national_metric_four_season_intersections"]["temperature_2m_height_adjusted_k"][
+            "site_count"
+        ]
         == 66
     )
     assert (
@@ -302,22 +326,17 @@ def test_national_summary_and_exact_common_65(tmp_path):
     intersection_counts = {
         (item["season"], item["metric"]): item["paired_station_count"]
         for item in summary["equal_station_summaries"]
-        if item["subset"] == "national_four_season_intersection"
-        and item["stratum"] == "all_sites"
+        if item["subset"] == "national_four_season_intersection" and item["stratum"] == "all_sites"
     }
     assert all(
         intersection_counts[(season, "temperature_2m_height_adjusted_k")] == 66
         for season in MODULE.SEASONS
     )
-    assert all(
-        intersection_counts[(season, "wind_vector")] == 67
-        for season in MODULE.SEASONS
-    )
+    assert all(intersection_counts[(season, "wind_vector")] == 67 for season in MODULE.SEASONS)
     lead_temperature = next(
         item
         for item in summary["lead_hour_tables"]["DJF"]
-        if item["metric"] == "temperature_2m_height_adjusted_k"
-        and item["stratum"] == "all_sites"
+        if item["metric"] == "temperature_2m_height_adjusted_k" and item["stratum"] == "all_sites"
     )
     assert lead_temperature["hicar_bias"] == pytest.approx(1.0)
     assert lead_temperature["rea_l_bias"] == pytest.approx(1.5)
@@ -328,10 +347,7 @@ def test_national_summary_and_exact_common_65(tmp_path):
     assert lead_temperature["observation_mean"] == pytest.approx(280.0)
     assert lead_temperature["lead_hour"] == 1
     assert lead_temperature["physical_lead_hour"] == 25
-    assert {
-        (item["stratum"], item["metric"])
-        for item in summary["lead_hour_tables"]["JJA"]
-    } == {
+    assert {(item["stratum"], item["metric"]) for item in summary["lead_hour_tables"]["JJA"]} == {
         ("all_sites", "temperature_2m_height_adjusted_k"),
         ("all_sites", "wind_speed_10m_m_s"),
         ("all_sites", "wind_vector"),
@@ -342,8 +358,7 @@ def test_national_summary_and_exact_common_65(tmp_path):
     ridge_wind = next(
         item
         for item in summary["lead_hour_tables"]["JJA"]
-        if item["stratum"] == "terrain_ridge_relative_gt_150m"
-        and item["metric"] == "wind_vector"
+        if item["stratum"] == "terrain_ridge_relative_gt_150m" and item["metric"] == "wind_vector"
     )
     assert ridge_wind["pair_count"] == 2
     assert ridge_wind["hicar_rmse"] == pytest.approx(4.0)
@@ -364,19 +379,13 @@ def test_national_summary_and_exact_common_65(tmp_path):
         "material_degradation": 0,
         "nondegradation": 4,
     }
-    assert {event["classification"] for event in decision["event_evidence"]} == {
-        "degraded"
-    }
-    assert decision["station_event_evidence"]["wind_vector"][
-        "median_direction"
-    ] == "degrading"
-    assert decision["leave_one_event_out"]["wind_vector"][
-        "all_omissions_nondegrading"
-    ] is False
+    assert {event["classification"] for event in decision["event_evidence"]} == {"degraded"}
+    assert decision["station_event_evidence"]["wind_vector"]["median_direction"] == "degrading"
+    assert decision["leave_one_event_out"]["wind_vector"]["all_omissions_nondegrading"] is False
     assert decision["safeguards"]["status"] == "fail"
-    assert {
-        item["stratum"] for item in decision["safeguards"]["strata"]
-    } == set(MODULE.WIND_SAFEGUARDS)
+    assert {item["stratum"] for item in decision["safeguards"]["strata"]} == set(
+        MODULE.WIND_SAFEGUARDS
+    )
     assert summary["footprint_sensitivity"]["status"] == (
         "not_computable_from_evaluator_aggregates"
     )
@@ -423,12 +432,10 @@ def test_network_pooled_rmse_uses_pair_counts_and_preserves_equal_station_mean()
     )
 
 
-def make_wind_decision_rows(event_deltas):
+def make_wind_decision_rows(event_deltas, site_count=30):
     rows = []
-    for season, (vector_delta, speed_delta) in zip(
-        MODULE.SEASONS, event_deltas, strict=True
-    ):
-        for index in range(30):
+    for season, (vector_delta, speed_delta) in zip(MODULE.SEASONS, event_deltas, strict=True):
+        for index in range(site_count):
             terrain = (
                 "terrain_ridge_relative_gt_150m"
                 if index < 10
@@ -472,11 +479,130 @@ def test_preregistered_wind_campaign_classifications(event_deltas, expected):
     decision = MODULE.wind_decision_readout(make_wind_decision_rows(event_deltas))
 
     assert decision["classification"] == expected
-    assert len(decision["event_evidence"]) == 4
-    assert all(
-        len(values["omissions"]) == 4
-        for values in decision["leave_one_event_out"].values()
+    assert decision["next_action"]["interpolation_only_control_required"] is (
+        expected in {"degraded", "neutral", "mixed"}
     )
+    assert len(decision["event_evidence"]) == 4
+    assert all(len(values["omissions"]) == 4 for values in decision["leave_one_event_out"].values())
+
+
+def test_wind_truth_table_tolerates_one_vector_degradation_but_never_rescues_event():
+    decision = MODULE.wind_decision_readout(
+        make_wind_decision_rows([(-0.3, -0.3), (-0.3, -0.3), (0.0, 0.0), (0.2, -0.3)])
+    )
+
+    assert decision["classification"] == "strong"
+    degraded_event = next(event for event in decision["event_evidence"] if event["season"] == "SON")
+    assert degraded_event["metrics"]["wind_vector"]["classification"] == ("material_degradation")
+    assert degraded_event["classification"] == "degraded"
+    assert decision["requirements"]["vector_nondegradation"]["observed"] == 3
+    assert decision["requirements"]["vector_leave_one_event_out_nondegradation"]["passes"] is True
+
+
+@pytest.mark.parametrize(
+    ("vector", "speed", "expected"),
+    [
+        ("material_improvement", "material_improvement", "strong"),
+        ("material_improvement", "neutral", "qualified"),
+        ("material_improvement", "material_degradation", "mixed"),
+        ("neutral", "material_improvement", "mixed"),
+        ("neutral", "neutral", "neutral"),
+        ("neutral", "material_degradation", "degraded"),
+        ("material_degradation", "material_improvement", "degraded"),
+        ("material_degradation", "neutral", "degraded"),
+        ("material_degradation", "material_degradation", "degraded"),
+    ],
+)
+def test_joint_wind_event_truth_table(vector, speed, expected):
+    assert MODULE.joint_wind_event_classification(vector, speed) == expected
+
+
+def test_wind_truth_table_freezes_staggered_and_repeated_speed_outcomes():
+    staggered = MODULE.wind_decision_readout(
+        make_wind_decision_rows([(-0.2, 0.0), (-0.2, 0.0), (0.0, -0.2), (0.0, -0.2)])
+    )
+    repeated_speed_regression = MODULE.wind_decision_readout(
+        make_wind_decision_rows([(-0.2, 0.2), (-0.2, 0.2), (0.0, 0.0), (0.0, 0.0)])
+    )
+
+    assert staggered["classification"] == "qualified"
+    assert staggered["joint_event_counts"]["strong"] == 0
+    assert repeated_speed_regression["classification"] == "mixed"
+    assert repeated_speed_regression["event_counts"]["wind_vector"]["material_degradation"] == 0
+    assert repeated_speed_regression["next_action"]["interpolation_only_control_required"] is True
+
+
+def test_vector_gate_requires_all_leave_one_event_out_medians_nondegrading():
+    decision = MODULE.wind_decision_readout(
+        make_wind_decision_rows([(-0.3, 0.0), (-0.2, 0.0), (0.05, 0.0), (0.05, 0.0)])
+    )
+
+    assert decision["event_counts"]["wind_vector"]["material_improvement"] == 2
+    assert decision["station_event_evidence"]["wind_vector"]["median_direction"] == ("improving")
+    assert decision["leave_one_event_out"]["wind_vector"]["all_omissions_nondegrading"] is False
+    assert decision["classification"] == "mixed"
+
+
+def apply_ridge_vector_regression(rows, seasons):
+    updated = [dict(row) for row in rows]
+    for row in updated:
+        if (
+            row["season"] in seasons
+            and row["metric"] == "wind_vector"
+            and row["terrain_class"] == "terrain_ridge_relative_gt_150m"
+        ):
+            row["hicar_rmse"] = 2.2
+            row["rmse_delta_hicar_minus_rea_l"] = 0.2
+            row["outcome"] = "degraded"
+    return updated
+
+
+def test_one_safeguard_regression_passes_but_two_fail_and_force_degraded():
+    baseline = make_wind_decision_rows([(-0.4, 0.0)] * 4)
+    one = MODULE.wind_decision_readout(apply_ridge_vector_regression(baseline, {"DJF"}))
+    two = MODULE.wind_decision_readout(apply_ridge_vector_regression(baseline, {"DJF", "MAM"}))
+
+    assert one["safeguards"]["status"] == "pass"
+    assert one["classification"] == "qualified"
+    assert two["safeguards"]["status"] == "fail"
+    assert two["classification"] == "degraded"
+    assert two["next_action"]["interpolation_only_control_required"] is True
+
+
+def test_fixed_cohort_intersects_changing_event_populations():
+    rows = make_wind_decision_rows([(-0.2, -0.2)] * 4)
+    rows = [
+        row
+        for row in rows
+        if not (
+            (row["season"] == "DJF" and row["station_key"] == "S029:1")
+            or (row["season"] == "MAM" and row["station_key"] == "S028:1")
+    )
+    ]
+
+    decision = MODULE.wind_decision_readout(rows)
+
+    assert decision["classification"] == "strong"
+    assert decision["cohort"]["station_count"] == 28
+    assert all(event["paired_station_count"] == 28 for event in decision["event_evidence"])
+    assert "S028:1" not in decision["cohort"]["station_keys"]
+    assert "S029:1" not in decision["cohort"]["station_keys"]
+
+
+def test_unequal_vector_speed_pair_count_excludes_station_from_fixed_cohort():
+    rows = make_wind_decision_rows([(-0.2, 0.0)] * 4)
+    for row in rows:
+        if (
+            row["season"] == "SON"
+            and row["station_key"] == "S029:1"
+            and row["metric"] == "wind_speed_10m_m_s"
+        ):
+            row["pair_count"] = 23
+
+    decision = MODULE.wind_decision_readout(rows)
+
+    assert decision["cohort"]["station_count"] == 29
+    assert "S029:1" not in decision["cohort"]["station_keys"]
 
 
 def test_material_threshold_boundary_is_neutral_and_raw_values_are_retained():
@@ -491,20 +617,40 @@ def test_material_threshold_boundary_is_neutral_and_raw_values_are_retained():
     }
 
 
-def test_wind_decision_fails_closed_on_population_or_metric_loss():
-    rows = make_wind_decision_rows([(-0.2, 0.0)] * 4)
-    missing_speed = [
-        row
-        for row in rows
-        if not (
-            row["season"] == "DJF"
-            and row["station_key"] == "S000:1"
-            and row["metric"] == "wind_speed_10m_m_s"
-        )
-    ]
-    with pytest.raises(ValueError, match="vector and speed station populations differ"):
-        MODULE.wind_decision_readout(missing_speed)
+@pytest.mark.parametrize(
+    ("hicar_rmse", "expected"),
+    [
+        (1.9, "neutral"),
+        (1.9 - 1.0e-9, "material_improvement"),
+        (2.1, "neutral"),
+        (2.1 + 1.0e-9, "material_degradation"),
+    ],
+)
+def test_material_threshold_equality_and_epsilon(hicar_rmse, expected):
+    assert MODULE.material_wind_change(hicar_rmse, 2.0)["classification"] == expected
 
+
+def test_wind_decision_rejects_supplied_delta_inconsistency():
+    rows = make_wind_decision_rows([(-0.2, 0.0)] * 4)
+    rows[0]["rmse_delta_hicar_minus_rea_l"] = -0.3
+
+    with pytest.raises(ValueError, match="supplied RMSE delta is inconsistent"):
+        MODULE.wind_decision_readout(rows)
+
+
+def test_wind_decision_fails_closed_on_population_or_metric_loss():
+    too_small = make_wind_decision_rows([(-0.2, 0.0)] * 4, site_count=20)
+    for row in too_small:
+        if (
+            row["season"] == "DJF"
+            and row["station_key"] == "S019:1"
+            and row["metric"] == "wind_speed_10m_m_s"
+        ):
+            row["pair_count"] = 23
+    with pytest.raises(ValueError, match="fixed four-event/two-metric cohort has 19"):
+        MODULE.wind_decision_readout(too_small)
+
+    rows = make_wind_decision_rows([(-0.2, 0.0)] * 4)
     insufficient_ridge = [dict(row) for row in rows]
     for row in insufficient_ridge:
         if row["station_key"] == "S009:1":
@@ -522,21 +668,84 @@ def test_lead_hours_are_evaluation_relative_and_preserve_physical_lead(tmp_path)
     reports = {}
     for season in MODULE.SEASONS:
         path = make_report(tmp_path / f"{season}.json", season)
-        report = json.loads(path.read_text())
-        report["lead_time_metrics"]["48"] = report["lead_time_metrics"]["25"]
-        path.write_text(json.dumps(report))
         reports[season] = (path, MODULE.load_report(path))
 
-    tables, exclusions = MODULE.lead_hour_tables(
-        reports, {"temperature_2m_height_adjusted_k"}
-    )
+    tables, exclusions = MODULE.lead_hour_tables(reports, {"temperature_2m_height_adjusted_k"})
 
     assert exclusions == {}
     assert {
         (row["lead_hour"], row["physical_lead_hour"])
         for row in tables["DJF"]
         if row["stratum"] == "all_sites"
-    } == {(1, 25), (24, 48)}
+    } == {(lead - 24, lead) for lead in range(25, 49)}
+
+
+def source_reports(tmp_path):
+    reports = {}
+    for season in MODULE.SEASONS:
+        path = make_report(tmp_path / f"source-{season}.json", season)
+        reports[season] = (path, MODULE.load_report(path))
+    return reports
+
+
+def test_wind_source_contract_proves_times_leads_and_reconciles_counts(tmp_path):
+    evidence = MODULE.validate_wind_source_reports(source_reports(tmp_path))
+
+    assert set(evidence) == set(MODULE.SEASONS)
+    assert evidence["DJF"]["matched_endpoint_count"] == 25
+    assert evidence["DJF"]["physical_leads"] == list(range(25, 49))
+    assert evidence["DJF"]["normalized_leads"] == list(range(1, 25))
+    assert (
+        evidence["DJF"]["common_triplet_reconciliation"]["wind_vector"][
+            "accepted_common_triplet_count"
+        ]
+        == 67 * 24
+    )
+
+
+@pytest.mark.parametrize("broken_field", ["matched_model_times", "lead_time_metrics"])
+def test_wind_source_contract_rejects_incomplete_times_or_leads(tmp_path, broken_field):
+    reports = source_reports(tmp_path)
+    path, report = reports["DJF"]
+    if broken_field == "matched_model_times":
+        report[broken_field].pop()
+        message = "requires exactly 25 matched endpoints"
+    else:
+        del report[broken_field]["48"]
+        message = "physical leads must be exactly 25..48"
+    path.write_text(json.dumps(report))
+    reports["DJF"] = (path, MODULE.load_report(path))
+
+    with pytest.raises(ValueError, match=message):
+        MODULE.validate_wind_source_reports(reports)
+
+
+def test_wind_source_contract_rejects_pair_and_accounting_inconsistency(tmp_path):
+    reports = source_reports(tmp_path)
+    path, report = reports["DJF"]
+    report["site_metrics"]["S000:1"]["hicar"]["wind_vector"]["count"] = 23
+    path.write_text(json.dumps(report))
+    reports["DJF"] = (path, MODULE.load_report(path))
+    with pytest.raises(ValueError, match="HICAR and REA-L common-pair counts differ"):
+        MODULE.validate_wind_source_reports(reports)
+
+    reports = source_reports(tmp_path)
+    path, report = reports["DJF"]
+    report["common_triplet_accounting"]["metrics"]["wind_vector"][
+        "accepted_common_triplet_count"
+    ] += 1
+    path.write_text(json.dumps(report))
+    reports["DJF"] = (path, MODULE.load_report(path))
+    with pytest.raises(ValueError, match="common-triplet accounting does not reconcile"):
+        MODULE.validate_wind_source_reports(reports)
+
+    reports = source_reports(tmp_path)
+    path, report = reports["DJF"]
+    report["metrics"]["hicar"]["all_sites"]["wind_vector"]["count"] -= 1
+    path.write_text(json.dumps(report))
+    reports["DJF"] = (path, MODULE.load_report(path))
+    with pytest.raises(ValueError, match="aggregate counts do not equal accepted"):
+        MODULE.validate_wind_source_reports(reports)
 
 
 def test_lead_hour_normalization_rejects_non_hourly_evaluation_offset(tmp_path):
@@ -544,9 +753,7 @@ def test_lead_hour_normalization_rejects_non_hourly_evaluation_offset(tmp_path):
     for season in MODULE.SEASONS:
         path = make_report(tmp_path / f"{season}.json", season)
         report = json.loads(path.read_text())
-        report["sampling"]["evaluation_start_inclusive"] = (
-            "2020-01-02T00:30:00+00:00"
-        )
+        report["sampling"]["evaluation_start_inclusive"] = "2020-01-02T00:30:00+00:00"
         path.write_text(json.dumps(report))
         reports[season] = (path, MODULE.load_report(path))
 
@@ -565,6 +772,7 @@ def test_national_four_season_intersection_is_distinct_from_per_season(tmp_path)
         site for site in mam["station_mapping"]["sites"] if site["key"] != missing_key
     ]
     del mam["site_metrics"][missing_key]
+    refresh_wind_report_totals(mam)
     national["MAM"].write_text(json.dumps(mam))
 
     bridge = [
@@ -642,9 +850,7 @@ def test_station_diagnostics_require_twenty_temporal_pairs():
     hicar = metric(1.0, count=19, model_mean=281.0, observation_mean=280.0, bias=1.0)
     rea_l = metric(1.5, count=19, model_mean=281.5, observation_mean=280.0, bias=1.5)
 
-    comparison, reason = MODULE.comparison_row(
-        hicar, rea_l, "temperature_2m_height_adjusted_k"
-    )
+    comparison, reason = MODULE.comparison_row(hicar, rea_l, "temperature_2m_height_adjusted_k")
 
     assert reason is None
     assert comparison["hicar_mae"] == 1.0

@@ -17,7 +17,7 @@ from __future__ import annotations
 import argparse
 import csv
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import json
 import math
@@ -34,18 +34,18 @@ TIE_TOLERANCE = 1.0e-12
 MINIMUM_STATION_EVENT_PAIRS = 20
 MINIMUM_NATIONAL_WIND_STATIONS = 20
 MINIMUM_SAFEGUARD_STATIONS = 10
+REQUIRED_WIND_EVENT_PAIR_COUNT = 24
+REQUIRED_WIND_MATCHED_ENDPOINT_COUNT = 25
+REQUIRED_WIND_PHYSICAL_LEADS = tuple(range(25, 49))
 WIND_METRICS = ("wind_vector", "wind_speed_10m_m_s")
 WIND_SAFEGUARDS = {
     "terrain_ridge_relative_gt_150m": (
         lambda row: row["terrain_class"] == "terrain_ridge_relative_gt_150m"
     ),
     "terrain_valley_relative_lt_minus_150m": (
-        lambda row: row["terrain_class"]
-        == "terrain_valley_relative_lt_minus_150m"
+        lambda row: row["terrain_class"] == "terrain_valley_relative_lt_minus_150m"
     ),
-    "station_elevation_ge_1500m": (
-        lambda row: float(row["station_elevation_m"]) >= 1500.0
-    ),
+    "station_elevation_ge_1500m": (lambda row: float(row["station_elevation_m"]) >= 1500.0),
 }
 
 FOOTPRINT_INPUT_CONTRACT = {
@@ -451,12 +451,8 @@ def summarize_group(rows: list[dict]) -> dict:
     pair_count_total = sum(row["pair_count"] for row in rows)
     mean_station_hicar_rmse = mean(row["hicar_rmse"] for row in rows)
     mean_station_rea_l_rmse = mean(row["rea_l_rmse"] for row in rows)
-    equal_station_network_hicar_rmse = math.sqrt(
-        mean(row["hicar_rmse"] ** 2 for row in rows)
-    )
-    equal_station_network_rea_l_rmse = math.sqrt(
-        mean(row["rea_l_rmse"] ** 2 for row in rows)
-    )
+    equal_station_network_hicar_rmse = math.sqrt(mean(row["hicar_rmse"] ** 2 for row in rows))
+    equal_station_network_rea_l_rmse = math.sqrt(mean(row["rea_l_rmse"] ** 2 for row in rows))
     network_pooled_hicar_rmse = math.sqrt(
         sum(row["pair_count"] * row["hicar_rmse"] ** 2 for row in rows) / pair_count_total
     )
@@ -530,12 +526,8 @@ def summarize_group(rows: list[dict]) -> dict:
         row for row in rows if all(row.get(field) is not None for field in anatomy_fields)
     ]
     if len(anatomy_rows) == len(rows):
-        hicar_rms_station_bias = math.sqrt(
-            mean(row["hicar_bias"] ** 2 for row in anatomy_rows)
-        )
-        rea_l_rms_station_bias = math.sqrt(
-            mean(row["rea_l_bias"] ** 2 for row in anatomy_rows)
-        )
+        hicar_rms_station_bias = math.sqrt(mean(row["hicar_bias"] ** 2 for row in anatomy_rows))
+        rea_l_rms_station_bias = math.sqrt(mean(row["rea_l_bias"] ** 2 for row in anatomy_rows))
         hicar_within_station_centered_rmse = math.sqrt(
             mean(row["hicar_centered_rmse"] ** 2 for row in anatomy_rows)
         )
@@ -545,12 +537,8 @@ def summarize_group(rows: list[dict]) -> dict:
         result.update(
             {
                 "error_anatomy_paired_station_count": len(anatomy_rows),
-                "equal_station_mean_hicar_mae": mean(
-                    row["hicar_mae"] for row in anatomy_rows
-                ),
-                "equal_station_mean_rea_l_mae": mean(
-                    row["rea_l_mae"] for row in anatomy_rows
-                ),
+                "equal_station_mean_hicar_mae": mean(row["hicar_mae"] for row in anatomy_rows),
+                "equal_station_mean_rea_l_mae": mean(row["rea_l_mae"] for row in anatomy_rows),
                 "equal_station_rms_hicar_station_bias": hicar_rms_station_bias,
                 "equal_station_rms_rea_l_station_bias": rea_l_rms_station_bias,
                 "equal_station_within_station_hicar_centered_rmse": (
@@ -563,12 +551,8 @@ def summarize_group(rows: list[dict]) -> dict:
                 # station-aware decomposition. Removing only the signed
                 # network-mean bias incorrectly classifies opposing persistent
                 # station biases as temporal variability.
-                "equal_station_network_hicar_centered_rmse": (
-                    hicar_within_station_centered_rmse
-                ),
-                "equal_station_network_rea_l_centered_rmse": (
-                    rea_l_within_station_centered_rmse
-                ),
+                "equal_station_network_hicar_centered_rmse": (hicar_within_station_centered_rmse),
+                "equal_station_network_rea_l_centered_rmse": (rea_l_within_station_centered_rmse),
             }
         )
     diagnostic_fields = (
@@ -603,9 +587,7 @@ def equal_station_summaries(
     for row in rows:
         strata = ("all_sites", row["elevation_class"], row["terrain_class"])
         subsets = ["national"]
-        if row["station_key"] in national_metric_four_season_keys.get(
-            row["metric"], set()
-        ):
+        if row["station_key"] in national_metric_four_season_keys.get(row["metric"], set()):
             subsets.append("national_four_season_intersection")
         if common_available and row["in_common_65"]:
             subsets.append("common_65")
@@ -675,13 +657,9 @@ def lead_hour_tables(
                 if selected_metrics is not None:
                     metrics &= selected_metrics
                 for metric in sorted(metrics):
-                    comparison, reason = comparison_row(
-                        hicar[metric], rea_l[metric], metric
-                    )
+                    comparison, reason = comparison_row(hicar[metric], rea_l[metric], metric)
                     if comparison is None:
-                        exclusions[
-                            f"{reason}:{season}:{raw_hour}:{stratum}:{metric}"
-                        ] += 1
+                        exclusions[f"{reason}:{season}:{raw_hour}:{stratum}:{metric}"] += 1
                         continue
                     season_rows.append(
                         {
@@ -694,6 +672,179 @@ def lead_hour_tables(
                     )
         output[season] = season_rows
     return output, dict(sorted(exclusions.items()))
+
+
+def parsed_utc_time(value: object, context: str) -> datetime:
+    if not isinstance(value, str):
+        raise ValueError(f"{context} must be an ISO timestamp string")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise ValueError(f"{context} is not a valid ISO timestamp") from error
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def nonnegative_count(value: object, context: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{context} must be a nonnegative integer")
+    try:
+        count = int(value)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"{context} must be a nonnegative integer") from error
+    if count < 0 or count != value:
+        raise ValueError(f"{context} must be a nonnegative integer")
+    return count
+
+
+def validate_wind_source_reports(
+    reports: dict[str, tuple[Path, dict]],
+) -> dict[str, dict]:
+    """Prove the fixed 24-hour wind-decision input contract for each event."""
+    evidence: dict[str, dict] = {}
+    expected_lead_keys = {str(value) for value in REQUIRED_WIND_PHYSICAL_LEADS}
+    for season in SEASONS:
+        path, report = reports[season]
+        sampling = report.get("sampling")
+        if not isinstance(sampling, dict):
+            raise ValueError(f"{path}: evaluator sampling is missing or invalid")
+        simulation_start = parsed_utc_time(
+            sampling.get("simulation_start"), f"{path}: simulation_start"
+        )
+        evaluation_start = parsed_utc_time(
+            sampling.get("evaluation_start_inclusive"),
+            f"{path}: evaluation_start_inclusive",
+        )
+        evaluation_end = parsed_utc_time(
+            sampling.get("evaluation_end_inclusive"),
+            f"{path}: evaluation_end_inclusive",
+        )
+        if evaluation_start - simulation_start != timedelta(hours=24):
+            raise ValueError(f"{path}: wind evaluation must start at physical lead 24")
+        if evaluation_end - evaluation_start != timedelta(hours=24):
+            raise ValueError(f"{path}: wind evaluation endpoints must span exactly 24 hours")
+
+        raw_times = report.get("matched_model_times")
+        if (
+            not isinstance(raw_times, list)
+            or len(raw_times) != REQUIRED_WIND_MATCHED_ENDPOINT_COUNT
+        ):
+            count = len(raw_times) if isinstance(raw_times, list) else "invalid"
+            raise ValueError(
+                f"{path}: wind decision requires exactly "
+                f"{REQUIRED_WIND_MATCHED_ENDPOINT_COUNT} matched endpoints; got {count}"
+            )
+        matched_times = [
+            parsed_utc_time(value, f"{path}: matched_model_times[{index}]")
+            for index, value in enumerate(raw_times)
+        ]
+        expected_times = [
+            evaluation_start + timedelta(hours=index)
+            for index in range(REQUIRED_WIND_MATCHED_ENDPOINT_COUNT)
+        ]
+        if matched_times != expected_times:
+            raise ValueError(
+                f"{path}: matched_model_times must be the 25 ordered inclusive "
+                "hourly evaluation endpoints"
+            )
+
+        lead_metrics = report.get("lead_time_metrics")
+        if not isinstance(lead_metrics, dict) or set(lead_metrics) != expected_lead_keys:
+            raise ValueError(f"{path}: lead_time_metrics physical leads must be exactly 25..48")
+        evaluation_start_lead = int((evaluation_start - simulation_start).total_seconds() // 3600)
+        normalized_leads = {int(raw_lead) - evaluation_start_lead for raw_lead in lead_metrics}
+        if normalized_leads != set(range(1, 25)):
+            raise ValueError(f"{path}: normalized wind evaluation leads must be exactly 1..24")
+
+        accounting = report.get("common_triplet_accounting", {}).get("metrics", {})
+        aggregate_metrics = report.get("metrics")
+        if not isinstance(accounting, dict) or not isinstance(aggregate_metrics, dict):
+            raise ValueError(f"{path}: wind decision requires common-triplet and aggregate metrics")
+        reconciled: dict[str, dict] = {}
+        for metric in WIND_METRICS:
+            metric_accounting = accounting.get(metric)
+            if not isinstance(metric_accounting, dict):
+                raise ValueError(f"{path}: common-triplet accounting lacks {metric}")
+            station_total = 0
+            for station_key, sources in report["site_metrics"].items():
+                try:
+                    hicar_count = nonnegative_count(
+                        sources["hicar"][metric]["count"],
+                        f"{path}: {station_key}/hicar/{metric} count",
+                    )
+                    rea_l_count = nonnegative_count(
+                        sources["rea_l"][metric]["count"],
+                        f"{path}: {station_key}/rea_l/{metric} count",
+                    )
+                except KeyError as error:
+                    raise ValueError(
+                        f"{path}: station {station_key} lacks {metric} counts"
+                    ) from error
+                if hicar_count != rea_l_count:
+                    raise ValueError(
+                        f"{path}: station {station_key}/{metric} HICAR and REA-L "
+                        "common-pair counts differ"
+                    )
+                station_total += hicar_count
+
+            accepted = nonnegative_count(
+                metric_accounting.get("accepted_common_triplet_count"),
+                f"{path}: {metric} accepted_common_triplet_count",
+            )
+            candidate = nonnegative_count(
+                metric_accounting.get("candidate_station_time_count"),
+                f"{path}: {metric} candidate_station_time_count",
+            )
+            excluded = nonnegative_count(
+                metric_accounting.get("excluded_station_time_count"),
+                f"{path}: {metric} excluded_station_time_count",
+            )
+            exclusions = metric_accounting.get("exclusions", {})
+            if not isinstance(exclusions, dict):
+                raise ValueError(f"{path}: {metric} exclusions must be an object")
+            exclusion_total = sum(
+                nonnegative_count(value, f"{path}: {metric} exclusion {name}")
+                for name, value in exclusions.items()
+            )
+            if candidate - accepted != excluded or exclusion_total != excluded:
+                raise ValueError(f"{path}: {metric} common-triplet accounting does not reconcile")
+            if station_total != accepted:
+                raise ValueError(
+                    f"{path}: {metric} station counts total {station_total}, "
+                    f"but accounting reports {accepted} accepted triplets"
+                )
+            try:
+                hicar_aggregate = nonnegative_count(
+                    aggregate_metrics["hicar"]["all_sites"][metric]["count"],
+                    f"{path}: hicar/all_sites/{metric} count",
+                )
+                rea_l_aggregate = nonnegative_count(
+                    aggregate_metrics["rea_l"]["all_sites"][metric]["count"],
+                    f"{path}: rea_l/all_sites/{metric} count",
+                )
+            except KeyError as error:
+                raise ValueError(
+                    f"{path}: aggregate metrics lack all_sites/{metric} counts"
+                ) from error
+            if hicar_aggregate != accepted or rea_l_aggregate != accepted:
+                raise ValueError(
+                    f"{path}: {metric} aggregate counts do not equal accepted triplets"
+                )
+            reconciled[metric] = {
+                "accepted_common_triplet_count": accepted,
+                "candidate_station_time_count": candidate,
+                "excluded_station_time_count": excluded,
+            }
+        evidence[season] = {
+            "matched_endpoint_count": len(matched_times),
+            "first_matched_endpoint": matched_times[0].isoformat(),
+            "last_matched_endpoint": matched_times[-1].isoformat(),
+            "physical_leads": list(REQUIRED_WIND_PHYSICAL_LEADS),
+            "normalized_leads": list(range(1, 25)),
+            "common_triplet_reconciliation": reconciled,
+        }
+    return evidence
 
 
 def material_wind_change(hicar_rmse: float, rea_l_rmse: float) -> dict:
@@ -759,6 +910,7 @@ def wind_decision_readout(rows: list[dict]) -> dict:
         "hicar_rmse",
         "rea_l_rmse",
         "rmse_delta_hicar_minus_rea_l",
+        "outcome",
     }
     wind_rows = [row for row in rows if row.get("metric") in WIND_METRICS]
     if not wind_rows:
@@ -769,9 +921,31 @@ def wind_decision_readout(rows: list[dict]) -> dict:
             raise ValueError(
                 f"wind decision row {index} lacks required fields: {', '.join(absent)}"
             )
+        try:
+            nonnegative_count(row["pair_count"], f"wind decision row {index} pair_count")
+            hicar_rmse = float(row["hicar_rmse"])
+            rea_l_rmse = float(row["rea_l_rmse"])
+            supplied_delta = float(row["rmse_delta_hicar_minus_rea_l"])
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"wind decision row {index} has invalid numeric evidence") from error
+        if not all(
+            math.isfinite(value) and value >= 0.0 for value in (hicar_rmse, rea_l_rmse)
+        ) or not math.isfinite(supplied_delta):
+            raise ValueError(f"wind decision row {index} has nonfinite or negative RMSE evidence")
+        expected_delta = hicar_rmse - rea_l_rmse
+        if not math.isclose(supplied_delta, expected_delta, rel_tol=0.0, abs_tol=TIE_TOLERANCE):
+            raise ValueError(f"wind decision row {index} supplied RMSE delta is inconsistent")
+        expected_outcome = (
+            "improved"
+            if expected_delta < -TIE_TOLERANCE
+            else "degraded"
+            if expected_delta > TIE_TOLERANCE
+            else "tied"
+        )
+        if row["outcome"] != expected_outcome:
+            raise ValueError(f"wind decision row {index} outcome is inconsistent with RMSE delta")
     grain = [
-        (row["season"], row["event_name"], row["station_key"], row["metric"])
-        for row in wind_rows
+        (row["season"], row["event_name"], row["station_key"], row["metric"]) for row in wind_rows
     ]
     if len(grain) != len(set(grain)):
         raise ValueError("wind decision rows are not unique at station-event-metric grain")
@@ -786,26 +960,68 @@ def wind_decision_readout(rows: list[dict]) -> dict:
     if len(set.union(*event_names.values())) != len(SEASONS):
         raise ValueError("wind decision event_name values must be unique across seasons")
 
+    eligible_station_sets = {
+        (season, metric): {
+            row["station_key"]
+            for row in wind_rows
+            if row["season"] == season
+            and row["metric"] == metric
+            and row["pair_count"] == REQUIRED_WIND_EVENT_PAIR_COUNT
+        }
+        for season in SEASONS
+        for metric in WIND_METRICS
+    }
+    cohort = set.intersection(*eligible_station_sets.values())
+    if len(cohort) < MINIMUM_NATIONAL_WIND_STATIONS:
+        raise ValueError(
+            f"wind decision fixed four-event/two-metric cohort has {len(cohort)} "
+            f"stations; requires at least {MINIMUM_NATIONAL_WIND_STATIONS}"
+        )
+    decision_rows = [row for row in wind_rows if row["station_key"] in cohort]
+    expected_grain = {
+        (season, next(iter(event_names[season])), station_key, metric)
+        for season in SEASONS
+        for station_key in cohort
+        for metric in WIND_METRICS
+    }
+    decision_grain = {
+        (row["season"], row["event_name"], row["station_key"], row["metric"])
+        for row in decision_rows
+    }
+    if decision_grain != expected_grain or len(decision_rows) != len(expected_grain):
+        raise ValueError("wind decision fixed cohort is incomplete at station-event-metric grain")
+    for season in SEASONS:
+        for station_key in cohort:
+            station_rows = [
+                row
+                for row in decision_rows
+                if row["season"] == season and row["station_key"] == station_key
+            ]
+            pair_counts = {row["metric"]: row["pair_count"] for row in station_rows}
+            if pair_counts != {metric: REQUIRED_WIND_EVENT_PAIR_COUNT for metric in WIND_METRICS}:
+                raise ValueError(
+                    f"{season}/{station_key}: vector and speed must each have exactly "
+                    f"{REQUIRED_WIND_EVENT_PAIR_COUNT} common ending-hour pairs"
+                )
+    for station_key in cohort:
+        metadata = {
+            (float(row["station_elevation_m"]), row["terrain_class"])
+            for row in decision_rows
+            if row["station_key"] == station_key
+        }
+        if len(metadata) != 1:
+            raise ValueError(f"wind decision fixed-cohort metadata changes for {station_key}")
+
     event_evidence = []
     metric_statuses = {metric: [] for metric in WIND_METRICS}
     for season in SEASONS:
         by_metric = {
             metric: [
-                row
-                for row in wind_rows
-                if row["season"] == season and row["metric"] == metric
+                row for row in decision_rows if row["season"] == season and row["metric"] == metric
             ]
             for metric in WIND_METRICS
         }
-        station_keys = {metric: {row["station_key"] for row in values} for metric, values in by_metric.items()}
-        if station_keys["wind_vector"] != station_keys["wind_speed_10m_m_s"]:
-            raise ValueError(f"{season}: vector and speed station populations differ")
-        station_count = len(station_keys["wind_vector"])
-        if station_count < MINIMUM_NATIONAL_WIND_STATIONS:
-            raise ValueError(
-                f"{season}: wind decision has {station_count} paired stations; "
-                f"requires at least {MINIMUM_NATIONAL_WIND_STATIONS}"
-            )
+        station_count = len(cohort)
         metrics = {}
         for metric, metric_rows in by_metric.items():
             summary = summarize_group(metric_rows)
@@ -840,7 +1056,7 @@ def wind_decision_readout(rows: list[dict]) -> dict:
     station_event = {}
     leave_one_event_out = {}
     for metric in WIND_METRICS:
-        metric_rows = [row for row in wind_rows if row["metric"] == metric]
+        metric_rows = [row for row in decision_rows if row["metric"] == metric]
         deltas = [float(row["rmse_delta_hicar_minus_rea_l"]) for row in metric_rows]
         if not all(math.isfinite(value) for value in deltas):
             raise ValueError(f"wind decision {metric} station-event deltas are nonfinite")
@@ -876,7 +1092,7 @@ def wind_decision_readout(rows: list[dict]) -> dict:
 
     safeguard_evidence = []
     repeated_regression = False
-    vector_rows = [row for row in wind_rows if row["metric"] == "wind_vector"]
+    vector_rows = [row for row in decision_rows if row["metric"] == "wind_vector"]
     for stratum, predicate in WIND_SAFEGUARDS.items():
         events = []
         for season in SEASONS:
@@ -933,6 +1149,7 @@ def wind_decision_readout(rows: list[dict]) -> dict:
         event_counts["wind_vector"]["nondegradation"] >= 3
         and event_counts["wind_vector"]["material_improvement"] >= 2
         and station_event["wind_vector"]["median_direction"] == "improving"
+        and leave_one_event_out["wind_vector"]["all_omissions_nondegrading"]
         and not repeated_regression
     )
     speed_gate = (
@@ -948,14 +1165,12 @@ def wind_decision_readout(rows: list[dict]) -> dict:
         counts["material_improvement"] == 0 and counts["material_degradation"] == 0
         for counts in event_counts.values()
     )
-    repeated_primary_or_coprimary_degradation = (
-        repeated_regression
-        or event_counts["wind_vector"]["material_degradation"] >= 2
-        or event_counts["wind_speed_10m_m_s"]["material_degradation"] >= 2
+    repeated_vector_or_safeguard_degradation = (
+        repeated_regression or event_counts["wind_vector"]["material_degradation"] >= 2
     )
     classification = (
         "degraded"
-        if repeated_primary_or_coprimary_degradation
+        if repeated_vector_or_safeguard_degradation
         else "strong"
         if vector_gate and speed_gate and joint_event_counts["strong"] >= 2
         else "qualified"
@@ -964,12 +1179,35 @@ def wind_decision_readout(rows: list[dict]) -> dict:
         if all_materially_neutral
         else "mixed"
     )
+    interpolation_control_required = classification in {
+        "degraded",
+        "neutral",
+        "mixed",
+    }
     return {
         "schema_version": 1,
         "classification": classification,
+        "next_action": {
+            "interpolation_only_control_required": interpolation_control_required,
+            "instruction": (
+                "Run the identically sampled interpolation-only control next; "
+                "report any safeguard failure and do not open a tuning matrix."
+                if interpolation_control_required
+                else "The wind decision rule does not trigger an interpolation-only control."
+            ),
+        },
         "rule": {
             "estimand": (
-                "Per-event equal-station network RMSE, sqrt(mean station RMSE squared)"
+                "For each event and metric, sqrt(mean over the fixed four-event, "
+                "two-metric station cohort of station RMSE squared)"
+            ),
+            "cohort": (
+                "Exact intersection of station keys with 24 common ending-hour pairs "
+                "for both wind_vector and wind_speed_10m_m_s in all four events"
+            ),
+            "source_report_contract": (
+                "Each event has exactly 25 ordered inclusive hourly matched_model_times; "
+                "lead_time_metrics has physical leads 25..48, normalized to 1..24"
             ),
             "delta_sign": "negative favors HICAR",
             "material_threshold": "max(0.10 m s-1, 0.05 * REA-L RMSE)",
@@ -988,13 +1226,15 @@ def wind_decision_readout(rows: list[dict]) -> dict:
                 ),
                 "qualified": "vector gate passes; speed has no material degradation and nondegrading median",
                 "neutral": "all eight event-metric changes are materially neutral",
-                "degraded": "repeated vector/speed degradation or a repeated safeguard regression",
+                "degraded": "vector degradation in at least two events or a repeated vector safeguard regression",
                 "mixed": "all other combinations",
             },
             "required_event_counts": {
                 "event_count": 4,
+                "common_ending_hour_pairs_per_station_event_metric": REQUIRED_WIND_EVENT_PAIR_COUNT,
                 "vector_nondegradation_minimum": 3,
                 "vector_material_improvement_minimum": 2,
+                "vector_leave_one_event_out_nondegradation_minimum": 4,
                 "speed_nondegradation_minimum_for_strong": 3,
                 "speed_material_improvement_minimum_for_strong": 2,
                 "joint_strong_event_minimum_for_strong": 2,
@@ -1002,11 +1242,24 @@ def wind_decision_readout(rows: list[dict]) -> dict:
             "median_rule": "raw station-event median; negative is improving; no significance inference",
             "safeguard_rule": (
                 "For vector RMSE, material broad degradation in the same sufficiently "
-                "populated stratum in at least two events fails the safeguard"
+                "populated fixed-cohort stratum in at least two events fails the safeguard"
             ),
+            "minimum_fixed_cohort_stations": MINIMUM_NATIONAL_WIND_STATIONS,
             "minimum_national_stations_per_event": MINIMUM_NATIONAL_WIND_STATIONS,
             "minimum_safeguard_stations_per_event": MINIMUM_SAFEGUARD_STATIONS,
-            "leave_one_event_out_role": "reported robustness diagnostic; it does not override RMSE gates",
+            "leave_one_event_out_role": (
+                "All four vector leave-one-event-out station-event medians must be "
+                "nondegrading for the vector gate; speed omissions are diagnostic"
+            ),
+        },
+        "cohort": {
+            "station_count": len(cohort),
+            "station_keys": sorted(cohort),
+            "excluded_station_counts_by_event_and_metric": {
+                f"{season}:{metric}": len(eligible_station_sets[(season, metric)] - cohort)
+                for season in SEASONS
+                for metric in WIND_METRICS
+            },
         },
         "event_counts": event_counts,
         "joint_event_counts": joint_event_counts,
@@ -1024,6 +1277,13 @@ def wind_decision_readout(rows: list[dict]) -> dict:
             "negative_vector_station_event_median": {
                 "observed_direction": station_event["wind_vector"]["median_direction"],
                 "passes": station_event["wind_vector"]["median_direction"] == "improving",
+            },
+            "vector_leave_one_event_out_nondegradation": {
+                "observed": sum(
+                    row["nondegrading"] for row in leave_one_event_out["wind_vector"]["omissions"]
+                ),
+                "required": 4,
+                "passes": leave_one_event_out["wind_vector"]["all_omissions_nondegrading"],
             },
             "safeguards": {"passes": not repeated_regression},
             "vector_gate_passes": vector_gate,
@@ -1151,6 +1411,7 @@ def run(args: argparse.Namespace) -> dict:
         raise ValueError(f"reports must cover exactly {', '.join(SEASONS)}")
 
     reports = {season: (specs[season], load_report(specs[season])) for season in SEASONS}
+    wind_source_evidence = validate_wind_source_reports(reports)
     common_keys, common_provenance = load_common_keys(
         args.common_65_report, args.common_65_site_file
     )
@@ -1163,20 +1424,18 @@ def run(args: argparse.Namespace) -> dict:
                 )
 
     selected_metrics = set(args.metric) if args.metric else None
-    rows, station_exclusions, metadata = station_season_rows(
-        reports, common_keys, selected_metrics
-    )
+    rows, station_exclusions, metadata = station_season_rows(reports, common_keys, selected_metrics)
     if not rows:
         raise ValueError("no valid paired station-season RMSE rows")
-    wind_rows, wind_exclusions, _ = station_season_rows(
-        reports, common_keys, set(WIND_METRICS)
-    )
+    wind_rows, wind_exclusions, _ = station_season_rows(reports, common_keys, set(WIND_METRICS))
     wind_decision = wind_decision_readout(wind_rows)
     wind_decision["data_quality"] = {
         "station_event_exclusions": wind_exclusions,
+        "source_report_contract": wind_source_evidence,
         "population_policy": (
-            "Excluded rows remain visible; each event must retain identical vector/speed "
-            "station keys and meet national and safeguard population minima."
+            "The decision cohort is the exact four-event/two-metric intersection. "
+            "Every retained station-event metric has 24 common pairs; source reports "
+            "prove 25 inclusive endpoints and physical leads 25..48."
         ),
     }
     lead_tables, lead_exclusions = lead_hour_tables(reports, selected_metrics)
@@ -1276,8 +1535,7 @@ def run(args: argparse.Namespace) -> dict:
             "station_key_union_count": len(set.union(*national_key_sets)),
             "station_key_four_season_intersection_count": len(national_four_season_keys),
             "metric_eligible_four_season_intersection_counts": {
-                metric: len(keys)
-                for metric, keys in national_metric_four_season_keys.items()
+                metric: len(keys) for metric, keys in national_metric_four_season_keys.items()
             },
         },
         "data_quality": {
