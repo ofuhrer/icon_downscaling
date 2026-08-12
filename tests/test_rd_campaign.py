@@ -38,6 +38,7 @@ def campaign(
     max_active_inputs=2,
     input_cpus=4,
     input_column_workers=1,
+    input_exclusive=False,
 ) -> Campaign:
     config = {
         "root": str(tmp_path / "campaign"),
@@ -53,6 +54,7 @@ def campaign(
         "max_active_inputs": max_active_inputs,
         "input_cpus": input_cpus,
         "input_column_workers": input_column_workers,
+        "input_exclusive": input_exclusive,
         "radiation_update_interval": 600,
         "seasons": seasons or [{
             "name": "autumn",
@@ -206,6 +208,24 @@ def test_input_column_workers_cannot_oversubscribe_allocated_cpus(tmp_path) -> N
         assert "input_cpus" in str(error)
     else:
         raise AssertionError("column workers exceeded the producer CPU allocation")
+
+
+def test_input_exclusive_adds_slurm_placement_option(tmp_path, monkeypatch) -> None:
+    configured = campaign(
+        tmp_path,
+        full_season_input_lists=False,
+        max_active_inputs=1,
+        input_exclusive=True,
+    )
+    options = []
+
+    def fake_submit(script, environment, job_name, *, partition, sbatch_options=()):
+        options.append(sbatch_options)
+        return "2999"
+
+    monkeypatch.setattr(rd_campaign, "submit", fake_submit)
+    assert configured.prepare_inputs() == 1
+    assert options and "--exclusive" in options[0]
 
 
 def test_inputs_only_override_can_prepare_beyond_bounded_horizon(

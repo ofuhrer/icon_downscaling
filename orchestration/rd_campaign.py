@@ -167,6 +167,7 @@ class Campaign:
         )
         self.input_memory = str(self.config.get("input_memory", "64G"))
         self.input_time = str(self.config.get("input_time", "01:00:00"))
+        self.input_exclusive = bool(self.config.get("input_exclusive", False))
         self.model_nodes = int(self.config.get("model_nodes", 2))
         self.model_time = str(self.config.get("model_time", "06:00:00"))
         self.radiation_update_interval = float(
@@ -349,6 +350,7 @@ class Campaign:
                     f"--cpus-per-task={self.input_cpus}",
                     f"--mem={self.input_memory}",
                     f"--time={self.input_time}",
+                    *(("--exclusive",) if self.input_exclusive else ()),
                 ),
             )
             (directory / f"attempt-{attempt}.job").write_text(job + "\n")
