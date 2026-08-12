@@ -144,6 +144,11 @@ surface and terrain-radiation choices but cover much smaller domains.
   the following 24 h reproduce the selected winter, spring, summer and autumn
   evaluation events. A final daylight turnover and continuous-versus-restart
   check is required after the complete setup changes, not for tuning it.
+- Each segment lists only the hourly records bracketing that segment. Ready
+  forcing/LBC pairs for the next segment can therefore be generated while the
+  current segment runs; the shared endpoint is reused. A daylight 2 x 1 h
+  local-list restart must be bit-exact with the full-list reference before this
+  streaming mode is used for the campaign.
 - Write the essential two-dimensional station-comparison and surface-process
   fields every 600 s. For each ending civil hour, aggregate the six HICAR
   ten-minute samples to the SwissMetNet `h0` definitions; inverse-rotate HICAR
