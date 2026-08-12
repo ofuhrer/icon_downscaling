@@ -200,10 +200,11 @@ Each season is a single 48-hour physical trajectory split into four 12-hour
 restartable segments. Four consecutive attempts on `preemptible` were
 externally displaced after 22--71 minutes without model failures. The retained
 workflow therefore uses one 12-node segment at a time on non-preempting
-`normal`, preserving the qualified 60-rank topology and consuming 27.3% of the
-current 44-node partition. A fail-closed 50% partition-share check and global
-one-model concurrency bound make this operational choice explicit. The first
-24 hours are spin-up; the original 24-hour
+`normal`, preserving the qualified 60-rank topology. On the live 46-node
+partition this consumes 26.1%; the controller derives the live capacity rather
+than relying on that snapshot. A fail-closed 50% partition-share check and
+global one-model concurrency bound make this operational choice explicit. The
+first 24 hours are spin-up; the original 24-hour
 event is evaluated:
 
 | Season | trajectory | evaluation |
