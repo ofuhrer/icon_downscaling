@@ -41,9 +41,24 @@ invertibility or global solver conditioning.
 
 ## Follow-up order
 
+The selected national winter initialization isolated a fork/domain-specific
+dynamic-alpha failure. The 2020-01-14 00 UTC A/B test held the 4a425677
+executable, domain, 13 forcing records, Sx settings and 12-node topology fixed.
+Diagnosed alpha produced a 139.30 m s-1 maximum 10 m wind, p99.9 of
+26.42 m s-1, and 2,101/476/30 cells above 30/50/100 m s-1; its 50 m maximum
+was 34.60 m s-1. `alpha_const=1` produced a 21.085 m s-1 maximum and
+11.212 m s-1 p99.9 at 10 m and a 21.262 m s-1 maximum at 50 m, with no cells
+above 30 m s-1. Both solver and conservation checks passed. Evidence is under
+`winter_projection_ab_4a425677/adjoint_alpha1` (model hash prefix `31a27113`,
+comparison-JSON hash prefix `cca0f797`).
+
+Use alpha 1 for the conservative R&D reference. Revisit dynamic alpha only as
+a controlled mechanism experiment after the campaign; this result does not
+establish fixed alpha as the published or optimal choice.
+
 After the vertical grid, lid, and SLEVE decay are stable, investigate:
 
-1. `alpha_const` and `wind_iterations`;
+1. `wind_iterations` and, only if needed, a bounded dynamic-alpha alternative;
 2. `cz_diff_order` and other numerical diffusion controls;
 3. `advect_density` and wind balancing;
 4. `use_agl_height` / `agl_cap` where relevant;

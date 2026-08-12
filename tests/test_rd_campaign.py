@@ -358,6 +358,7 @@ def test_radiation_configuration_is_explicit_in_model_environment(
     assert configured.submit_segments() == 1
     assert submitted[0]["HICAR_RADIATION_UPDATE_INTERVAL"] == "600.0"
     assert submitted[0]["HICAR_RADIATION_SCHEME"] == "rrtmg"
+    assert submitted[0]["HICAR_ALPHA_CONST"] == "1.0"
 
 
 def test_unknown_radiation_scheme_is_rejected(tmp_path) -> None:

@@ -10,7 +10,9 @@ The selected baseline is explicit in `config/hicar_swiss_200m.nml.in`:
 - hourly valid-time REA-L SKT as water-only `SST` in regular forcing;
 - literature-established regular full-domain forcing relaxation; sparse LBC is
   retained only for controlled experiments;
-- adjoint variational wind, Sx on, density advection, dynamic Froude alpha;
+- adjoint variational wind, Sx on, density advection, and conservative fixed
+  alpha 1. The diagnosed dynamic-alpha coupling produced rejected localized
+  high-terrain spikes in this fork/domain and remains an explicit sensitivity;
 - Noah-MP with SMI initialization and four depth-varying soil textures;
 - ICON SWE, snow depth/density, and bulk snow temperature on cold starts;
 - RRTMG every 600 s, with terrain shading and direct/diffuse shortwave

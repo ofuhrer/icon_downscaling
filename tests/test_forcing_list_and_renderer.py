@@ -113,7 +113,7 @@ def test_renderer_has_one_explicit_hicarprep_configuration(tmp_path: Path) -> No
         "qv_is_spec_humidity = .False.", "relax_filters = .True.",
         "soiltexture_var = 'soil_type_layer'", "nmp_opt_sfc = 1",
         "nmp_dveg = 3", "nmp_opt_soil = 2",
-        "Sx = .True.", "advect_density = .True.", "alpha_const = -1.0",
+        "Sx = .True.", "advect_density = .True.", "alpha_const = 1.0",
         "Sx_dmax = 600.0", "TPI_dmax = 4000.0", "TPI_scale = 200.0",
         "rad = 'rrtmgp'", "terrain_shading = .True.",
         "terrain_direct_sw = .True.", "terrain_diffuse_sw = .True.",

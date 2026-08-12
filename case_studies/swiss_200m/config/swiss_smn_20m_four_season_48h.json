@@ -1,5 +1,5 @@
 {
-  "root": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/campaign_regular_relaxation_rrtmg_water_v2",
+  "root": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/campaign_regular_relaxation_rrtmg_water_alpha1_v1",
   "repo_root": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/source/coordinator",
   "forcing_dir": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/input/forcing_sst_local_baseline_v1",
   "python": "/scratch/mch/olifu/icon_hicar/venv_static/bin/python",
@@ -26,7 +26,7 @@
   "output_interval": 600,
   "radiation_update_interval": 600,
   "radiation_scheme": "rrtmg",
-  "alpha_const": -1.0,
+  "alpha_const": 1.0,
   "seasons": [
     {
       "name": "winter",

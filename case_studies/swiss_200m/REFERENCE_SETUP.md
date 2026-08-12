@@ -96,9 +96,15 @@ surface and terrain-radiation choices but cover much smaller domains.
 - Use the fork's adjoint variational mass-conserving projection. It has exact
   algebraic/restart tests but is not the same published operator and must be
   identified as such in interpretation.
-- Diagnose the Froude-dependent alpha at every hourly wind update, bounded by
-  the published 0.1--1.0 range. A fixed alpha of 1 is the stable end member,
-  not the published HICAR reference.
+- Use fixed `alpha_const=1` as the conservative bounded R&D reference. In the
+  exact winter initial state, this fork's adjoint projection coupled to the
+  diagnosed dynamic alpha produced localized high-terrain 10 m winds up to
+  139.30 m s-1 (2,101 cells above 30 m s-1 and 476 above 50 m s-1), despite
+  bounded forcing and a converged conservative solve. Holding everything else
+  fixed, alpha 1 reduced the maximum to 21.085 m s-1 and left no cell above
+  30 m s-1; the 50 m maximum fell from 34.60 to 21.262 m s-1. This rejects that
+  fork/domain coupling for the selected campaign. Fixed alpha is the stable
+  end member, not the published dynamic HICAR reference or a claimed optimum.
 - Apply Sx/TPI with `Sx_dmax=600 m`, `Sx_scale_ang=30 degrees`,
   `TPI_dmax=4000 m`, `TPI_scale=200`, and 500 m wind smoothing. Use two wind
   adjustment passes, a 2500-iteration solver cap and one update per hourly

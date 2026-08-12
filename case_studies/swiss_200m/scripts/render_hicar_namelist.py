@@ -84,7 +84,7 @@ def main() -> int:
     parser.add_argument(
         "--alpha-const",
         type=float,
-        default=-1.0,
+        default=1.0,
         help="fixed wind-solver alpha in 0.01..1, or -1 for dynamic Froude alpha",
     )
     parser.add_argument("--cfl-reduction-factor", type=float, default=1.6)

@@ -453,7 +453,7 @@ class Campaign:
                     ),
                     "HICAR_RADIATION_SCHEME": self.radiation_scheme,
                     "HICAR_DISABLE_SX": "1" if self.config.get("disable_sx", False) else "0",
-                    "HICAR_ALPHA_CONST": str(self.config.get("alpha_const", -1.0)),
+                    "HICAR_ALPHA_CONST": str(self.config.get("alpha_const", 1.0)),
                     "HICAR_ALLOW_INPUT_SUPERSET": (
                         "1" if self.full_season_input_lists else "0"
                     ),

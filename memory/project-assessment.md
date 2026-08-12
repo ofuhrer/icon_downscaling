@@ -33,6 +33,16 @@ less complete setup and only 65 sites. It showed no general added value over
 REA-L-CH1 and a large autumn ridge-wind degradation. That result is diagnostic
 history, not the assessment of the reference setup now being prepared.
 
+The first winter initialization of the complete setup exposed a separate
+fork-specific wind-projection defect: diagnosed dynamic alpha coupled to the
+adjoint projection produced localized high-terrain 10 m winds up to 139.30
+m s-1, with 2,101 cells above 30 m s-1, although forcing was bounded and the
+solver converged. An otherwise identical initialization with `alpha_const=1`
+bounded the maximum at 21.085 m s-1 with no cells above 30 m s-1; its conservation
+residual also passed. The dynamic-alpha coupling is therefore rejected for the
+campaign. Alpha 1 is the conservative bounded R&D reference, not a claim of
+published equivalence or scientific optimality.
+
 ## Scientific reference
 
 The complete rationale and option-by-option specification is in
@@ -91,10 +101,11 @@ than a claimed optimum.
 
 - RK3, CFL factor 1.6, third-order horizontal/vertical advection, FCT option 1,
   density transport and no extra constant-z diffusion.
-- The fork's adjoint variational wind projection, dynamic Froude alpha in the
-  published 0.1--1 range, Sx 600 m/30 degrees, TPI 4 km/200, 500 m smoothing,
-  two passes, cap 2500, hourly updates; thermal and linear-theory corrections
-  off.
+- The fork's adjoint variational wind projection with fixed alpha 1, Sx 600
+  m/30 degrees, TPI 4 km/200, 500 m smoothing, two passes, cap 2500 and hourly
+  updates; thermal and linear-theory corrections off. Dynamic alpha remains a
+  scientifically relevant mechanism but is excluded from this fork/domain
+  reference because of the quantified initialization spikes above.
 - Morrison, YSU, Noah-MP, revised-MM5, simple prescribed-water temperature,
   RRTMG and Noah-MP internal snow; no cumulus scheme. YSU top-down radiative
   mixing remains explicitly disabled.
@@ -149,7 +160,7 @@ than a claimed optimum.
   8.7e-9 m s-1. Local extrema warrant monitoring, but this is numerical restart
   reproducibility adequate for the present wind assessment, not bit identity.
 
-## Experiment now being executed
+## Selected campaign experiment
 
 Each season is a single 48-hour physical trajectory split into four 12-hour
 preemptible segments. The first 24 hours are spin-up; the original 24-hour

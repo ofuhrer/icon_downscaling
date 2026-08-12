@@ -17,8 +17,13 @@ result identifies a specific scientific ambiguity.
 - SLEVE decay 2/6, terrain smoothing radius 5 for 10 cycles;
 - RK3/CFL 1.6, third-order horizontal and vertical advection, FCT option 1,
   and density advection;
-- discretely adjoint variational wind, dynamic `alpha_const=-1` bounded by
-  0.1--1, two passes and a 2500-iteration cap;
+- discretely adjoint variational wind with conservative `alpha_const=1`, two
+  passes and a 2500-iteration cap. On the selected national domain, coupling
+  this fork's projection to diagnosed dynamic alpha produced localized
+  high-terrain 10 m spikes (139.30 m s-1 and 2,101 cells above 30 m s-1 at
+  winter initialization); alpha 1 bounded the maximum at 21.085 m s-1 with no
+  cells above 30 m s-1. This is the bounded R&D reference, not a claim that
+  fixed alpha is the published or scientifically optimal choice;
 - Sx on with 600 m search, 30 degree scale and 500 m smoothing; TPI search
   4 km and scale 200;
 - Morrison microphysics, YSU PBL, Noah-MP surface-exchange option 1 with the
