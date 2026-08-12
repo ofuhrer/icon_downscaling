@@ -29,18 +29,24 @@ Use `orchestration/rd_campaign.py`. The selected national 200 m setup uses
 daylight smoke; do not change that decomposition merely to pack more chains.
 Each model attempt:
 
-- names `preemptible` explicitly and checks live group access;
+- names its configured partition explicitly, validates live exact-group access,
+  and checks the actual Slurm partition inside the job;
 - uses at most six hours wall time and 12 nodes for the selected national
   200 m case;
 - writes 600 s evaluation output and a terminal restart;
 - runs in a new attempt directory;
 - creates `segment.complete` only after HICAR success and restart/output checks.
 
-Pre-emption may kill a job before a large restart can be written. Recovery is
-therefore to rerun that segment from the last completed predecessor restart,
-not to trust a partial attempt. Independent seasonal chains may run in
-parallel; a single chain remains serial. Input production uses no more than
-two `pp-short` jobs.
+Four consecutive national attempts on `preemptible` were externally displaced
+after 22--71 minutes without model failures. The selected campaign therefore
+uses `normal`, `max_active_models=1`, and a fail-closed
+`model_max_partition_fraction=0.5`. On the live 44--46-node partition this is
+one 12-node/60-rank segment at a time (26--27%); never release a second model
+job concurrently. Recovery still reruns a failed segment from its last
+completed predecessor restart and never trusts a partial attempt. A single
+seasonal chain remains serial. National input production uses the bounded
+configuration and exclusive CPU nodes because each eight-worker record has
+measured peak memory near 240 GB.
 
 ## Runtime essentials
 
