@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import datetime as dt
-import json
 import multiprocessing as mp
 from pathlib import Path
 import tempfile
@@ -11,7 +10,6 @@ from unittest import mock
 import netCDF4
 import numpy as np
 from preprocessing.hicarprep.boundary import validate_boundary_sequence
-from preprocessing.hicarprep.cli import parser as hicarprep_parser
 from preprocessing.hicarprep.geometry import SleveConfig, build_sleve_geometry
 from preprocessing.hicarprep.external import append_epoch, evaluate_external_fields
 from preprocessing.hicarprep.pipeline import (
@@ -426,6 +424,117 @@ class HorizontalRemapTests(unittest.TestCase):
             rebuilt_u, rebuilt_v = restored.apply(vn)
             np.testing.assert_allclose(rebuilt_u, u)
             np.testing.assert_allclose(rebuilt_v, v)
+
+
+class RBFApplyChunkingTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.operator = RBFWeights(
+            donor_index=np.array(
+                [
+                    [0, 2, 4],
+                    [1, 3, 5],
+                    [2, 4, 6],
+                    [3, 5, 7],
+                    [4, 6, 8],
+                    [5, 7, 9],
+                    [6, 8, 10],
+                ]
+            ),
+            weight=np.array(
+                [
+                    [0.25, 0.5, 0.25],
+                    [1.5, -0.5, 0.0],
+                    [-0.5, 1.5, 0.0],
+                    [0.0, 1.0, 0.0],
+                    [0.5, 0.0, 0.5],
+                    [0.125, 0.25, 0.625],
+                    [2.0, -1.0, 0.0],
+                ]
+            ),
+            target_shape=(1, 7),
+            source_fingerprint="source",
+            target_fingerprint="target",
+        )
+
+    def unchunked_reference(
+        self, source: np.ndarray, *, monotone: bool = False
+    ) -> np.ndarray:
+        donors = np.take(source, self.operator.donor_index, axis=-1)
+        result = np.sum(donors * self.operator.weight, axis=-1)
+        if monotone:
+            result = np.clip(
+                result,
+                np.min(donors, axis=-1),
+                np.max(donors, axis=-1),
+            )
+        return result.reshape((*source.shape[:-1], *self.operator.target_shape))
+
+    def test_scalar_result_exactly_matches_unchunked_with_odd_final_chunk(self) -> None:
+        source = np.linspace(-7.0, 13.0, 11)
+        expected = self.unchunked_reference(source)
+        with mock.patch(
+            "preprocessing.hicarprep.remap._RBF_APPLY_TARGET_CHUNK_SIZE", 3
+        ):
+            actual = self.operator.apply(source)
+        np.testing.assert_array_equal(actual, expected)
+
+    def test_level_result_exactly_matches_unchunked_with_odd_final_chunk(self) -> None:
+        source = np.arange(55, dtype=np.float64).reshape(5, 11) / 7.0
+        expected = self.unchunked_reference(source)
+        with mock.patch(
+            "preprocessing.hicarprep.remap._RBF_APPLY_TARGET_CHUNK_SIZE", 3
+        ):
+            actual = self.operator.apply(source)
+        np.testing.assert_array_equal(actual, expected)
+
+    def test_monotone_result_exactly_matches_unchunked_with_odd_final_chunk(self) -> None:
+        source = np.array(
+            [8.0, -3.0, 5.0, 12.0, -9.0, 4.0, 7.0, -1.0, 2.0, 6.0, 0.0]
+        )
+        expected = self.unchunked_reference(source, monotone=True)
+        with mock.patch(
+            "preprocessing.hicarprep.remap._RBF_APPLY_TARGET_CHUNK_SIZE", 3
+        ):
+            actual = self.operator.apply(source, monotone=True)
+        np.testing.assert_array_equal(actual, expected)
+
+    def test_apply_bounds_every_gather_to_the_chunk_size(self) -> None:
+        source = np.arange(44, dtype=np.float64).reshape(4, 11)
+        expected = self.unchunked_reference(source)
+        original_take = np.take
+        gathered_target_counts: list[int] = []
+
+        def bounded_take(
+            array: np.ndarray, indices: np.ndarray, *args: object, **kwargs: object
+        ) -> np.ndarray:
+            gathered_target_counts.append(indices.shape[0])
+            self.assertLessEqual(indices.shape[0], 3)
+            return original_take(array, indices, *args, **kwargs)
+
+        with (
+            mock.patch("preprocessing.hicarprep.remap._RBF_APPLY_TARGET_CHUNK_SIZE", 3),
+            mock.patch("preprocessing.hicarprep.remap.np.take", side_effect=bounded_take),
+        ):
+            actual = self.operator.apply(source)
+
+        self.assertEqual(gathered_target_counts, [3, 3, 1])
+        np.testing.assert_array_equal(actual, expected)
+
+    def test_apply_rejects_invalid_source_shapes(self) -> None:
+        with self.assertRaisesRegex(ValueError, "at least one dimension"):
+            self.operator.apply(np.array(1.0))
+        with self.assertRaisesRegex(ValueError, "shorter than cached donor index"):
+            self.operator.apply(np.zeros(10))
+
+    def test_operator_rejects_non_matrix_weight_shapes(self) -> None:
+        with self.assertRaisesRegex(ValueError, "two-dimensional"):
+            RBFWeights(
+                donor_index=np.array([0, 1]),
+                weight=np.array([0.5, 0.5]),
+                target_shape=(2,),
+                source_fingerprint="source",
+                target_fingerprint="target",
+            )
 
 
 class VerticalTransformTests(unittest.TestCase):

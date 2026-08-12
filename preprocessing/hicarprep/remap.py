@@ -18,6 +18,10 @@ RBF_SCALE_REFERENCE = 0.05
 RBF_GRID_DISTANCE_REFERENCE_M = 13_000.0
 MAXIMUM_RBF_CONDITION_NUMBER = 1.0e10
 MAXIMUM_RBF_WEIGHT_AMPLIFICATION = 10.0
+# An 80-level, ten-donor float64 gather is 200 MiB at this target count.
+# Keeping this internal preserves the interpolation API while bounding both
+# the gather and weighted-product temporaries on national target grids.
+_RBF_APPLY_TARGET_CHUNK_SIZE = 32_768
 
 
 def coordinates_in_degrees(values: np.ndarray, units: str | None) -> np.ndarray:
@@ -128,6 +132,8 @@ class RBFWeights:
     def __post_init__(self) -> None:
         if self.donor_index.shape != self.weight.shape:
             raise ValueError("donor indices and weights must have identical shapes")
+        if self.donor_index.ndim != 2:
+            raise ValueError("donor indices and weights must be two-dimensional")
         if self.donor_index.shape[0] != int(np.prod(self.target_shape)):
             raise ValueError("weight target count does not match target shape")
         amplification = np.sum(np.abs(self.weight), axis=1)
@@ -143,12 +149,33 @@ class RBFWeights:
     def apply(self, source: np.ndarray, *, monotone: bool = False) -> np.ndarray:
         """Apply weights to an array whose final dimension is native cell."""
         source = np.asanyarray(source)
+        if source.ndim == 0:
+            raise ValueError("source must have at least one dimension")
         if source.shape[-1] <= int(np.max(self.donor_index)):
             raise ValueError("source cell dimension is shorter than cached donor index")
-        donors = np.take(source, self.donor_index, axis=-1)
-        result = np.sum(donors * self.weight, axis=-1)
-        if monotone:
-            result = np.clip(result, np.min(donors, axis=-1), np.max(donors, axis=-1))
+
+        target_count = self.donor_index.shape[0]
+        result = None
+        for start in range(0, target_count, _RBF_APPLY_TARGET_CHUNK_SIZE):
+            stop = min(start + _RBF_APPLY_TARGET_CHUNK_SIZE, target_count)
+            donors = np.take(source, self.donor_index[start:stop], axis=-1)
+            chunk = np.sum(donors * self.weight[start:stop], axis=-1)
+            if monotone:
+                chunk = np.clip(
+                    chunk,
+                    np.min(donors, axis=-1),
+                    np.max(donors, axis=-1),
+                )
+            if result is None:
+                result_shape = (*source.shape[:-1], target_count)
+                if np.ma.isMaskedArray(chunk):
+                    result = np.ma.empty(result_shape, dtype=chunk.dtype)
+                else:
+                    result = np.empty(result_shape, dtype=chunk.dtype)
+            result[..., start:stop] = chunk
+            del donors, chunk
+        if result is None:
+            raise ValueError("cached RBF operator has no target points")
         return result.reshape((*source.shape[:-1], *self.target_shape))
 
     def apply_same_surface(
