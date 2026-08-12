@@ -64,19 +64,19 @@ than a claimed optimum.
   are not sufficiently established to define the national reference.
 - Missing QI is explicitly zero; QR/QS/QG are not invented. Supersaturation is
   retained. Cold-cloud and precipitation spin-up remain interpretation limits.
-- The former blank `sst_var` held every lake at 280 K. The reference prescribes
-  hourly REA-L skin temperature over source-water support. HICAR still floors
-  SST at 273.15 K, so frozen-lake physics is absent. The first five real SST
-  remaps found that 10,773 of 84,346 target water cells (12.77%) lacked water
-  support in the compact REA-L stencil and used a global same-surface fallback,
-  with a maximum distance of 55.67 km. They cover about 431 km2, but the major
-  lakes are well supported: fallback fractions are below 0.6% for the largest
-  Constance-, Maggiore-, Como-, Lucerne- and Thun-like components. Most fallback
-  cells belong to fine rivers or small water-mask fragments. Exact masks and
-  distances are retained in every forcing record and a reproducible geography
-  diagnostic is available. This is acceptable for the event campaign with the
-  frozen-lake and small-water limitations stated explicitly; terrestrial
-  station sampling is separately constrained to land cells.
+- The former blank `sst_var` held every lake at 280 K. HICAR still floors SST
+  at 273.15 K, so frozen-lake physics is absent. Of 84,346 target water cells,
+  10,773 (12.77%, about 431 km2) lack compact same-surface REA-L support. The
+  former nearest-water fallback reached 55.67 km and produced multi-kW m-2
+  turbulent heat fluxes over unsupported high-elevation water, so it is
+  rejected. The selected `sst-local-baseline-v1` policy retains compact
+  same-surface remapping where supported and otherwise uses the exact-valid-time
+  monotone local all-surface RBF baseline. The unsupported-water mask and
+  nearest same-surface candidate distance remain diagnostics; the remote value
+  is not used. This is a defensible immediate approximation, not lake thermal
+  physics. Rebuild into the versioned forcing directory and repeat the finite
+  daylight smoke before launching the campaign; a prognostic lake model remains
+  future work.
 - Conditioned local RBF weights are required. An old nearly singular stencil
   produced a 320 m s-1 wind spike and is invalid. Operators with excessive L1
   amplification are rejected and vector bounds are checked.

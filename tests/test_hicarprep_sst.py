@@ -8,7 +8,12 @@ import pytest
 
 from preprocessing.hicarprep.products import sha256
 from preprocessing.hicarprep.remap import RBFWeights, grid_fingerprint
-from preprocessing.hicarprep.sst import build_target_sst_product, load_target_sst
+from preprocessing.hicarprep.sst import (
+    SST_POLICY_VERSION,
+    SST_REMAP_POLICY,
+    build_target_sst_product,
+    load_target_sst,
+)
 
 
 def inputs(root: Path) -> tuple[Path, Path, RBFWeights, np.ndarray, np.ndarray, np.ndarray]:
@@ -66,9 +71,9 @@ def test_target_sst_uses_same_surface_water_and_exact_contract(tmp_path: Path) -
         assert dataset.source_variable == "SKT"
 
 
-def test_target_sst_persists_exact_global_fallback_provenance(tmp_path: Path) -> None:
+def test_target_sst_uses_local_baseline_without_compact_water_support(tmp_path: Path) -> None:
     static, source, original_weights, lat, lon, land = inputs(tmp_path)
-    output = tmp_path / "target_sst_global_fallback.nc"
+    output = tmp_path / "target_sst_local_baseline.nc"
     donor_index = original_weights.donor_index.copy()
     donor_index[[1, 3]] = np.array([0, 2])
     weights = RBFWeights(
@@ -78,9 +83,10 @@ def test_target_sst_persists_exact_global_fallback_provenance(tmp_path: Path) ->
         source_fingerprint=original_weights.source_fingerprint,
         target_fingerprint=original_weights.target_fingerprint,
     )
+    source_skt = np.array([290.0, 280.0, 292.0, 282.0])
     diagnostics = build_target_sst_product(
         output,
-        source_skt=np.array([290.0, 280.0, 292.0, 282.0]),
+        source_skt=source_skt,
         source_lat=lat.ravel(),
         source_lon=lon.ravel(),
         source_land=land.ravel(),
@@ -90,16 +96,30 @@ def test_target_sst_persists_exact_global_fallback_provenance(tmp_path: Path) ->
         source_path=source,
     )
 
-    assert diagnostics["water_global_fallback_count"] == 2
-    assert diagnostics["maximum_global_fallback_distance_km"] == 0.0
+    actual = load_target_sst(
+        output,
+        static_path=static,
+        valid_time="2020-02-10T01:00:00Z",
+        target_lat=lat,
+        target_lon=lon,
+        target_land=land,
+    )
+    np.testing.assert_allclose(actual[~land], [290.2, 290.2])
+    assert diagnostics["water_compact_fallback_count"] == 0
+    assert diagnostics["water_unsupported_count"] == 2
+    assert diagnostics["maximum_nearest_same_surface_candidate_distance_km"] == 0.0
     with netCDF4.Dataset(output) as dataset:
-        mask = np.asarray(dataset["global_fallback_mask"][:], dtype=bool)
-        distance = np.asarray(dataset["global_fallback_distance_km"][:])
+        mask = np.asarray(dataset["unsupported_water_mask"][:], dtype=bool)
+        distance = np.asarray(
+            np.ma.asarray(dataset["nearest_same_surface_candidate_distance_km"][:]).filled(np.nan)
+        )
         np.testing.assert_array_equal(mask, ~land)
         np.testing.assert_allclose(distance[~land], 0.0, atol=1.0e-12)
         assert np.isnan(distance[land]).all()
-        assert dataset.water_global_fallback_count == 2
-        assert dataset.maximum_global_fallback_distance_km == 0.0
+        assert dataset.sst_policy_version == SST_POLICY_VERSION
+        assert dataset.remap_policy == SST_REMAP_POLICY
+        assert dataset.water_unsupported_count == 2
+        assert dataset.maximum_nearest_same_surface_candidate_distance_km == 0.0
 
 
 def test_target_sst_rejects_time_and_mask_mismatch(tmp_path: Path) -> None:
@@ -128,6 +148,33 @@ def test_target_sst_rejects_time_and_mask_mismatch(tmp_path: Path) -> None:
     with netCDF4.Dataset(output, "a") as dataset:
         dataset["water_mask"][:] = 0
     with pytest.raises(ValueError, match="water mask"):
+        load_target_sst(
+            output,
+            static_path=static,
+            valid_time="2020-02-10T01:00:00Z",
+            target_lat=lat,
+            target_lon=lon,
+            target_land=land,
+        )
+
+
+def test_target_sst_rejects_stale_policy(tmp_path: Path) -> None:
+    static, source, weights, lat, lon, land = inputs(tmp_path)
+    output = tmp_path / "target_sst.nc"
+    build_target_sst_product(
+        output,
+        source_skt=np.array([290.0, 280.0, 292.0, 282.0]),
+        source_lat=lat.ravel(),
+        source_lon=lon.ravel(),
+        source_land=land.ravel(),
+        static_path=static,
+        weights=weights,
+        valid_time="2020-02-10T01:00:00Z",
+        source_path=source,
+    )
+    with netCDF4.Dataset(output, "a") as dataset:
+        dataset.sst_policy_version = "stale"
+    with pytest.raises(ValueError, match="local-baseline remapping contract"):
         load_target_sst(
             output,
             static_path=static,

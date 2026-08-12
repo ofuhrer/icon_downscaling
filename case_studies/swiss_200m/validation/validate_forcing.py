@@ -18,11 +18,23 @@ if str(ROOT) not in sys.path:
 from preprocessing.hicarprep.boundary import validate_boundary_sequence
 from preprocessing.hicarprep.pipeline import forcing_geometry_for_serialization
 from preprocessing.hicarprep.products import sha256
+from preprocessing.hicarprep.sst import SST_POLICY_VERSION, SST_REMAP_POLICY
 
 
 REQUIRED = (
-    "P", "T", "QV", "QC", "QI", "U", "V", "W", "SST",
-    "HFL", "HHL", "HSURF", "FR_LAND",
+    "P",
+    "T",
+    "QV",
+    "QC",
+    "QI",
+    "U",
+    "V",
+    "W",
+    "SST",
+    "HFL",
+    "HHL",
+    "HSURF",
+    "FR_LAND",
 )
 
 
@@ -53,14 +65,17 @@ def main() -> int:
         if forcing["time"].size != 1:
             raise SystemExit("forcing record must contain exactly one time")
         value = netCDF4.num2date(
-            forcing["time"][0], forcing["time"].units,
+            forcing["time"][0],
+            forcing["time"].units,
             calendar=getattr(forcing["time"], "calendar", "standard"),
         )
         valid = datetime(value.year, value.month, value.day, value.hour, value.minute, value.second)
         if args.expected_valid_time and valid != datetime.fromisoformat(
             args.expected_valid_time.replace("Z", "")
         ):
-            raise SystemExit(f"forcing time is {valid.isoformat()}, expected {args.expected_valid_time}")
+            raise SystemExit(
+                f"forcing time is {valid.isoformat()}, expected {args.expected_valid_time}"
+            )
         for name in REQUIRED:
             values = np.ma.asarray(forcing[name][:]).filled(np.nan)
             if not np.isfinite(values).all():
@@ -87,9 +102,7 @@ def main() -> int:
             "authoritative_static_HFL"
         ):
             raise SystemExit("W lacks the authoritative target-HFL coordinate contract")
-        if str(getattr(forcing, "target_w_terrain_wind_basis", "")) != (
-            "HICAR_grid_relative"
-        ):
+        if str(getattr(forcing, "target_w_terrain_wind_basis", "")) != ("HICAR_grid_relative"):
             raise SystemExit("terrain-adjusted W was not built from HICAR grid-relative winds")
         if forcing["SST"].dimensions != ("time", "y_1", "x_1"):
             raise SystemExit("SST must be a two-dimensional time-dependent target field")
@@ -118,75 +131,76 @@ def main() -> int:
         ).replace(tzinfo=None)
         if sst_valid_time != valid:
             raise SystemExit("forcing SST provenance time differs from forcing time")
-        if str(getattr(forcing, "sst_remap_policy", "")) != (
-            "same-surface water support; RBF baseline on land"
+        if (
+            str(getattr(forcing, "sst_policy_version", "")) != SST_POLICY_VERSION
+            or str(getattr(forcing, "sst_remap_policy", "")) != SST_REMAP_POLICY
         ):
-            raise SystemExit("forcing lacks the same-surface SST remapping contract")
+            raise SystemExit("forcing lacks the selected local-baseline SST contract")
         water_cell_count = int(getattr(forcing, "sst_water_cell_count", -1))
-        local_fallback_count = int(
-            getattr(forcing, "sst_water_local_fallback_count", -1)
-        )
-        global_fallback_count = int(
-            getattr(forcing, "sst_water_global_fallback_count", -1)
-        )
-        fallback_distance = float(
-            getattr(forcing, "sst_maximum_fallback_distance_km", np.nan)
+        compact_fallback_count = int(getattr(forcing, "sst_water_compact_fallback_count", -1))
+        unsupported_count = int(getattr(forcing, "sst_water_unsupported_count", -1))
+        candidate_distance_maximum = float(
+            getattr(
+                forcing,
+                "sst_maximum_nearest_same_surface_candidate_distance_km",
+                np.nan,
+            )
         )
         if water_cell_count != int(np.sum(water)):
             raise SystemExit("SST water-cell diagnostics disagree with the runtime domain")
-        if not (
-            0
-            <= global_fallback_count
-            <= local_fallback_count
-            <= water_cell_count
+        if not (0 <= compact_fallback_count <= water_cell_count):
+            raise SystemExit("SST compact-fallback count is inconsistent")
+        if not (0 <= unsupported_count <= water_cell_count):
+            raise SystemExit("SST unsupported-water count is inconsistent")
+        if compact_fallback_count + unsupported_count > water_cell_count:
+            raise SystemExit("SST support-exception counts are inconsistent")
+        if not np.isfinite(candidate_distance_maximum) or candidate_distance_maximum < 0.0:
+            raise SystemExit("SST candidate-distance maximum is missing or invalid")
+        for name in (
+            "SST_unsupported_water_mask",
+            "SST_nearest_same_surface_candidate_distance_km",
         ):
-            raise SystemExit("SST fallback counts are inconsistent")
-        if not np.isfinite(fallback_distance) or fallback_distance < 0.0:
-            raise SystemExit("SST fallback distance is missing or invalid")
-        for name in ("SST_global_fallback_mask", "SST_global_fallback_distance_km"):
             if name not in forcing.variables:
                 raise SystemExit(f"forcing lacks {name}")
-        if forcing["SST_global_fallback_mask"].dimensions != ("y_1", "x_1") or (
-            forcing["SST_global_fallback_distance_km"].dimensions
-            != ("y_1", "x_1")
+        if forcing["SST_unsupported_water_mask"].dimensions != ("y_1", "x_1") or (
+            forcing["SST_nearest_same_surface_candidate_distance_km"].dimensions != ("y_1", "x_1")
         ):
-            raise SystemExit("SST fallback provenance is not on the target grid")
-        global_fallback_mask = np.asarray(
-            forcing["SST_global_fallback_mask"][:], dtype=bool
+            raise SystemExit("SST support provenance is not on the target grid")
+        unsupported_water_values = np.asarray(
+            np.ma.asarray(forcing["SST_unsupported_water_mask"][:]).filled(np.nan),
+            dtype=np.float64,
         )
-        global_fallback_distance = np.asarray(
-            np.ma.asarray(forcing["SST_global_fallback_distance_km"][:]).filled(
+        if not np.isfinite(unsupported_water_values).all() or np.any(
+            (unsupported_water_values != 0.0) & (unsupported_water_values != 1.0)
+        ):
+            raise SystemExit("SST unsupported-water mask is not binary")
+        unsupported_water_mask = unsupported_water_values.astype(bool)
+        candidate_distance = np.asarray(
+            np.ma.asarray(forcing["SST_nearest_same_surface_candidate_distance_km"][:]).filled(
                 np.nan
             ),
             dtype=np.float64,
         )
-        if np.any(global_fallback_mask & ~water):
-            raise SystemExit("SST global fallback includes target land cells")
-        if int(np.count_nonzero(global_fallback_mask)) != global_fallback_count:
-            raise SystemExit("SST global fallback mask disagrees with its count")
-        if np.any(~np.isfinite(global_fallback_distance[global_fallback_mask])) or (
-            np.any(global_fallback_distance[global_fallback_mask] < 0.0)
+        if np.any(unsupported_water_mask & ~water):
+            raise SystemExit("SST unsupported-water mask includes target land cells")
+        if int(np.count_nonzero(unsupported_water_mask)) != unsupported_count:
+            raise SystemExit("SST unsupported-water mask disagrees with its count")
+        if np.any(~np.isfinite(candidate_distance[unsupported_water_mask])) or (
+            np.any(candidate_distance[unsupported_water_mask] < 0.0)
         ):
-            raise SystemExit("SST global fallback distances are invalid")
-        if np.any(np.isfinite(global_fallback_distance[~global_fallback_mask])):
-            raise SystemExit("SST fallback distances exist outside the fallback mask")
-        expected_global_maximum = (
-            float(np.max(global_fallback_distance[global_fallback_mask]))
-            if global_fallback_count
-            else 0.0
-        )
-        reported_global_maximum = float(
-            getattr(forcing, "sst_maximum_global_fallback_distance_km", np.nan)
+            raise SystemExit("SST same-surface candidate distances are invalid")
+        if np.any(np.isfinite(candidate_distance[~unsupported_water_mask])):
+            raise SystemExit("SST candidate distances exist outside unsupported water")
+        expected_candidate_maximum = (
+            float(np.max(candidate_distance[unsupported_water_mask])) if unsupported_count else 0.0
         )
         if not np.isclose(
-            reported_global_maximum,
-            expected_global_maximum,
+            candidate_distance_maximum,
+            expected_candidate_maximum,
             rtol=0.0,
             atol=1.0e-9,
         ):
-            raise SystemExit(
-                "SST global fallback maximum disagrees with its distance field"
-            )
+            raise SystemExit("SST candidate-distance maximum disagrees with its field")
         hhl = np.asarray(forcing["HHL"][:])
         hfl = np.asarray(forcing["HFL"][:])
         if np.any(np.diff(hhl, axis=0) <= 0.0) or np.any(np.diff(hfl, axis=0) <= 0.0):

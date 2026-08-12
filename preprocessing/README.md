@@ -30,9 +30,12 @@ python scripts/hicarprep.py prepare-hicar-forcing \
 Add `--boundary forcing.lbc.nc` only for a sparse-LBC experiment.
 
 `target_sst.nc` is produced for the same exact valid time from REA-L `SKT`.
-Its water cells use same-surface source support; its static-domain checksum,
-grid fingerprint, water mask, and valid time must all match the atmospheric
-record. HICAR reads this field as `SST` from every hourly regular record.
+Target water with compact same-surface support uses that remap. Target water
+without it uses the exact-time monotone local all-surface RBF baseline; a mask
+and the nearest same-surface candidate distance are retained as diagnostics,
+but no remote candidate value is inserted. The static-domain checksum, grid
+fingerprint, water mask, and valid time must all match the atmospheric record.
+HICAR reads this field as `SST` from every hourly regular record.
 
 The regular record initializes HICAR, advances its forcing clock and is the
 selected literature-established lateral-relaxation path with

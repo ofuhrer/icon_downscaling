@@ -1,7 +1,7 @@
 {
   "root": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/smoke/autumn_daylight_regular_relaxation_hourly/segmented",
   "repo_root": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/source/coordinator",
-  "forcing_dir": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/input/forcing",
+  "forcing_dir": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/input/forcing_sst_local_baseline_v1",
   "python": "/scratch/mch/olifu/icon_hicar/venv_static/bin/python",
   "hicar_executable": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/build/hicar-gpu-nccl-0e2ceb54/HICAR_gpu",
   "hicar_support_dir": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/source/coordinator/HICAR/run",

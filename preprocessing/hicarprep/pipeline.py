@@ -23,7 +23,7 @@ from .remap import (
     grid_fingerprint,
 )
 from .rotation import hicar_grid_rotation
-from .sst import load_target_sst
+from .sst import SST_POLICY_VERSION, SST_REMAP_POLICY, load_target_sst
 from .vertical import (
     adjust_vertical_velocity,
     interpolate_interface_w_to_hfl,
@@ -52,10 +52,10 @@ def forcing_geometry_for_serialization(
     serialized_hfl = np.asarray(hfl, dtype=np.float32).copy()
     if serialized_hfl.ndim != 3 or serialized_hfl.shape[0] < 1:
         raise ValueError("forcing HFL must have at least one three-dimensional level")
-    serialized_hfl[-1] = np.nextafter(
-        serialized_hfl[-1], np.float32(np.inf)
-    )
+    serialized_hfl[-1] = np.nextafter(serialized_hfl[-1], np.float32(np.inf))
     return serialized_hhl, serialized_hfl
+
+
 WATER_FIELDS = ("QV", "QC", "QI", "QR", "QS", "QG")
 MINIMUM_REMAPPED_LAYER_THICKNESS_M = 20.0
 
@@ -119,7 +119,9 @@ def convert_water_to_hicar_mixing_ratios(
     return result
 
 
-def _mass_grid_wind(value: np.ndarray, *, component: str, target_shape: tuple[int, int]) -> np.ndarray:
+def _mass_grid_wind(
+    value: np.ndarray, *, component: str, target_shape: tuple[int, int]
+) -> np.ndarray:
     """Return a mass-grid wind field from a mass- or native-face field."""
     levels, ny, nx = value.shape
     target_ny, target_nx = target_shape
@@ -135,7 +137,9 @@ def _mass_grid_wind(value: np.ndarray, *, component: str, target_shape: tuple[in
     )
 
 
-def _face_grid_wind(value: np.ndarray, *, component: str, target_shape: tuple[int, int]) -> np.ndarray:
+def _face_grid_wind(
+    value: np.ndarray, *, component: str, target_shape: tuple[int, int]
+) -> np.ndarray:
     """Place a target mass-grid wind on HICAR's native Arakawa-C face grid.
 
     HICAR performs the same geometric operation when a regular forcing file
@@ -194,18 +198,12 @@ def write_hicar_forcing_record(
     valid_time = str(diagnostics.get("valid_time", ""))
     if not valid_time or valid_time == "unknown":
         raise ValueError("HICAR forcing record requires an unambiguous valid_time")
-    target_w_vertical_coordinate = str(
-        diagnostics.get("target_w_vertical_coordinate", "")
-    )
+    target_w_vertical_coordinate = str(diagnostics.get("target_w_vertical_coordinate", ""))
     if target_w_vertical_coordinate != "authoritative_static_HFL":
         raise ValueError("HICAR forcing W must use the authoritative target HFL")
-    target_w_terrain_wind_basis = str(
-        diagnostics.get("target_w_terrain_wind_basis", "")
-    )
+    target_w_terrain_wind_basis = str(diagnostics.get("target_w_terrain_wind_basis", ""))
     if target_w_terrain_wind_basis != "HICAR_grid_relative":
-        raise ValueError(
-            "terrain-adjusted HICAR forcing W must use grid-relative winds"
-        )
+        raise ValueError("terrain-adjusted HICAR forcing W must use grid-relative winds")
     when = _normalized_time(valid_time)
     lat = np.asarray(state["lat"], dtype=np.float64)
     lon = np.asarray(state["lon"], dtype=np.float64)
@@ -226,8 +224,12 @@ def write_hicar_forcing_record(
         "QV": np.asarray(state["QV"], dtype=np.float64),
         "QC": np.asarray(state["QC"], dtype=np.float64),
         "QI": np.asarray(state["QI"], dtype=np.float64),
-        "U": _mass_grid_wind(np.asarray(state["U"], dtype=np.float64), component="U", target_shape=(ny, nx)),
-        "V": _mass_grid_wind(np.asarray(state["V"], dtype=np.float64), component="V", target_shape=(ny, nx)),
+        "U": _mass_grid_wind(
+            np.asarray(state["U"], dtype=np.float64), component="U", target_shape=(ny, nx)
+        ),
+        "V": _mass_grid_wind(
+            np.asarray(state["V"], dtype=np.float64), component="V", target_shape=(ny, nx)
+        ),
         "W": np.asarray(state["W"], dtype=np.float64),
     }
     for name in OPTIONAL_HYDROMETEORS:
@@ -248,13 +250,18 @@ def write_hicar_forcing_record(
         static_hfl = np.asarray(static["HFL"][:], dtype=np.float64)
         terrain = np.asarray(static["topo"][:], dtype=np.float64)
         land_fraction = np.asarray(
-            static["land_fraction"][:] if "land_fraction" in static.variables else static["landmask"][:],
+            static["land_fraction"][:]
+            if "land_fraction" in static.variables
+            else static["landmask"][:],
             dtype=np.float64,
         )
-        target_land = np.asarray(
-            static["landmask"][:] if "landmask" in static.variables else land_fraction,
-            dtype=np.float64,
-        ) >= 0.5
+        target_land = (
+            np.asarray(
+                static["landmask"][:] if "landmask" in static.variables else land_fraction,
+                dtype=np.float64,
+            )
+            >= 0.5
+        )
     if not np.array_equal(lat, static_lat) or not np.array_equal(lon, static_lon):
         raise ValueError("forcing state and static horizontal grids do not match exactly")
     if not np.array_equal(hhl, static_hhl) or not np.array_equal(hfl, static_hfl):
@@ -275,43 +282,48 @@ def write_hicar_forcing_record(
         sst_valid_time = str(getattr(target_sst, "valid_time", ""))
         sst_remap_policy = str(getattr(target_sst, "remap_policy", ""))
         sst_source_variable = str(getattr(target_sst, "source_variable", ""))
-        sst_native_source_sha256 = str(
-            getattr(target_sst, "source_sha256", "")
+        sst_native_source_sha256 = str(getattr(target_sst, "source_sha256", ""))
+        sst_water_cell_count = int(getattr(target_sst, "water_cell_count", -1))
+        sst_water_compact_fallback_count = int(
+            getattr(target_sst, "water_compact_fallback_count", -1)
         )
-        sst_water_cell_count = int(
-            getattr(target_sst, "water_cell_count", -1)
+        sst_water_unsupported_count = int(getattr(target_sst, "water_unsupported_count", -1))
+        sst_maximum_candidate_distance_km = float(
+            getattr(
+                target_sst,
+                "maximum_nearest_same_surface_candidate_distance_km",
+                np.nan,
+            )
         )
-        sst_water_local_fallback_count = int(
-            getattr(target_sst, "water_local_fallback_count", -1)
-        )
-        sst_water_global_fallback_count = int(
-            getattr(target_sst, "water_global_fallback_count", -1)
-        )
-        sst_maximum_fallback_distance_km = float(
-            getattr(target_sst, "maximum_fallback_distance_km", np.nan)
-        )
-        sst_maximum_global_fallback_distance_km = float(
-            getattr(target_sst, "maximum_global_fallback_distance_km", np.nan)
-        )
-        for name in ("global_fallback_mask", "global_fallback_distance_km"):
+        sst_policy_version = str(getattr(target_sst, "sst_policy_version", ""))
+        for name in (
+            "unsupported_water_mask",
+            "nearest_same_surface_candidate_distance_km",
+        ):
             if name not in target_sst.variables:
                 raise ValueError(f"SST input lacks {name} provenance")
-        if target_sst["global_fallback_mask"].dimensions != ("y", "x") or (
-            target_sst["global_fallback_distance_km"].dimensions != ("y", "x")
+        if target_sst["unsupported_water_mask"].dimensions != ("y", "x") or (
+            target_sst["nearest_same_surface_candidate_distance_km"].dimensions != ("y", "x")
         ):
-            raise ValueError("SST fallback provenance is not on the target grid")
-        sst_global_fallback_mask = np.asarray(
-            target_sst["global_fallback_mask"][:], dtype=bool
+            raise ValueError("SST support provenance is not on the target grid")
+        sst_unsupported_water_values = np.asarray(
+            np.ma.asarray(target_sst["unsupported_water_mask"][:]).filled(np.nan),
+            dtype=np.float64,
         )
-        sst_global_fallback_distance_km = np.asarray(
-            np.ma.asarray(target_sst["global_fallback_distance_km"][:]).filled(
+        if not np.isfinite(sst_unsupported_water_values).all() or np.any(
+            (sst_unsupported_water_values != 0.0) & (sst_unsupported_water_values != 1.0)
+        ):
+            raise ValueError("SST unsupported-water mask is not binary")
+        sst_unsupported_water_mask = sst_unsupported_water_values.astype(bool)
+        sst_candidate_distance_km = np.asarray(
+            np.ma.asarray(target_sst["nearest_same_surface_candidate_distance_km"][:]).filled(
                 np.nan
             ),
             dtype=np.float64,
         )
     expected_water_cells = int(np.sum(~target_land))
-    if sst_remap_policy != "same-surface water support; RBF baseline on land":
-        raise ValueError("SST input lacks the same-surface remapping contract")
+    if sst_policy_version != SST_POLICY_VERSION or sst_remap_policy != SST_REMAP_POLICY:
+        raise ValueError("SST input lacks the selected local-baseline remapping contract")
     if _normalized_time(sst_valid_time) != when:
         raise ValueError("SST provenance time differs from forcing valid time")
     if sst_source_variable != "SKT":
@@ -320,45 +332,38 @@ def write_hicar_forcing_record(
         raise ValueError("SST input lacks native-source provenance")
     if sst_water_cell_count != expected_water_cells:
         raise ValueError("SST water-cell diagnostics disagree with the runtime domain")
-    if not (
-        0
-        <= sst_water_global_fallback_count
-        <= sst_water_local_fallback_count
-        <= sst_water_cell_count
+    if not (0 <= sst_water_compact_fallback_count <= sst_water_cell_count):
+        raise ValueError("SST compact-fallback count is inconsistent")
+    if not (0 <= sst_water_unsupported_count <= sst_water_cell_count):
+        raise ValueError("SST unsupported-water count is inconsistent")
+    if sst_water_compact_fallback_count + sst_water_unsupported_count > sst_water_cell_count:
+        raise ValueError("SST support-exception counts are inconsistent")
+    if sst_unsupported_water_mask.shape != target_land.shape or (
+        sst_candidate_distance_km.shape != target_land.shape
     ):
-        raise ValueError("SST fallback counts are inconsistent")
-    if not np.isfinite(sst_maximum_fallback_distance_km) or (
-        sst_maximum_fallback_distance_km < 0.0
+        raise ValueError("SST support provenance shape differs from the runtime domain")
+    if np.any(sst_unsupported_water_mask & target_land):
+        raise ValueError("SST unsupported-water mask includes target land cells")
+    if int(np.count_nonzero(sst_unsupported_water_mask)) != sst_water_unsupported_count:
+        raise ValueError("SST unsupported-water mask disagrees with its count")
+    if np.any(~np.isfinite(sst_candidate_distance_km[sst_unsupported_water_mask])) or (
+        np.any(sst_candidate_distance_km[sst_unsupported_water_mask] < 0.0)
     ):
-        raise ValueError("SST fallback distance is missing or invalid")
-    if sst_global_fallback_mask.shape != target_land.shape or (
-        sst_global_fallback_distance_km.shape != target_land.shape
-    ):
-        raise ValueError("SST fallback provenance shape differs from the runtime domain")
-    if np.any(sst_global_fallback_mask & target_land):
-        raise ValueError("SST global fallback includes target land cells")
-    if int(np.count_nonzero(sst_global_fallback_mask)) != (
-        sst_water_global_fallback_count
-    ):
-        raise ValueError("SST global fallback mask disagrees with its count")
-    if np.any(~np.isfinite(sst_global_fallback_distance_km[sst_global_fallback_mask])) or (
-        np.any(sst_global_fallback_distance_km[sst_global_fallback_mask] < 0.0)
-    ):
-        raise ValueError("SST global fallback distances are invalid")
-    if np.any(np.isfinite(sst_global_fallback_distance_km[~sst_global_fallback_mask])):
-        raise ValueError("SST fallback distances are defined outside its fallback mask")
-    expected_global_maximum = (
-        float(np.max(sst_global_fallback_distance_km[sst_global_fallback_mask]))
-        if sst_water_global_fallback_count
+        raise ValueError("SST same-surface candidate distances are invalid")
+    if np.any(np.isfinite(sst_candidate_distance_km[~sst_unsupported_water_mask])):
+        raise ValueError("SST candidate distances are defined outside unsupported water")
+    expected_candidate_maximum = (
+        float(np.max(sst_candidate_distance_km[sst_unsupported_water_mask]))
+        if sst_water_unsupported_count
         else 0.0
     )
     if not np.isclose(
-        sst_maximum_global_fallback_distance_km,
-        expected_global_maximum,
+        sst_maximum_candidate_distance_km,
+        expected_candidate_maximum,
         rtol=0.0,
         atol=1.0e-9,
     ):
-        raise ValueError("SST global fallback maximum disagrees with its distance field")
+        raise ValueError("SST candidate-distance maximum disagrees with its field")
     serialized_hhl, serialized_hfl = forcing_geometry_for_serialization(hhl, hfl)
 
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -381,34 +386,33 @@ def write_hicar_forcing_record(
             dataset.createVariable("HHL", "f4", ("z_hl", "y_1", "x_1"), zlib=True)[:] = (
                 serialized_hhl
             )
-            dataset.createVariable("HFL", "f4", ("z", "y_1", "x_1"), zlib=True)[:] = (
-                serialized_hfl
-            )
+            dataset.createVariable("HFL", "f4", ("z", "y_1", "x_1"), zlib=True)[:] = serialized_hfl
             dataset.createVariable("HSURF", "f4", ("y_1", "x_1"), zlib=True)[:] = terrain
             dataset.createVariable("FR_LAND", "f4", ("y_1", "x_1"), zlib=True)[:] = land_fraction
-            sst_variable = dataset.createVariable(
-                "SST", "f4", ("time", "y_1", "x_1"), zlib=True
-            )
+            sst_variable = dataset.createVariable("SST", "f4", ("time", "y_1", "x_1"), zlib=True)
             sst_variable[0] = sst
             sst_variable.units = "K"
             sst_variable.hicar_support = "water cells"
-            sst_fallback_mask = dataset.createVariable(
-                "SST_global_fallback_mask", "i1", ("y_1", "x_1"), zlib=True
+            sst_unsupported_mask = dataset.createVariable(
+                "SST_unsupported_water_mask", "i1", ("y_1", "x_1"), zlib=True
             )
-            sst_fallback_mask[:] = sst_global_fallback_mask
-            sst_fallback_mask.long_name = (
-                "SST target cells filled from nearest same-surface source outside "
-                "the compact RBF stencil"
+            sst_unsupported_mask[:] = sst_unsupported_water_mask
+            sst_unsupported_mask.long_name = (
+                "target water cells without compact same-surface support, filled "
+                "from the exact-valid-time local all-surface RBF baseline"
             )
-            sst_fallback_distance = dataset.createVariable(
-                "SST_global_fallback_distance_km",
+            sst_candidate_distance = dataset.createVariable(
+                "SST_nearest_same_surface_candidate_distance_km",
                 "f8",
                 ("y_1", "x_1"),
                 zlib=True,
                 fill_value=np.nan,
             )
-            sst_fallback_distance[:] = sst_global_fallback_distance_km
-            sst_fallback_distance.units = "km"
+            sst_candidate_distance[:] = sst_candidate_distance_km
+            sst_candidate_distance.units = "km"
+            sst_candidate_distance.long_name = (
+                "distance to nearest same-surface source candidate; diagnostic only"
+            )
             for name, values in payloads.items():
                 variable = dataset.createVariable(
                     name, "f4", ("time", "z", "y_1", "x_1"), zlib=True
@@ -447,19 +451,13 @@ def write_hicar_forcing_record(
             dataset.sst_valid_time = sst_valid_time
             dataset.sst_source_variable = sst_source_variable
             dataset.sst_native_source_sha256 = sst_native_source_sha256
+            dataset.sst_policy_version = sst_policy_version
             dataset.sst_remap_policy = sst_remap_policy
             dataset.sst_water_cell_count = sst_water_cell_count
-            dataset.sst_water_local_fallback_count = (
-                sst_water_local_fallback_count
-            )
-            dataset.sst_water_global_fallback_count = (
-                sst_water_global_fallback_count
-            )
-            dataset.sst_maximum_fallback_distance_km = (
-                sst_maximum_fallback_distance_km
-            )
-            dataset.sst_maximum_global_fallback_distance_km = (
-                sst_maximum_global_fallback_distance_km
+            dataset.sst_water_compact_fallback_count = sst_water_compact_fallback_count
+            dataset.sst_water_unsupported_count = sst_water_unsupported_count
+            dataset.sst_maximum_nearest_same_surface_candidate_distance_km = (
+                sst_maximum_candidate_distance_km
             )
             dataset.target_grid_fingerprint = grid_fingerprint(lat, lon)
             dataset.geometry_serialization = "static_sleve_with_one_ulp_top_cover"
@@ -663,9 +661,7 @@ def _remap_vertical_interfaces(
     scale = endpoint_span / thickness_sum
     thickness *= scale[None, ...]
     thin = thickness < minimum_layer_thickness_m
-    deficit = np.sum(
-        np.where(thin, minimum_layer_thickness_m - thickness, 0.0), axis=0
-    )
+    deficit = np.sum(np.where(thin, minimum_layer_thickness_m - thickness, 0.0), axis=0)
     excess = np.where(thin, 0.0, thickness - minimum_layer_thickness_m)
     total_excess = np.sum(excess, axis=0)
     if np.any(deficit > total_excess + 1.0e-8):
@@ -686,9 +682,7 @@ def _remap_vertical_interfaces(
     remapped[1:] = bottom[None, ...] + np.cumsum(thickness, axis=0)
     remapped[-1] = top
     differences = np.diff(remapped, axis=0)
-    if not np.isfinite(remapped).all() or np.any(
-        differences < minimum_layer_thickness_m - 1.0e-8
-    ):
+    if not np.isfinite(remapped).all() or np.any(differences < minimum_layer_thickness_m - 1.0e-8):
         raise ValueError(
             "constrained ICON HHL remap violated the minimum layer-thickness constraint"
         )
@@ -726,9 +720,7 @@ def _column_ranges(column_count: int, worker_count: int) -> list[tuple[int, int]
     return ranges
 
 
-def _column_chunk(
-    work: _ColumnWork, bounds: tuple[int, int]
-) -> tuple[int, int, dict[str, int]]:
+def _column_chunk(work: _ColumnWork, bounds: tuple[int, int]) -> tuple[int, int, dict[str, int]]:
     """Reconstruct one disjoint range without changing per-column arithmetic."""
     start, stop = bounds
     ny, nx = work.terrain_differences.shape
@@ -745,9 +737,7 @@ def _column_chunk(
             qv=work.remapped["QV"][:, row, col],
             u_ms=work.remapped["U"][:, row, col],
             v_ms=work.remapped["V"][:, row, col],
-            hydrometeors={
-                name: value[:, row, col] for name, value in work.hydro.items()
-            },
+            hydrometeors={name: value[:, row, col] for name, value in work.hydro.items()},
         )
         for name in work.state:
             work.state[name][:, row, col] = column[name]
@@ -771,9 +761,7 @@ def _fork_column_chunk(bounds: tuple[int, int]) -> tuple[int, int, dict[str, int
     return _column_chunk(_FORK_COLUMN_WORK, bounds)
 
 
-def _shared_float64_array(
-    context: mp.context.BaseContext, shape: tuple[int, ...]
-) -> np.ndarray:
+def _shared_float64_array(context: mp.context.BaseContext, shape: tuple[int, ...]) -> np.ndarray:
     """Allocate an anonymous shared array whose ndarray keeps the owner alive."""
     raw = context.RawArray("d", int(np.prod(shape, dtype=np.int64)))
     return np.frombuffer(raw, dtype=np.float64).reshape(shape)
@@ -804,9 +792,7 @@ def _reconstruct_target_columns(
     names = ("T", "P", "QV", "U", "V", "THETA", "RHO", *hydro)
 
     if effective_workers == 1:
-        state = {
-            name: np.empty((nz, ny, nx), dtype=np.float64) for name in names
-        }
+        state = {name: np.empty((nz, ny, nx), dtype=np.float64) for name in names}
         target_w = np.empty_like(target_hhl)
         terrain_differences = np.empty((ny, nx), dtype=np.float64)
         work = _ColumnWork(
@@ -826,9 +812,7 @@ def _reconstruct_target_columns(
                 "multiple column workers require the fork multiprocessing start method"
             )
         context = mp.get_context("fork")
-        state = {
-            name: _shared_float64_array(context, (nz, ny, nx)) for name in names
-        }
+        state = {name: _shared_float64_array(context, (nz, ny, nx)) for name in names}
         target_w = _shared_float64_array(context, target_hhl.shape)
         terrain_differences = _shared_float64_array(context, (ny, nx))
         work = _ColumnWork(
@@ -852,8 +836,7 @@ def _reconstruct_target_columns(
     below_count = sum(item[0] for item in summaries)
     buried_count = sum(item[1] for item in summaries)
     cases = {
-        name: sum(item[2][name] for item in summaries)
-        for name in ("lower", "matched", "higher")
+        name: sum(item[2][name] for item in summaries) for name in ("lower", "matched", "higher")
     }
     return (
         state,
@@ -942,9 +925,7 @@ def transform_icon_state(
         if declared_aliases[declared_order] != source_order:
             raise ValueError("declared ICON vertical order contradicts native HHL")
         bottom_to_top_hhl = native_hhl if source_order == "bottom_to_top" else native_hhl[::-1]
-        source_hhl, geometry_diagnostics = _remap_vertical_interfaces(
-            bottom_to_top_hhl, weights
-        )
+        source_hhl, geometry_diagnostics = _remap_vertical_interfaces(bottom_to_top_hhl, weights)
         unit_policy = {
             "T": ("k", "kelvin"),
             "P": ("pa", "pascal", "pascals"),
@@ -1020,9 +1001,7 @@ def transform_icon_state(
         raise ValueError(
             "HICAR target x/y spacing must be uniform and equal for grid-wind rotation"
         )
-    grid_sintheta, grid_costheta = hicar_grid_rotation(
-        target_lat, target_lon, dx_m=dx_m
-    )
+    grid_sintheta, grid_costheta = hicar_grid_rotation(target_lat, target_lon, dx_m=dx_m)
     target_w = adjust_vertical_velocity(
         target_hhl_m=target_hhl,
         interpolated_w_ms=target_w,
@@ -1072,9 +1051,7 @@ def transform_icon_state(
         "terrain_columns_higher": cases["higher"],
         "column_workers_requested": column_workers,
         "column_workers_effective": effective_column_workers,
-        "column_worker_start_method": (
-            "serial" if effective_column_workers == 1 else "fork"
-        ),
+        "column_worker_start_method": ("serial" if effective_column_workers == 1 else "fork"),
         "timing_static_read_seconds": static_seconds,
         "timing_horizontal_remap_seconds": horizontal_seconds,
         "timing_column_reconstruction_seconds": column_seconds,
@@ -1262,9 +1239,7 @@ def write_boundary_condition(
             dataset.createDimension("half_level", state["HHL"].shape[0])
             dataset.createVariable("row", "i4", ("boundary_point",))[:] = rows
             dataset.createVariable("column", "i4", ("boundary_point",))[:] = cols
-            mass_weight = dataset.createVariable(
-                "relaxation_weight", "f8", ("boundary_point",)
-            )
+            mass_weight = dataset.createVariable("relaxation_weight", "f8", ("boundary_point",))
             mass_weight[:] = relaxation_weight
             mass_weight.long_name = "lateral relaxation coefficient on the mass grid"
             for name in (*sparse_fields, "HFL", "HHL"):
@@ -1306,17 +1281,19 @@ def write_boundary_condition(
                 "instantaneous target-native state; runtime brackets consecutive valid times"
             )
             dataset.hicar_pressure_adjustment = "HICARPREP_HYDROSTATIC_RECONSTRUCTION"
-            dataset.wind_balance = "NO_SPARSE_WIND; regular forcing and HICAR wind solver authoritative"
+            dataset.wind_balance = (
+                "NO_SPARSE_WIND; regular forcing and HICAR wind solver authoritative"
+            )
             dataset.water_representation = water_representation
             dataset.hicar_water_conversion = (
                 "APPLIED_JOINT_ALL_WATER_SPECIES"
                 if water_representation == "dry-air mixing ratio"
                 else "NOT_APPLIED_RESEARCH_PRODUCT"
             )
-            dataset.authoritative_temporal_basis = "T,P,QV,QC,QI; dependent diagnostics refreshed after interpolation"
-            dataset.lateral_w_policy = (
-                "regular_forcing_initial_guess_then_hicar_projection"
+            dataset.authoritative_temporal_basis = (
+                "T,P,QV,QC,QI; dependent diagnostics refreshed after interpolation"
             )
+            dataset.lateral_w_policy = "regular_forcing_initial_guess_then_hicar_projection"
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)

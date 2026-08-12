@@ -35,9 +35,12 @@ U/V earth-relative. Require forcing attributes
 `target_w_vertical_coordinate=authoritative_static_HFL` and
 `target_w_terrain_wind_basis=HICAR_grid_relative`; older records without both
 are stale. Sparse LBC contains only T/P/QV/QC/QI and mass-grid geometry; it
-never inserts winds. REA-L SKT is remapped separately with
-same-surface water support and written as hourly regular-forcing `SST`; require
-exact time, target grid, static checksum, and water mask. Set
+never inserts winds. REA-L SKT is remapped separately and written as hourly
+regular-forcing `SST`: use compact same-surface support where available and
+the exact-time monotone local all-surface RBF baseline for unsupported target
+water. Retain the unsupported-water mask and nearest same-surface candidate
+distance as diagnostics, but do not insert the remote candidate value. Require
+exact time, target grid, static checksum, water mask, and SST policy version. Set
 `relax_filters=.True.` for the selected regular-forcing reference. Sparse LBC
 is retained only as an explicit experimental output.
 

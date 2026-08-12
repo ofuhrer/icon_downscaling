@@ -50,6 +50,7 @@ from preprocessing.hicarprep.rotation import (
     grid_to_earth_wind,
     hicar_grid_rotation,
 )
+from preprocessing.hicarprep.sst import SST_POLICY_VERSION, SST_REMAP_POLICY
 from preprocessing.hicarprep.vertical import (
     adjust_vertical_velocity,
     interpolate_interface_w_to_hfl,
@@ -575,9 +576,7 @@ class VerticalTransformTests(unittest.TestCase):
                 [[310.0, 350.0], [390.0, 430.0]],
             ]
         )
-        fractions = np.array(
-            [[[0.2, 0.4], [0.6, 0.8]], [[0.75, 0.5], [0.25, 0.9]]]
-        )
+        fractions = np.array([[[0.2, 0.4], [0.6, 0.8]], [[0.75, 0.5], [0.25, 0.9]]])
         hfl = hhl[:-1] + fractions * (hhl[1:] - hhl[:-1])
         interface_w = np.arange(12, dtype=np.float64).reshape(3, 2, 2) / 3.0
         actual = interpolate_interface_w_to_hfl(
@@ -630,9 +629,7 @@ class GridRotationTests(unittest.TestCase):
         )
         self.assertTrue(np.all(sine < 0.0))
         self.assertTrue(np.all(cosine > 0.0))
-        u_grid, v_grid = earth_to_grid_wind(
-            np.zeros((3, 3)), np.full((3, 3), 10.0), sine, cosine
-        )
+        u_grid, v_grid = earth_to_grid_wind(np.zeros((3, 3)), np.full((3, 3), 10.0), sine, cosine)
         self.assertTrue(np.all(u_grid > 0.0))
         u_east, v_north = grid_to_earth_wind(u_grid, v_grid, sine, cosine)
         np.testing.assert_allclose(u_east, 0.0, atol=1.0e-14)
@@ -653,9 +650,7 @@ class GridRotationTests(unittest.TestCase):
         left = np.maximum(np.arange(7) - 2, 0)
         right = np.minimum(np.arange(7) + 2, 6)
         dlat = latitude[:, right] - latitude[:, left]
-        dlon = (longitude[:, right] - longitude[:, left]) * np.cos(
-            np.deg2rad(latitude)
-        )
+        dlon = (longitude[:, right] - longitude[:, left]) * np.cos(np.deg2rad(latitude))
         distance = np.hypot(dlat, dlon)
         expected_sine = -dlat / distance
         expected_cosine = np.abs(dlon / distance)
@@ -720,14 +715,10 @@ class ProductPipelineTests(unittest.TestCase):
                 variable = dataset.createVariable("SST", "f4", ("y", "x"))
                 variable[:] = 277.0
                 variable.units = "K"
-                dataset.createVariable("water_mask", "i1", ("y", "x"))[:] = (
-                    landmask < 0.5
-                )
+                dataset.createVariable("water_mask", "i1", ("y", "x"))[:] = landmask < 0.5
+                dataset.createVariable("unsupported_water_mask", "i1", ("y", "x"))[:] = 0
                 dataset.createVariable(
-                    "global_fallback_mask", "i1", ("y", "x")
-                )[:] = 0
-                dataset.createVariable(
-                    "global_fallback_distance_km", "f8", ("y", "x")
+                    "nearest_same_surface_candidate_distance_km", "f8", ("y", "x")
                 )[:] = np.nan
                 dataset.product_type = "hicarprep_target_water_temperature"
                 dataset.valid_time = "2020-02-10T01:00:00Z"
@@ -735,14 +726,12 @@ class ProductPipelineTests(unittest.TestCase):
                 dataset.target_grid_fingerprint = grid_fingerprint(lat, lon)
                 dataset.source_sha256 = "synthetic-native-sst"
                 dataset.source_variable = "SKT"
-                dataset.remap_policy = (
-                    "same-surface water support; RBF baseline on land"
-                )
+                dataset.sst_policy_version = SST_POLICY_VERSION
+                dataset.remap_policy = SST_REMAP_POLICY
                 dataset.water_cell_count = 1
-                dataset.water_local_fallback_count = 0
-                dataset.water_global_fallback_count = 0
-                dataset.maximum_fallback_distance_km = 0.0
-                dataset.maximum_global_fallback_distance_km = 0.0
+                dataset.water_compact_fallback_count = 0
+                dataset.water_unsupported_count = 0
+                dataset.maximum_nearest_same_surface_candidate_distance_km = 0.0
             state = {
                 "T": np.full((levels, ny, nx), 280.0),
                 "P": np.full((levels, ny, nx), 90_000.0),
@@ -781,9 +770,7 @@ class ProductPipelineTests(unittest.TestCase):
                 self.assertEqual(dataset["P"].dimensions, ("time", "z", "y_1", "x_1"))
                 self.assertEqual(dataset["HHL"].dimensions, ("z_hl", "y_1", "x_1"))
                 expected_hfl = hfl.astype(np.float32)
-                expected_hfl[-1] = np.nextafter(
-                    expected_hfl[-1], np.float32(np.inf)
-                )
+                expected_hfl[-1] = np.nextafter(expected_hfl[-1], np.float32(np.inf))
                 np.testing.assert_array_equal(dataset["HFL"][:], expected_hfl)
                 self.assertEqual(
                     dataset.geometry_serialization,
@@ -803,21 +790,23 @@ class ProductPipelineTests(unittest.TestCase):
                 )
                 self.assertEqual(dataset["SST"].dimensions, ("time", "y_1", "x_1"))
                 np.testing.assert_allclose(dataset["SST"][:], 277.0)
+                self.assertEqual(dataset.sst_policy_version, SST_POLICY_VERSION)
+                self.assertEqual(dataset.sst_remap_policy, SST_REMAP_POLICY)
                 self.assertEqual(dataset.sst_water_cell_count, 1)
-                self.assertEqual(dataset.sst_water_global_fallback_count, 0)
-                self.assertEqual(dataset.sst_maximum_fallback_distance_km, 0.0)
+                self.assertEqual(dataset.sst_water_compact_fallback_count, 0)
+                self.assertEqual(dataset.sst_water_unsupported_count, 0)
                 self.assertEqual(
-                    dataset.sst_maximum_global_fallback_distance_km,
+                    dataset.sst_maximum_nearest_same_surface_candidate_distance_km,
                     0.0,
                 )
                 np.testing.assert_array_equal(
-                    dataset["SST_global_fallback_mask"][:],
+                    dataset["SST_unsupported_water_mask"][:],
                     np.zeros((ny, nx), dtype=np.int8),
                 )
                 self.assertTrue(
                     np.isnan(
                         np.ma.asarray(
-                            dataset["SST_global_fallback_distance_km"][:]
+                            dataset["SST_nearest_same_surface_candidate_distance_km"][:]
                         ).filled(np.nan)
                     ).all()
                 )
@@ -837,9 +826,10 @@ class ProductPipelineTests(unittest.TestCase):
                     dataset.createDimension("half_level", 2)
                     dataset.createVariable("row", "i4", ("boundary_point",))[:] = [0, 0]
                     dataset.createVariable("column", "i4", ("boundary_point",))[:] = [0, 1]
-                    dataset.createVariable(
-                        "relaxation_weight", "f8", ("boundary_point",)
-                    )[:] = [1.0, 0.5]
+                    dataset.createVariable("relaxation_weight", "f8", ("boundary_point",))[:] = [
+                        1.0,
+                        0.5,
+                    ]
                     for name in ("T", "P", "QV", "QC", "QI", "HFL"):
                         dataset.createVariable(name, "f8", ("level", "boundary_point"))[:] = 1.0
                     dataset.createVariable("HHL", "f8", ("half_level", "boundary_point"))[:] = 1.0
@@ -850,9 +840,7 @@ class ProductPipelineTests(unittest.TestCase):
                     dataset.hicar_water_conversion = "APPLIED_JOINT_ALL_WATER_SPECIES"
                     dataset.hicar_pressure_adjustment = "APPLIED_HICAR_NATIVE"
                     dataset.wind_balance = "APPLIED_HICAR_ADJOINT_VARIATIONAL_PROJECTION"
-                    dataset.lateral_w_policy = (
-                        "regular_forcing_initial_guess_then_hicar_projection"
-                    )
+                    dataset.lateral_w_policy = "regular_forcing_initial_guess_then_hicar_projection"
                     dataset.target_grid_fingerprint = "target"
                     dataset.static_sha256 = "static"
                     dataset.relaxation_profile = "cosine_squared"
@@ -873,7 +861,9 @@ class ProductPipelineTests(unittest.TestCase):
         x = np.arange(8, dtype=np.float64) * 200.0
         y = np.arange(7, dtype=np.float64) * 200.0
         rows, cols, weights = boundary_relaxation_weights(x, y, 400.0)
-        lookup = {(int(row), int(col)): float(weight) for row, col, weight in zip(rows, cols, weights)}
+        lookup = {
+            (int(row), int(col)): float(weight) for row, col, weight in zip(rows, cols, weights)
+        }
         self.assertEqual(lookup[(0, 3)], 1.0)
         self.assertAlmostEqual(lookup[(1, 3)], 0.5)
         self.assertEqual(lookup[(2, 2)], 0.0)
@@ -1003,14 +993,14 @@ class ProductPipelineTests(unittest.TestCase):
                 self.assertEqual(parallel_diagnostics["column_workers_effective"], 2)
                 self.assertEqual(parallel_diagnostics["column_worker_start_method"], "fork")
             self.assertEqual(diagnostics["source_vertical_order"], "top_to_bottom")
-            self.assertEqual(diagnostics["target_w_vertical_coordinate"], "authoritative_static_HFL")
+            self.assertEqual(
+                diagnostics["target_w_vertical_coordinate"], "authoritative_static_HFL"
+            )
             self.assertEqual(state["W"].shape, state["HFL"].shape)
             with netCDF4.Dataset(static_path) as static:
                 np.testing.assert_array_equal(state["HFL"], static["HFL"][:])
                 self.assertFalse(
-                    np.array_equal(
-                        state["HFL"], 0.5 * (state["HHL"][:-1] + state["HHL"][1:])
-                    )
+                    np.array_equal(state["HFL"], 0.5 * (state["HHL"][:-1] + state["HHL"][1:]))
                 )
             write_initial_condition(
                 initial_path,
@@ -1038,7 +1028,18 @@ class ProductPipelineTests(unittest.TestCase):
                 self.assertEqual(boundary.dimensions["boundary_point"].size, 8)
                 self.assertEqual(
                     set(boundary.variables),
-                    {"row", "column", "relaxation_weight", "T", "P", "QV", "QC", "QI", "HFL", "HHL"},
+                    {
+                        "row",
+                        "column",
+                        "relaxation_weight",
+                        "T",
+                        "P",
+                        "QV",
+                        "QC",
+                        "QI",
+                        "HFL",
+                        "HHL",
+                    },
                 )
                 self.assertNotIn("U", boundary.variables)
                 self.assertNotIn("V", boundary.variables)
@@ -1248,13 +1249,11 @@ class SurfaceStateTests(unittest.TestCase):
                 dataset.createVariable("landmask", "f8", ("y", "x"))[:] = np.array(
                     [[1.0, 1.0], [1.0, 0.0]]
                 )
-                dataset.createVariable("landuse", "i2", ("y", "x"))[:] = np.array(
-                    [[7, 7], [7, 16]]
-                )
+                dataset.createVariable("landuse", "i2", ("y", "x"))[:] = np.array([[7, 7], [7, 16]])
                 dataset.createVariable("soil_type", "i2", ("y", "x"))[:] = 6
-                dataset.createVariable(
-                    "soil_type_layer", "i2", ("soil_layer", "y", "x")
-                )[:] = np.array([6, 7, 8, 9])[:, None, None]
+                dataset.createVariable("soil_type_layer", "i2", ("soil_layer", "y", "x"))[:] = (
+                    np.array([6, 7, 8, 9])[:, None, None]
+                )
             append_sleve_geometry(
                 static,
                 config=SleveConfig(
@@ -1349,8 +1348,7 @@ class SurfaceStateTests(unittest.TestCase):
             hydraulics = parse_noahmp_stas_hydraulics(table)
             target_indices = np.array([5, 6, 7, 8])
             expected_smi_vwc = hydraulics["WLTSMC"][target_indices] + terra_smi * (
-                hydraulics["REFSMC"][target_indices]
-                - hydraulics["WLTSMC"][target_indices]
+                hydraulics["REFSMC"][target_indices] - hydraulics["WLTSMC"][target_indices]
             )
             with (
                 netCDF4.Dataset(absolute) as absolute_data,
@@ -1410,9 +1408,7 @@ class SurfaceStateTests(unittest.TestCase):
             with netCDF4.Dataset(runtime) as dataset:
                 self.assertEqual(dataset.product_type, "hicar_runtime_domain_initial_conditions")
                 self.assertEqual(dataset.land_state_soil_water_method, "smi")
-                np.testing.assert_allclose(
-                    dataset["surface_temperature"][:], 281.0
-                )
+                np.testing.assert_allclose(dataset["surface_temperature"][:], 281.0)
                 np.testing.assert_allclose(
                     dataset["soil_vwc"][:],
                     expected_smi_grid,

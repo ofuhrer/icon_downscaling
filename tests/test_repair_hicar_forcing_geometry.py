@@ -9,6 +9,7 @@ import netCDF4
 import numpy as np
 
 from preprocessing.hicarprep.products import sha256
+from preprocessing.hicarprep.sst import SST_POLICY_VERSION, SST_REMAP_POLICY
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,15 +31,17 @@ def test_repair_replaces_only_geometry_and_rebinds_boundary(tmp_path: Path) -> N
         dataset.createVariable("lon", "f8", ("y", "x"))[:] = lon
         dataset.createVariable("HHL", "f8", ("half_level", "y", "x"))[:] = hhl
         dataset.createVariable("HFL", "f8", ("level", "y", "x"))[:] = hfl
-        dataset.createVariable("landmask", "i1", ("y", "x"))[:] = np.array(
-            [[1, 0], [1, 1]]
-        )
+        dataset.createVariable("landmask", "i1", ("y", "x"))[:] = np.array([[1, 0], [1, 1]])
     static_sha = sha256(static)
 
     payload = np.arange(8, dtype=np.float32).reshape(1, 2, 2, 2)
     with netCDF4.Dataset(forcing, "w") as dataset:
         for name, size in (
-            ("time", 1), ("z", 2), ("z_hl", 3), ("y_1", 2), ("x_1", 2),
+            ("time", 1),
+            ("z", 2),
+            ("z_hl", 3),
+            ("y_1", 2),
+            ("x_1", 2),
         ):
             dataset.createDimension(name, size)
         dataset.product_type = "hicarprep_target_forcing_record"
@@ -61,9 +64,7 @@ def test_repair_replaces_only_geometry_and_rebinds_boundary(tmp_path: Path) -> N
         ):
             dataset.createVariable(name, "f4", ("time", "z", "y_1", "x_1"))[:] = values
         dataset.createVariable("HHL", "f4", ("z_hl", "y_1", "x_1"))[:] = hhl
-        dataset.createVariable("HFL", "f4", ("z", "y_1", "x_1"))[:] = 0.5 * (
-            hhl[:-1] + hhl[1:]
-        )
+        dataset.createVariable("HFL", "f4", ("z", "y_1", "x_1"))[:] = 0.5 * (hhl[:-1] + hhl[1:])
         dataset.createVariable("HSURF", "f4", ("y_1", "x_1"))[:] = 0.0
         dataset.createVariable("FR_LAND", "f4", ("y_1", "x_1"))[:] = np.array(
             [[1.0, 0.0], [1.0, 1.0]]
@@ -71,30 +72,30 @@ def test_repair_replaces_only_geometry_and_rebinds_boundary(tmp_path: Path) -> N
         sst = dataset.createVariable("SST", "f4", ("time", "y_1", "x_1"))
         sst[:] = 277.0
         sst.units = "K"
+        dataset.createVariable("SST_unsupported_water_mask", "i1", ("y_1", "x_1"))[:] = 0
         dataset.createVariable(
-            "SST_global_fallback_mask", "i1", ("y_1", "x_1")
-        )[:] = 0
-        dataset.createVariable(
-            "SST_global_fallback_distance_km", "f8", ("y_1", "x_1")
+            "SST_nearest_same_surface_candidate_distance_km", "f8", ("y_1", "x_1")
         )[:] = np.nan
         dataset.sst_source_sha256 = "synthetic-target-sst"
         dataset.sst_target_product_sha256 = "synthetic-target-sst"
         dataset.sst_valid_time = "2020-01-01T01:00:00Z"
         dataset.sst_source_variable = "SKT"
         dataset.sst_native_source_sha256 = "synthetic-native-sst"
-        dataset.sst_remap_policy = "same-surface water support; RBF baseline on land"
+        dataset.sst_policy_version = SST_POLICY_VERSION
+        dataset.sst_remap_policy = SST_REMAP_POLICY
         dataset.sst_water_cell_count = 1
-        dataset.sst_water_local_fallback_count = 0
-        dataset.sst_water_global_fallback_count = 0
-        dataset.sst_maximum_fallback_distance_km = 0.0
-        dataset.sst_maximum_global_fallback_distance_km = 0.0
+        dataset.sst_water_compact_fallback_count = 0
+        dataset.sst_water_unsupported_count = 0
+        dataset.sst_maximum_nearest_same_surface_candidate_distance_km = 0.0
         dataset.target_w_vertical_coordinate = "authoritative_static_HFL"
         dataset.target_w_terrain_wind_basis = "HICAR_grid_relative"
     original_payload = sha256(forcing)
 
     with netCDF4.Dataset(boundary, "w") as dataset:
         for name, size in (
-            ("boundary_point", 2), ("level", 2), ("half_level", 3),
+            ("boundary_point", 2),
+            ("level", 2),
+            ("half_level", 3),
         ):
             dataset.createDimension(name, size)
         dataset.createVariable("row", "i4", ("boundary_point",))[:] = [0, 1]
@@ -120,8 +121,14 @@ def test_repair_replaces_only_geometry_and_rebinds_boundary(tmp_path: Path) -> N
 
     result = subprocess.run(
         [
-            sys.executable, str(REPAIR), "--forcing-file", str(forcing),
-            "--boundary-file", str(boundary), "--static-file", str(static),
+            sys.executable,
+            str(REPAIR),
+            "--forcing-file",
+            str(forcing),
+            "--boundary-file",
+            str(boundary),
+            "--static-file",
+            str(static),
         ],
         text=True,
         capture_output=True,
@@ -142,8 +149,14 @@ def test_repair_replaces_only_geometry_and_rebinds_boundary(tmp_path: Path) -> N
     os.utime(Path(f"{boundary}.ready"), ns=(marker_time_ns, marker_time_ns))
     repeated = subprocess.run(
         [
-            sys.executable, str(REPAIR), "--forcing-file", str(forcing),
-            "--boundary-file", str(boundary), "--static-file", str(static),
+            sys.executable,
+            str(REPAIR),
+            "--forcing-file",
+            str(forcing),
+            "--boundary-file",
+            str(boundary),
+            "--static-file",
+            str(static),
         ],
         text=True,
         capture_output=True,

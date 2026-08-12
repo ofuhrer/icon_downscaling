@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarize where hicarprep used global same-surface SST fallback support."""
+"""Summarize target water lacking compact same-surface SST support."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from scipy.spatial import cKDTree
 EARTH_MEAN_RADIUS_KM = 6_371.0088
 LARGEST_COMPONENT_COUNT = 20
 MATERIAL_WATER_AREA_KM2 = 1.0
-MATERIAL_FALLBACK_AREA_KM2 = 0.2
+MATERIAL_UNSUPPORTED_AREA_KM2 = 0.2
 
 
 def read_array(variable: netCDF4.Variable, *, fill: float = np.nan) -> np.ndarray:
@@ -43,7 +43,9 @@ def regular_spacing_m(dataset: netCDF4.Dataset) -> tuple[float, float, str]:
         x = np.asarray(read_array(dataset["x"]), dtype=np.float64)
         y = np.asarray(read_array(dataset["y"]), dtype=np.float64)
         if x.ndim != 1 or y.ndim != 1 or x.size < 2 or y.size < 2:
-            raise ValueError("static x/y coordinates must be one-dimensional with two or more cells")
+            raise ValueError(
+                "static x/y coordinates must be one-dimensional with two or more cells"
+            )
         if not np.isfinite(x).all() or not np.isfinite(y).all():
             raise ValueError("static x/y coordinates are not finite")
         dx_values = np.abs(np.diff(x))
@@ -95,46 +97,48 @@ def load_inputs(
         required = {
             "lat_1",
             "lon_1",
-            "SST_global_fallback_mask",
-            "SST_global_fallback_distance_km",
+            "SST_unsupported_water_mask",
+            "SST_nearest_same_surface_candidate_distance_km",
         }
         missing = sorted(required - set(forcing.variables))
         if missing:
             raise ValueError(f"regular forcing lacks variables: {missing}")
-        mask_variable = forcing["SST_global_fallback_mask"]
-        distance_variable = forcing["SST_global_fallback_distance_km"]
+        mask_variable = forcing["SST_unsupported_water_mask"]
+        distance_variable = forcing["SST_nearest_same_surface_candidate_distance_km"]
         if mask_variable.dimensions != ("y_1", "x_1") or distance_variable.dimensions != (
             "y_1",
             "x_1",
         ):
-            raise ValueError("SST fallback provenance is not on the forcing target grid")
+            raise ValueError("SST unsupported provenance is not on the forcing target grid")
         forcing_latitude = require_finite_2d("forcing lat_1", read_array(forcing["lat_1"]))
         forcing_longitude = require_finite_2d("forcing lon_1", read_array(forcing["lon_1"]))
-        fallback_values = np.asarray(read_array(mask_variable, fill=np.nan), dtype=np.float64)
-        if not np.isfinite(fallback_values).all() or np.any(
-            (fallback_values != 0.0) & (fallback_values != 1.0)
+        unsupported_values = np.asarray(read_array(mask_variable, fill=np.nan), dtype=np.float64)
+        if not np.isfinite(unsupported_values).all() or np.any(
+            (unsupported_values != 0.0) & (unsupported_values != 1.0)
         ):
-            raise ValueError("SST global fallback mask is not binary")
-        fallback_mask = fallback_values.astype(bool)
-        fallback_distance_km = np.asarray(
+            raise ValueError("SST unsupported-water mask is not binary")
+        unsupported_mask = unsupported_values.astype(bool)
+        unsupported_distance_km = np.asarray(
             read_array(distance_variable, fill=np.nan), dtype=np.float64
         )
         reported_water_count = int(getattr(forcing, "sst_water_cell_count", -1))
-        reported_fallback_count = int(
-            getattr(forcing, "sst_water_global_fallback_count", -1)
-        )
-        reported_fallback_maximum = float(
-            getattr(forcing, "sst_maximum_global_fallback_distance_km", np.nan)
+        reported_unsupported_count = int(getattr(forcing, "sst_water_unsupported_count", -1))
+        reported_unsupported_maximum = float(
+            getattr(
+                forcing,
+                "sst_maximum_nearest_same_surface_candidate_distance_km",
+                np.nan,
+            )
         )
 
     if not (
         forcing_latitude.shape
         == forcing_longitude.shape
-        == fallback_mask.shape
-        == fallback_distance_km.shape
+        == unsupported_mask.shape
+        == unsupported_distance_km.shape
         == latitude.shape
     ):
-        raise ValueError("forcing fallback provenance and static target-grid shapes differ")
+        raise ValueError("forcing unsupported provenance and static target-grid shapes differ")
     if not np.array_equal(forcing_latitude, latitude) or not np.array_equal(
         forcing_longitude, longitude
     ):
@@ -142,31 +146,33 @@ def load_inputs(
 
     water = landmask < 0.5
     water_count = int(np.count_nonzero(water))
-    fallback_count = int(np.count_nonzero(fallback_mask))
+    unsupported_count = int(np.count_nonzero(unsupported_mask))
     if reported_water_count != water_count:
         raise ValueError("forcing SST water-cell count disagrees with the static domain")
-    if reported_fallback_count != fallback_count:
-        raise ValueError("forcing SST global-fallback count disagrees with its mask")
-    if np.any(fallback_mask & ~water):
-        raise ValueError("SST global fallback mask includes target land cells")
-    if np.any(~np.isfinite(fallback_distance_km[fallback_mask])) or np.any(
-        fallback_distance_km[fallback_mask] < 0.0
+    if reported_unsupported_count != unsupported_count:
+        raise ValueError("forcing SST unsupported-water count disagrees with its mask")
+    if np.any(unsupported_mask & ~water):
+        raise ValueError("SST unsupported-water mask includes target land cells")
+    if np.any(~np.isfinite(unsupported_distance_km[unsupported_mask])) or np.any(
+        unsupported_distance_km[unsupported_mask] < 0.0
     ):
-        raise ValueError("SST global fallback distances are invalid on fallback cells")
-    if np.any(np.isfinite(fallback_distance_km[~fallback_mask])):
-        raise ValueError("SST global fallback distances are defined outside the fallback mask")
+        raise ValueError("SST candidate distances are invalid on unsupported water")
+    if np.any(np.isfinite(unsupported_distance_km[~unsupported_mask])):
+        raise ValueError("SST candidate distances are defined outside unsupported water")
     expected_maximum = (
-        float(np.max(fallback_distance_km[fallback_mask])) if fallback_count else 0.0
+        float(np.max(unsupported_distance_km[unsupported_mask])) if unsupported_count else 0.0
     )
-    if not math.isclose(reported_fallback_maximum, expected_maximum, rel_tol=0.0, abs_tol=1.0e-9):
-        raise ValueError("forcing SST global-fallback maximum disagrees with its distance field")
+    if not math.isclose(
+        reported_unsupported_maximum, expected_maximum, rel_tol=0.0, abs_tol=1.0e-9
+    ):
+        raise ValueError("forcing SST candidate-distance maximum disagrees with its field")
 
     return (
         latitude,
         longitude,
         water,
-        fallback_mask,
-        fallback_distance_km,
+        unsupported_mask,
+        unsupported_distance_km,
         dx_m,
         dy_m,
         spacing_source,
@@ -189,7 +195,7 @@ def distribution(values: np.ndarray) -> dict[str, float | int | None]:
 
 def select_component_ids(
     water_counts: np.ndarray,
-    fallback_counts: np.ndarray,
+    unsupported_counts: np.ndarray,
     cell_area_km2: float,
 ) -> tuple[set[int], dict[int, list[str]]]:
     component_ids = np.arange(1, water_counts.size, dtype=np.int32)
@@ -202,20 +208,20 @@ def select_component_ids(
     for component_id in water_order[:LARGEST_COMPONENT_COUNT]:
         add(int(component_id), f"largest_{LARGEST_COMPONENT_COUNT}_by_water_area")
 
-    affected_ids = component_ids[fallback_counts[1:] > 0]
+    affected_ids = component_ids[unsupported_counts[1:] > 0]
     if affected_ids.size:
-        fallback_order = affected_ids[
-            np.argsort(-fallback_counts[affected_ids], kind="stable")
+        unsupported_order = affected_ids[
+            np.argsort(-unsupported_counts[affected_ids], kind="stable")
         ]
-        for component_id in fallback_order[:LARGEST_COMPONENT_COUNT]:
-            add(int(component_id), f"largest_{LARGEST_COMPONENT_COUNT}_by_fallback_area")
+        for component_id in unsupported_order[:LARGEST_COMPONENT_COUNT]:
+            add(int(component_id), f"largest_{LARGEST_COMPONENT_COUNT}_by_unsupported_area")
 
     for component_id in component_ids[water_counts[1:] * cell_area_km2 >= MATERIAL_WATER_AREA_KM2]:
         add(int(component_id), f"water_area_ge_{MATERIAL_WATER_AREA_KM2:g}_km2")
     for component_id in component_ids[
-        fallback_counts[1:] * cell_area_km2 >= MATERIAL_FALLBACK_AREA_KM2
+        unsupported_counts[1:] * cell_area_km2 >= MATERIAL_UNSUPPORTED_AREA_KM2
     ]:
-        add(int(component_id), f"fallback_area_ge_{MATERIAL_FALLBACK_AREA_KM2:g}_km2")
+        add(int(component_id), f"unsupported_area_ge_{MATERIAL_UNSUPPORTED_AREA_KM2:g}_km2")
     return set(reasons), reasons
 
 
@@ -223,27 +229,23 @@ def component_report(
     latitude: np.ndarray,
     longitude: np.ndarray,
     water: np.ndarray,
-    fallback_mask: np.ndarray,
+    unsupported_mask: np.ndarray,
     cell_area_km2: float,
 ) -> dict[str, Any]:
     structure = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=np.int8)
     labels, component_count = ndimage.label(water, structure=structure)
     water_counts = np.bincount(labels.ravel(), minlength=component_count + 1).astype(np.int64)
     water_counts[0] = 0
-    fallback_counts = np.bincount(
-        labels[fallback_mask], minlength=component_count + 1
+    unsupported_counts = np.bincount(
+        labels[unsupported_mask], minlength=component_count + 1
     ).astype(np.int64)
-    selected_ids, reasons = select_component_ids(
-        water_counts, fallback_counts, cell_area_km2
-    )
+    selected_ids, reasons = select_component_ids(water_counts, unsupported_counts, cell_area_km2)
 
     components: list[dict[str, Any]] = []
-    for component_id in sorted(
-        selected_ids, key=lambda value: (-int(water_counts[value]), value)
-    ):
+    for component_id in sorted(selected_ids, key=lambda value: (-int(water_counts[value]), value)):
         component = labels == component_id
         water_cell_count = int(water_counts[component_id])
-        fallback_cell_count = int(fallback_counts[component_id])
+        unsupported_cell_count = int(unsupported_counts[component_id])
         component_latitude = latitude[component]
         component_longitude = longitude[component]
         components.append(
@@ -251,10 +253,10 @@ def component_report(
                 "component_id": component_id,
                 "water_cell_count": water_cell_count,
                 "water_area_km2": water_cell_count * cell_area_km2,
-                "fallback_cell_count": fallback_cell_count,
-                "fallback_area_km2": fallback_cell_count * cell_area_km2,
-                "fallback_fraction_of_component_water": (
-                    fallback_cell_count / water_cell_count
+                "unsupported_cell_count": unsupported_cell_count,
+                "unsupported_area_km2": unsupported_cell_count * cell_area_km2,
+                "unsupported_fraction_of_component_water": (
+                    unsupported_cell_count / water_cell_count
                 ),
                 "centroid": {
                     "latitude": float(np.mean(component_latitude)),
@@ -271,32 +273,30 @@ def component_report(
         )
 
     retained_water_cells = sum(int(water_counts[value]) for value in selected_ids)
-    retained_fallback_cells = sum(int(fallback_counts[value]) for value in selected_ids)
-    affected_count = int(np.count_nonzero(fallback_counts[1:]))
+    retained_unsupported_cells = sum(int(unsupported_counts[value]) for value in selected_ids)
+    affected_count = int(np.count_nonzero(unsupported_counts[1:]))
     return {
         "connectivity": "four-neighbour edge connectivity on the target grid",
         "total_component_count": int(component_count),
-        "fallback_affected_component_count": affected_count,
+        "unsupported_affected_component_count": affected_count,
         "retention": {
             "largest_by_water_area_count": LARGEST_COMPONENT_COUNT,
-            "largest_by_fallback_area_count": LARGEST_COMPONENT_COUNT,
+            "largest_by_unsupported_area_count": LARGEST_COMPONENT_COUNT,
             "material_water_area_km2": MATERIAL_WATER_AREA_KM2,
-            "material_fallback_area_km2": MATERIAL_FALLBACK_AREA_KM2,
+            "material_unsupported_area_km2": MATERIAL_UNSUPPORTED_AREA_KM2,
             "rule": (
                 "union of largest components by water area, largest affected components "
-                "by fallback area, and components meeting either material-area threshold"
+                "by unsupported area, and components meeting either material-area threshold"
             ),
         },
         "retained_component_count": len(components),
         "omitted_component_count": int(component_count) - len(components),
         "retained_water_area_km2": retained_water_cells * cell_area_km2,
-        "omitted_water_area_km2": (
-            int(np.sum(water_counts)) - retained_water_cells
-        )
+        "omitted_water_area_km2": (int(np.sum(water_counts)) - retained_water_cells)
         * cell_area_km2,
-        "retained_fallback_area_km2": retained_fallback_cells * cell_area_km2,
-        "omitted_fallback_area_km2": (
-            int(np.sum(fallback_counts)) - retained_fallback_cells
+        "retained_unsupported_area_km2": retained_unsupported_cells * cell_area_km2,
+        "omitted_unsupported_area_km2": (
+            int(np.sum(unsupported_counts)) - retained_unsupported_cells
         )
         * cell_area_km2,
         "components": components,
@@ -372,54 +372,55 @@ def station_report(
     stations: list[dict[str, Any]],
     latitude: np.ndarray,
     longitude: np.ndarray,
-    fallback_mask: np.ndarray,
-    fallback_distance_km: np.ndarray,
+    unsupported_mask: np.ndarray,
+    unsupported_distance_km: np.ndarray,
 ) -> dict[str, Any]:
     result: dict[str, Any] = {
         "provided": observations_path is not None,
         "unique_station_count": len(stations),
         "distance_definition": (
             "great-circle distance from the station coordinate to the nearest target-grid "
-            "cell using global SST fallback; distinct from that cell's source-donor distance"
+            "water cell lacking compact same-surface support; the candidate distance stored "
+            "at that cell is diagnostic and its remote value was not used"
         ),
         "sites": [],
     }
     if not stations:
         return result
 
-    fallback_rows, fallback_columns = np.nonzero(fallback_mask)
-    if not fallback_rows.size:
+    unsupported_rows, unsupported_columns = np.nonzero(unsupported_mask)
+    if not unsupported_rows.size:
         result["sites"] = [
             {
                 **site,
-                "nearest_fallback_cell_distance_km": None,
-                "nearest_fallback_cell": None,
+                "nearest_unsupported_cell_distance_km": None,
+                "nearest_unsupported_cell": None,
             }
             for site in stations
         ]
         return result
 
-    fallback_latitude = latitude[fallback_mask]
-    fallback_longitude = longitude[fallback_mask]
-    tree = cKDTree(unit_sphere_points(fallback_latitude, fallback_longitude))
+    unsupported_latitude = latitude[unsupported_mask]
+    unsupported_longitude = longitude[unsupported_mask]
+    tree = cKDTree(unit_sphere_points(unsupported_latitude, unsupported_longitude))
     station_latitude = np.asarray([site["latitude"] for site in stations])
     station_longitude = np.asarray([site["longitude"] for site in stations])
     chord, nearest = tree.query(unit_sphere_points(station_latitude, station_longitude), k=1)
     arc_km = 2.0 * EARTH_MEAN_RADIUS_KM * np.arcsin(np.minimum(chord / 2.0, 1.0))
     for site, distance_km, nearest_index in zip(stations, arc_km, nearest, strict=True):
-        y_index = int(fallback_rows[int(nearest_index)])
-        x_index = int(fallback_columns[int(nearest_index)])
+        y_index = int(unsupported_rows[int(nearest_index)])
+        x_index = int(unsupported_columns[int(nearest_index)])
         result["sites"].append(
             {
                 **site,
-                "nearest_fallback_cell_distance_km": float(distance_km),
-                "nearest_fallback_cell": {
+                "nearest_unsupported_cell_distance_km": float(distance_km),
+                "nearest_unsupported_cell": {
                     "y_index": y_index,
                     "x_index": x_index,
                     "latitude": float(latitude[y_index, x_index]),
                     "longitude": float(longitude[y_index, x_index]),
-                    "sst_source_donor_distance_km": float(
-                        fallback_distance_km[y_index, x_index]
+                    "nearest_same_surface_candidate_distance_km": float(
+                        unsupported_distance_km[y_index, x_index]
                     ),
                 },
             }
@@ -436,18 +437,18 @@ def build_report(
         latitude,
         longitude,
         water,
-        fallback_mask,
-        fallback_distance_km,
+        unsupported_mask,
+        unsupported_distance_km,
         dx_m,
         dy_m,
         spacing_source,
     ) = load_inputs(forcing_path, static_path)
     cell_area_km2 = dx_m * dy_m / 1_000_000.0
     water_count = int(np.count_nonzero(water))
-    fallback_count = int(np.count_nonzero(fallback_mask))
+    unsupported_count = int(np.count_nonzero(unsupported_mask))
     stations = read_stations(observations_path) if observations_path is not None else []
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "inputs": {
             "regular_forcing": str(forcing_path.resolve()),
             "static_runtime_domain": str(static_path.resolve()),
@@ -465,25 +466,25 @@ def build_report(
         "summary": {
             "water_cell_count": water_count,
             "water_area_km2": water_count * cell_area_km2,
-            "global_fallback_cell_count": fallback_count,
-            "global_fallback_area_km2": fallback_count * cell_area_km2,
-            "global_fallback_fraction_of_water": (
-                fallback_count / water_count if water_count else None
+            "unsupported_water_cell_count": unsupported_count,
+            "unsupported_water_area_km2": unsupported_count * cell_area_km2,
+            "unsupported_fraction_of_water": (
+                unsupported_count / water_count if water_count else None
             ),
-            "sst_source_donor_distance_km": distribution(
-                fallback_distance_km[fallback_mask]
+            "nearest_same_surface_candidate_distance_km": distribution(
+                unsupported_distance_km[unsupported_mask]
             ),
         },
         "water_components": component_report(
-            latitude, longitude, water, fallback_mask, cell_area_km2
+            latitude, longitude, water, unsupported_mask, cell_area_km2
         ),
         "stations": station_report(
             observations_path,
             stations,
             latitude,
             longitude,
-            fallback_mask,
-            fallback_distance_km,
+            unsupported_mask,
+            unsupported_distance_km,
         ),
     }
 
@@ -522,7 +523,7 @@ def main(argv: list[str] | None = None) -> int:
     print(
         "PASS "
         f"water_cells={payload['summary']['water_cell_count']} "
-        f"fallback_cells={payload['summary']['global_fallback_cell_count']} "
+        f"unsupported_cells={payload['summary']['unsupported_water_cell_count']} "
         f"report={args.report}"
     )
     return 0
