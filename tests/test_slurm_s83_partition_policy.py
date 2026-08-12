@@ -38,5 +38,5 @@ def test_hicarprep_record_is_validated_before_publication() -> None:
     validation = text.index('--forcing-file "$staged_output"')
     publish_forcing = text.index('mv "$staged_output" "$output"')
     publish_boundary = text.index('mv "$staged_boundary" "$boundary"')
-    ready = text.index('touch "$output.ready" "$boundary.ready"')
+    ready = text.index('touch "$output.ready" "$boundary.ready"', publish_boundary)
     assert validation < publish_forcing < publish_boundary < ready

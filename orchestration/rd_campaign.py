@@ -8,10 +8,10 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 import hashlib
 import json
-import os
 from pathlib import Path
 import subprocess
 import time
+from typing import Iterator
 
 
 TIME = "%Y-%m-%dT%H:%M:%S"
@@ -172,6 +172,12 @@ class Campaign:
         self.full_season_input_lists = bool(
             self.config.get("full_season_input_lists", False)
         )
+        lookahead = self.config.get("input_lookahead_segments")
+        if lookahead is not None and (
+            isinstance(lookahead, bool) or not isinstance(lookahead, int)
+        ):
+            raise ValueError("input_lookahead_segments must be a non-negative integer")
+        self.input_lookahead_segments = lookahead
         self.seasons = [
             Season(item["name"], parse_time(item["start"]), parse_time(item["end"]), Path(item["static"]))
             for item in self.config["seasons"]
@@ -190,6 +196,15 @@ class Campaign:
             )
         if not self.input_partitions:
             raise ValueError("input_partitions must not be empty")
+        if (
+            self.input_lookahead_segments is not None
+            and self.input_lookahead_segments < 0
+        ):
+            raise ValueError("input_lookahead_segments must be a non-negative integer")
+        if self.input_lookahead_segments is not None and self.full_season_input_lists:
+            raise ValueError(
+                "bounded input look-ahead requires segment-local input lists"
+            )
 
     def initialize(self) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
@@ -227,23 +242,73 @@ class Campaign:
         forcing = self.forcing / season.name / f"rea_l_hicar_{stamp(when)}.nc"
         return forcing, forcing.with_suffix(".lbc.nc")
 
-    def prepare_inputs(self) -> int:
+    def input_candidates(
+        self, *, bounded: bool = True
+    ) -> Iterator[tuple[Season, datetime, Path]]:
+        """Yield unbounded or segment-bounded input work in deterministic order."""
+        if self.input_lookahead_segments is None or not bounded:
+            unique: dict[tuple[str, datetime], tuple[Season, Path]] = {}
+            for season in self.seasons:
+                for when in hours(season.start, season.end):
+                    unique.setdefault((season.name, when), (season, season.static))
+            for key in sorted(unique):
+                season, static = unique[key]
+                yield season, key[1], static
+            return
+
+        # Build one ordered, de-duplicated horizon per active season. Adjacent
+        # segments share their endpoint forcing record, so preserve it only
+        # once. Interleave the season horizons to prevent a long first season
+        # from occupying the complete submission cap.
+        horizons: list[list[tuple[Season, datetime, Path]]] = []
+        for season in self.seasons:
+            windows = list(segments(season.start, season.end, self.segment_hours))
+            first_incomplete = next(
+                (
+                    index
+                    for index, (start, end) in enumerate(windows)
+                    if self.completed_attempt(
+                        self.root
+                        / season.name
+                        / f"{index:03d}_{stamp(start)}_{stamp(end)}"
+                    )
+                    is None
+                ),
+                None,
+            )
+            if first_incomplete is None:
+                continue
+            final = min(
+                len(windows),
+                first_incomplete + self.input_lookahead_segments + 1,
+            )
+            seen: set[datetime] = set()
+            horizon: list[tuple[Season, datetime, Path]] = []
+            for start, end in windows[first_incomplete:final]:
+                for when in hours(start, end):
+                    if when not in seen:
+                        seen.add(when)
+                        horizon.append((season, when, season.static))
+            horizons.append(horizon)
+
+        for position in range(max((len(item) for item in horizons), default=0)):
+            for horizon in horizons:
+                if position < len(horizon):
+                    yield horizon[position]
+
+    def prepare_inputs(self, *, bounded: bool = True) -> int:
         input_jobs = self.root / "input_jobs"
-        input_jobs.mkdir(exist_ok=True)
+        input_jobs.mkdir(parents=True, exist_ok=True)
         active_by_partition = {partition: 0 for partition in self.input_partitions}
         per_partition = max(1, self.max_active_inputs // len(self.input_partitions))
         submitted = 0
-        unique: dict[tuple[str, datetime], Path] = {}
-        for season in self.seasons:
-            for when in hours(season.start, season.end):
-                unique.setdefault((season.name, when), season.static)
-        for (season_name, when), static in sorted(unique.items()):
-            season = next(item for item in self.seasons if item.name == season_name)
+        for season, when, static in self.input_candidates(bounded=bounded):
+            season_name = season.name
             forcing, boundary = self.paths(season, when)
             if Path(f"{forcing}.ready").is_file() and Path(f"{boundary}.ready").is_file():
                 continue
-            directory = input_jobs / stamp(when)
-            directory.mkdir(exist_ok=True)
+            directory = input_jobs / season_name / stamp(when)
+            directory.mkdir(parents=True, exist_ok=True)
             previous = submitted_attempt(directory, self.max_attempts)
             if previous and previous[1] in {"PENDING", "RUNNING", "CONFIGURING", "COMPLETING"}:
                 partition = slurm_partition(directory / f"attempt-{previous[0]}.job")
@@ -410,7 +475,10 @@ def main() -> int:
     campaign = Campaign(args.config)
     campaign.initialize()
     while True:
-        campaign.prepare_inputs()
+        # --inputs-only retains its established meaning of preparing the full
+        # campaign. A bounded horizon advances only through completed model
+        # segments and would otherwise stall forever in inputs-only mode.
+        campaign.prepare_inputs(bounded=not args.inputs_only)
         if not args.inputs_only:
             campaign.submit_segments()
         print(json.dumps(campaign.status(), indent=2, sort_keys=True), flush=True)

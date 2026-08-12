@@ -29,19 +29,26 @@ weights=${HICARPREP_RBF_WEIGHTS:?}
 vector_weights=${HICARPREP_VECTOR_WEIGHTS:-}
 python=${HICAR_PYTHON:-python3}
 boundary=${output%.nc}.lbc.nc
+recovery="$repo_root/scripts/hicarprep_pair_recovery.sh"
 icon_extpar=${ICON_EXTPAR:-/oprusers/osm/opr.inn/data/ICON_INPUT/ICON-CH1-EPS/external_parameter_icon_grid_0001_R19B08_mch_tuned.nc}
 image=${REA_FDB_IMAGE_OVERRIDE:-${REA_FDB_IMAGE:?REA_FDB_IMAGE is required}}
 uenv_bin=${UENV_BIN:-/usr/bin/uenv}
 
-if test -f "$output.ready" && test -f "$boundary.ready"; then
+test -f "$recovery" || { echo "missing pair recovery helper: $recovery" >&2; exit 2; }
+. "$recovery"
+pair_state=$(hicarprep_recover_pair "$output" "$boundary")
+if test "$pair_state" = ready; then
   "$python" "$repo_root/case_studies/swiss_200m/validation/validate_forcing.py" \
     --forcing-file "$output" --boundary-file "$boundary" \
     --static-file "$static" --expected-valid-time "$valid"
   exit 0
 fi
-if test -e "$output" || test -e "$boundary"; then
-  echo "incomplete forcing pair exists: $output / $boundary" >&2
-  exit 2
+if test "$pair_state" = complete_unmarked; then
+  "$python" "$repo_root/case_studies/swiss_200m/validation/validate_forcing.py" \
+    --forcing-file "$output" --boundary-file "$boundary" \
+    --static-file "$static" --expected-valid-time "$valid"
+  touch "$output.ready" "$boundary.ready"
+  exit 0
 fi
 for path in "$static" "$weights" "$icon_extpar" "$uenv_bin"; do
   test -e "$path" || { echo "missing input: $path" >&2; exit 2; }
