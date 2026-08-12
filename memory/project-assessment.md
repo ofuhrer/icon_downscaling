@@ -255,6 +255,13 @@ identically sampled interpolation-only control. Run one further physics or
 wind sensitivity only if the diagnostics identify one coherent mechanism; do
 not reopen a tuning matrix.
 
+The national postprocessor now evaluates this rule directly and fails closed
+when required evidence is absent. It records per-event material thresholds and
+classifications, station-event median direction, leave-one-event-out behavior,
+and the repeated ridge, valley and >=1500 m safeguards; it does not add
+significance or climatological claims. This implementation was fixed before
+the seasonal scores were available.
+
 ## Remaining work
 
 The final 15 km static is complete and contains HLM/SVF/slope/aspect computed
