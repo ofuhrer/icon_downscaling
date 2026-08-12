@@ -52,9 +52,16 @@ clipped to the local donor component range; it must not create new wind extrema.
 RBF application is chunked over 32,768 target points while preserving each
 target's donor order and `np.sum` arithmetic. Do not restore a whole-domain
 gather: on the Swiss 80-level/ten-donor grid it creates an 18.88 GB temporary,
-whereas the selected chunk bounds it near 210 MB with exact output and no
-measured latency penalty. Re-qualify with a bounded end-to-end record before
-deploying a changed chunking implementation.
+whereas the selected chunk bounds it near 210 MB. A full national record was
+exact for all 2,383,027,129 values and all variable attributes. On its matched
+timestamp, chunking reduced a pathological horizontal-remap stage from 1,830
+to 262 seconds and total transformation from 2,225 to 659 seconds; other
+unchunked records already ran near the chunked end-to-end time, so treat this
+as a worst-case latency improvement rather than a general speedup factor.
+Continue to use one exclusive CPU node per eight-worker record: Slurm's
+copy-on-write aggregate RSS remained about 238 GB, and the benchmark does not
+qualify two records per node. Re-qualify any different chunk size or arithmetic
+with one bounded end-to-end record before deployment.
 
 ## Checks that matter
 
