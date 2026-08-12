@@ -49,6 +49,12 @@ has condition number at most `1e10` after the smallest needed diagonal nugget,
 and cached normalized weights have L1 amplification at most `10`. Rebuild any
 older cache that violates this invariant. Earth-relative U/V remapping is
 clipped to the local donor component range; it must not create new wind extrema.
+RBF application is chunked over 32,768 target points while preserving each
+target's donor order and `np.sum` arithmetic. Do not restore a whole-domain
+gather: on the Swiss 80-level/ten-donor grid it creates an 18.88 GB temporary,
+whereas the selected chunk bounds it near 210 MB with exact output and no
+measured latency penalty. Re-qualify with a bounded end-to-end record before
+deploying a changed chunking implementation.
 
 ## Checks that matter
 

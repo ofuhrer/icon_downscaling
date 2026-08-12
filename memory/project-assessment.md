@@ -157,8 +157,14 @@ than a claimed optimum.
   exclusive 456 GB CPU node per record. The selected real-record benchmark
   fell from about 80 min serial to 15 min 58 s, with 239 GB peak RSS; every
   regular-forcing and LBC variable was bit-exact. Two and four workers took
-  34 min 06 s and 21 min 32 s. Horizontal RBF remapping is now the largest
-  remaining preprocessing target, but is not a launch blocker.
+  34 min 06 s and 21 min 32 s. Horizontal RBF application now uses contiguous
+  32,768-target chunks without changing donor order or arithmetic. At national
+  80-level/ten-donor scale this reduces each gather/product temporary from
+  18.88 GB to at most 210 MB (about 90 times smaller); scalar, stacked-level
+  and monotone outputs are exact and a bounded benchmark was time-neutral.
+  This is qualified locally but deliberately not deployed into the active
+  campaign; a future forcing deployment still needs one bounded real-record
+  and end-to-end pilot.
 - Target HFL is preserved exactly. The serialized top mass level includes the
   one-float32-ULP allowance needed to cover HICAR's runtime reconstruction.
 - Land initialization uses native REA-L TERRA soil temperature/water, deep-soil
