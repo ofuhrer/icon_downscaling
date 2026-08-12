@@ -161,10 +161,24 @@ than a claimed optimum.
   32,768-target chunks without changing donor order or arithmetic. At national
   80-level/ten-donor scale this reduces each gather/product temporary from
   18.88 GB to at most 210 MB (about 90 times smaller); scalar, stacked-level
-  and monotone outputs are exact and a bounded benchmark was time-neutral.
-  This is qualified locally but deliberately not deployed into the active
-  campaign; a future forcing deployment still needs one bounded real-record
-  and end-to-end pilot.
+  and monotone outputs are exact. A full 2020-07-01 23 UTC national-record
+  qualification completed in 16 min 04 s and its 2,383,027,129 values
+  (9.56 GB encoded) were bit-identical to the production record; dimensions
+  and every variable attribute also matched. Only temporary source paths and
+  the checksum of the independently regenerated, scientifically identical SST
+  provenance product differed as global metadata. On this same timestamp the
+  horizontal-remap stage fell from 1,830.35 to 262.15 s (7.0 times faster),
+  transform time from 2,225.37 to 658.54 s (3.4 times faster), and end-to-end
+  time from 42 min 12 s to 16 min 04 s. Other unchunked records had already run
+  near 16 min, so this proves removal of a severe worst-case remap stall rather
+  than a general 2.6-times throughput expectation. The fork-worker stage's
+  directly observed cgroup memory peaked near 62.5 GB, but Slurm's copy-on-write
+  aggregate RSS changed only from 240.7 to 238.2 GB. Chunking is therefore
+  qualified as an exact, low-risk temporary-allocation and worst-case-latency
+  improvement, not as evidence that two workers can safely share one node. It
+  remains deliberately absent from the immutable active-campaign forcing
+  cache; use it for future input generation without regenerating already-ready
+  records.
 - Target HFL is preserved exactly. The serialized top mass level includes the
   one-float32-ULP allowance needed to cover HICAR's runtime reconstruction.
 - Land initialization uses native REA-L TERRA soil temperature/water, deep-soil

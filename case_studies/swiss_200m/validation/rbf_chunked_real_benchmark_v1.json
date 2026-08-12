@@ -1,0 +1,60 @@
+{
+  "schema": "hicarprep-rbf-chunk-real-benchmark-v1",
+  "decision": "qualified_for_future_input_generation",
+  "valid_time": "2020-07-01T23:00:00Z",
+  "target_shape": [
+    1431,
+    2061
+  ],
+  "vertical_levels": 80,
+  "column_workers": 8,
+  "rbf_chunk_targets": 32768,
+  "implementation_commit": "372fa3d",
+  "benchmark_source_commit": "a1eade36179a571e95436d6c8355059640c95ae0",
+  "baseline": {
+    "job_id": 5079446,
+    "forcing_path": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/input/forcing_sst_local_baseline_v1/summer/rea_l_hicar_20200701_2300.nc",
+    "forcing_sha256": "25196eeb815581198416b17449fcf22f2f96999e952084aa7ed98395ff20303c",
+    "elapsed_seconds": 2532,
+    "horizontal_remap_seconds": 1830.3482227465138,
+    "column_reconstruction_seconds": 373.7164482017979,
+    "transform_total_seconds": 2225.3744912939146,
+    "slurm_max_rss_kb": 240663896
+  },
+  "chunked": {
+    "job_id": 5080691,
+    "forcing_path": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/benchmarks/rbf_chunked_real_v1/rea_l_hicar_20200701_2300.nc",
+    "forcing_ready": true,
+    "forcing_sha256": "805317e51cf20065aa99191277f2346aede718dd38381de6e2f4df9b9cb64991",
+    "elapsed_seconds": 964,
+    "horizontal_remap_seconds": 262.1479500774294,
+    "column_reconstruction_seconds": 374.97590891458094,
+    "transform_total_seconds": 658.5449732020497,
+    "slurm_max_rss_kb": 238238764,
+    "observed_cgroup_memory_peak_bytes": 62497751040,
+    "cgroup_peak_is_bounded_observation": true
+  },
+  "exact_comparison": {
+    "job_id": 5081160,
+    "report_path": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/benchmarks/rbf_chunked_real_v1/exact_comparison.json",
+    "report_sha256": "bdc62bf695465bad0ab1a50a8864c50dd236ea70f82a92a576a8e247e3bec3df",
+    "compared_elements": 2383027129,
+    "compared_encoded_bytes": 9558652139,
+    "dimensions_equal": true,
+    "data_bitwise_equal": true,
+    "variable_attributes_equal": true,
+    "global_attribute_differences": [
+      "source_path",
+      "sst_source_sha256",
+      "sst_target_product_sha256"
+    ]
+  },
+  "interpretation": {
+    "same_timestamp_horizontal_remap_speedup": 6.9821191514,
+    "same_timestamp_transform_speedup": 3.3792293341,
+    "same_timestamp_end_to_end_speedup": 2.6265560166,
+    "throughput_claim": "The exact intervention removes this record's severe worst-case remap stall; other unchunked records already ran near 16 minutes, so it is not a general 2.6x expectation.",
+    "memory_claim": "The RBF gather temporary is bounded, but Slurm copy-on-write aggregate RSS remains near 238 GB; this does not qualify two records per node.",
+    "campaign_action": "Do not regenerate the immutable ready campaign cache. Use chunking for future forcing generation."
+  }
+}
