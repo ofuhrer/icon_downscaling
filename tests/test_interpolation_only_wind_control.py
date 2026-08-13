@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -11,6 +12,12 @@ SPEC = importlib.util.spec_from_file_location("interpolation_only_control", PATH
 MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
+
+
+def test_parse_time_supports_smn_compact_and_iso_formats():
+    expected = datetime(2020, 1, 15, tzinfo=timezone.utc)
+    assert MODULE.parse_time("20200115000000") == expected
+    assert MODULE.parse_time("2020-01-15T00:00:00Z") == expected
 
 
 def test_scalar_metrics_and_vector_rmse_are_exact():

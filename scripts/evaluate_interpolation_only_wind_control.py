@@ -29,7 +29,13 @@ SEASONS = ("DJF", "MAM", "JJA", "SON")
 
 
 def parse_time(value: str) -> datetime:
-    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    stripped = value.strip()
+    if len(stripped) == 14 and stripped.isdigit():
+        parsed = datetime.strptime(stripped, "%Y%m%d%H%M%S").replace(
+            tzinfo=timezone.utc
+        )
+    else:
+        parsed = datetime.fromisoformat(stripped.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc).replace(microsecond=0)
