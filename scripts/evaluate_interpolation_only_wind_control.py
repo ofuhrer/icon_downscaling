@@ -123,6 +123,19 @@ def forcing_time(dataset: netCDF4.Dataset) -> datetime:
     return value.astimezone(timezone.utc).replace(microsecond=0)
 
 
+def paired_horizontal_samples(values: np.ndarray, station_count: int) -> np.ndarray:
+    """Select paired (y, x) points from netCDF4 orthogonal-indexing output."""
+    array = np.asarray(values, dtype=np.float64)
+    expected_horizontal_shape = (station_count, station_count)
+    if array.shape[-2:] != expected_horizontal_shape:
+        raise ValueError(
+            "unexpected orthogonal station-sampling shape "
+            f"{array.shape}; expected trailing dimensions {expected_horizontal_shape}"
+        )
+    indices = np.arange(station_count)
+    return array[..., indices, indices]
+
+
 def sample_prepared_wind_10m(
     path: Path, y_indices: np.ndarray, x_indices: np.ndarray
 ) -> tuple[datetime, np.ndarray, np.ndarray]:
@@ -137,10 +150,19 @@ def sample_prepared_wind_10m(
             "HICAR performs final grid rotation and variational projection"
         ):
             raise ValueError(f"{path}: unexpected wind representation")
-        u = np.asarray(dataset.variables["U"][0, :2, y_indices, x_indices], dtype=np.float64)
-        v = np.asarray(dataset.variables["V"][0, :2, y_indices, x_indices], dtype=np.float64)
-        hfl = np.asarray(dataset.variables["HFL"][:2, y_indices, x_indices], dtype=np.float64)
-        hsurf = np.asarray(dataset.variables["HSURF"][y_indices, x_indices], dtype=np.float64)
+        station_count = len(y_indices)
+        u = paired_horizontal_samples(
+            dataset.variables["U"][0, :2, y_indices, x_indices], station_count
+        )
+        v = paired_horizontal_samples(
+            dataset.variables["V"][0, :2, y_indices, x_indices], station_count
+        )
+        hfl = paired_horizontal_samples(
+            dataset.variables["HFL"][:2, y_indices, x_indices], station_count
+        )
+        hsurf = paired_horizontal_samples(
+            dataset.variables["HSURF"][y_indices, x_indices], station_count
+        )
     height = hfl - hsurf[None, :]
     denominator = height[1] - height[0]
     if not np.all(np.isfinite(height)) or np.any(denominator <= 0.0):

@@ -35,6 +35,19 @@ def test_scalar_metrics_and_vector_rmse_are_exact():
     ) == np.sqrt(2.5)
 
 
+def test_paired_horizontal_samples_selects_station_diagonal():
+    values_2d = np.arange(9, dtype=np.float64).reshape(3, 3)
+    np.testing.assert_array_equal(
+        MODULE.paired_horizontal_samples(values_2d, 3),
+        np.array([0.0, 4.0, 8.0]),
+    )
+    values_3d = np.stack((values_2d, values_2d + 10.0))
+    np.testing.assert_array_equal(
+        MODULE.paired_horizontal_samples(values_3d, 3),
+        np.array([[0.0, 4.0, 8.0], [10.0, 14.0, 18.0]]),
+    )
+
+
 def test_combined_decision_uses_fixed_four_event_intersection():
     def source(speed: float, vector: float) -> dict:
         return {
