@@ -42,6 +42,13 @@ def station_value(report: dict, key: str, metric: str, field: str) -> float:
     return value
 
 
+def reference_value(report: dict, key: str, metric: str, field: str) -> float:
+    value = float(report["site_metrics"][key]["rea_l"][metric][field])
+    if not math.isfinite(value):
+        raise ValueError(f"{key}/rea_l/{metric}/{field}: non-finite value")
+    return value
+
+
 def compare(baseline: dict, sensitivity: dict, cohort_keys: list[str]) -> dict:
     if baseline.get("schema_version") != 2 or sensitivity.get("schema_version") != 2:
         raise ValueError("both evaluator reports must use schema_version 2")
@@ -110,19 +117,32 @@ def compare(baseline: dict, sensitivity: dict, cohort_keys: list[str]) -> dict:
             sensitivity_values = [
                 station_value(sensitivity, key, metric, field) for key in keys
             ]
+            reference_values = [
+                reference_value(baseline, key, metric, field) for key in keys
+            ]
             baseline_rmse = rms(baseline_values)
             sensitivity_rmse = rms(sensitivity_values)
+            reference_rmse = rms(reference_values)
             delta = sensitivity_rmse - baseline_rmse
             classification, threshold = material_classification(delta, baseline_rmse)
+            reference_delta = sensitivity_rmse - reference_rmse
+            reference_classification, reference_threshold = material_classification(
+                reference_delta, reference_rmse
+            )
+            station_deltas = np.asarray(sensitivity_values) - np.asarray(baseline_values)
             metrics[metric] = {
                 "baseline_equal_station_rmse_m_s": baseline_rmse,
                 "sensitivity_equal_station_rmse_m_s": sensitivity_rmse,
                 "delta_sensitivity_minus_baseline_m_s": delta,
                 "material_threshold_m_s": threshold,
                 "classification": classification,
-                "median_station_delta_m_s": float(
-                    np.median(np.asarray(sensitivity_values) - np.asarray(baseline_values))
-                ),
+                "median_station_delta_m_s": float(np.median(station_deltas)),
+                "stations_improved_count": int(np.count_nonzero(station_deltas < 0.0)),
+                "stations_degraded_count": int(np.count_nonzero(station_deltas > 0.0)),
+                "rea_l_equal_station_rmse_m_s": reference_rmse,
+                "delta_sensitivity_minus_rea_l_m_s": reference_delta,
+                "rea_l_material_threshold_m_s": reference_threshold,
+                "classification_vs_rea_l": reference_classification,
             }
         stratum_results[stratum] = {"station_count": len(keys), "metrics": metrics}
 

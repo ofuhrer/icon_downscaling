@@ -56,6 +56,10 @@ def test_compare_reports_material_speed_recovery_and_strata():
     assert result["strata"]["station_elevation_ge_1500m"]["station_count"] == 1
     speed = result["strata"]["all_stations"]["metrics"]["wind_speed_10m_m_s"]
     assert speed["classification"] == "material_improvement"
+    assert speed["stations_improved_count"] == 1
+    assert speed["stations_degraded_count"] == 0
+    assert speed["rea_l_equal_station_rmse_m_s"] == 2.0
+    assert speed["classification_vs_rea_l"] == "material_improvement"
     assert result["largest_absolute_station_speed_changes"][0][
         "delta_sensitivity_minus_baseline_m_s"
     ] == -1.0
