@@ -130,6 +130,17 @@ def numeric_attribute_mismatches(
     return mismatches
 
 
+def allow_legacy_missing_domain_height(
+    mismatches: dict[str, dict[str, str | float]], *, allowed: bool
+) -> bool:
+    """Remove only the known missing legacy height attribute when explicitly allowed."""
+    expected_missing = {"actual": "missing", "expected": 20.0}
+    if allowed and mismatches.get("domain.height_lowest_level") == expected_missing:
+        mismatches.pop("domain.height_lowest_level")
+        return True
+    return False
+
+
 def expected_output_times(
     start: datetime, end: datetime, interval_seconds: int, *, continued: bool
 ) -> list[datetime]:
@@ -175,6 +186,14 @@ def main() -> int:
         help="accept one ordered campaign-wide list that brackets this segment",
     )
     parser.add_argument("--continued", action="store_true")
+    parser.add_argument(
+        "--allow-missing-domain-height-provenance",
+        action="store_true",
+        help=(
+            "accept only a missing domain.height_lowest_level attribute from a "
+            "legacy executable; wrong or non-finite values still fail"
+        ),
+    )
     args = parser.parse_args()
 
     start = datetime.fromisoformat(args.start.replace("T", " ").replace("Z", ""))
@@ -227,6 +246,10 @@ def main() -> int:
             "domain.height_lowest_level": 20.0,
         }
         numeric_mismatches = numeric_attribute_mismatches(restart, numeric_physics)
+    missing_domain_height_provenance = allow_legacy_missing_domain_height(
+        numeric_mismatches,
+        allowed=args.allow_missing_domain_height_provenance,
+    )
     if numeric_mismatches:
         raise SystemExit(
             "restart numeric physics mismatch: " + json.dumps(numeric_mismatches, sort_keys=True)
@@ -264,6 +287,7 @@ def main() -> int:
         "boundary_relaxation": "sparse_lbc" if boundaries is not None else "regular_forcing",
         "radiation_scheme": args.radiation_scheme,
         "input_list_policy": "bracketing_superset" if args.allow_input_superset else "exact_segment",
+        "missing_domain_height_provenance": missing_domain_height_provenance,
     }, indent=2, sort_keys=True))
     return 0
 

@@ -81,6 +81,23 @@ def test_numeric_restart_attributes_fail_closed() -> None:
     assert mismatches["text_value"]["actual"] == "twenty"
 
 
+def test_legacy_domain_height_exception_is_exact_and_explicit() -> None:
+    missing = {
+        "domain.height_lowest_level": {"actual": "missing", "expected": 20.0},
+        "wind.alpha_const": {"actual": "0.5", "expected": 1.0},
+    }
+    assert not VALIDATOR.allow_legacy_missing_domain_height(missing, allowed=False)
+    assert "domain.height_lowest_level" in missing
+
+    assert VALIDATOR.allow_legacy_missing_domain_height(missing, allowed=True)
+    assert "domain.height_lowest_level" not in missing
+    assert "wind.alpha_const" in missing
+
+    wrong = {"domain.height_lowest_level": {"actual": "25.0", "expected": 20.0}}
+    assert not VALIDATOR.allow_legacy_missing_domain_height(wrong, allowed=True)
+    assert "domain.height_lowest_level" in wrong
+
+
 def test_restart_comparison_excludes_three_cell_guard_region() -> None:
     class Variable:
         def __init__(self, values: np.ndarray):

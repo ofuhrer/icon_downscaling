@@ -48,6 +48,7 @@ radiation_scheme=${HICAR_RADIATION_SCHEME:-rrtmgp}
 model_debug=${HICAR_MODEL_DEBUG:-0}
 disable_sx=${HICAR_DISABLE_SX:-0}
 restart_override_check=${HICAR_RESTART_OVERRIDE_CHECK:-0}
+allow_missing_domain_height_provenance=${HICAR_ALLOW_MISSING_RESTART_DOMAIN_PROVENANCE:-0}
 alpha_const=${HICAR_ALPHA_CONST:-1.0}
 allow_input_superset=${HICAR_ALLOW_INPUT_SUPERSET:-0}
 acc_synchronous=${HICAR_ACC_SYNCHRONOUS:-0}
@@ -116,6 +117,10 @@ fi
 input_validation_args=()
 if [[ "$allow_input_superset" == 1 ]]; then
   input_validation_args=(--allow-input-superset)
+fi
+restart_provenance_args=()
+if [[ "$allow_missing_domain_height_provenance" == 1 ]]; then
+  restart_provenance_args=(--allow-missing-domain-height-provenance)
 fi
 sparse_lbc_args=()
 boundary_validation_args=()
@@ -187,6 +192,7 @@ test -s "$restart" || { echo "missing terminal restart: $restart" >&2; exit 1; }
   --radiation-update-interval "$radiation_update_interval" \
   --alpha-const "$alpha_const" \
   "${boundary_validation_args[@]}" "${validation_restart_args[@]}" \
+  "${restart_provenance_args[@]}" \
   "${input_validation_args[@]}" \
   >"$run/segment_validation.json"
 
