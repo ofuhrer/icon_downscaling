@@ -67,3 +67,9 @@ restarts must restore the full model state.
 Success requires HICAR's completion message, nonempty output, and the expected
 terminal restart. For scientific assessment also inspect solver residuals,
 field extrema, time continuity, and comparison metrics.
+
+Do not infer the latest simulated timestamp by opening a NetCDF output file
+that HICAR is still writing. The external reader can observe only an older
+flushed prefix even while `model.out` has advanced by several hours. Use the
+model log for live progress, and use a closed/rotated output file or the
+terminal segment validator for field-level finiteness and extrema.
