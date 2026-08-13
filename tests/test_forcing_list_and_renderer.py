@@ -157,6 +157,53 @@ def test_segment_wrapper_stages_both_radiation_support_sets() -> None:
     assert "for asset in NoahmpTable.TBL rrtmg_support rrtmgp_support mp_support" in text
 
 
+def test_renderer_restart_override_is_explicit_and_default_off(tmp_path: Path) -> None:
+    static = tmp_path / "static.nc"
+    static_file(static)
+    pairs = [input_pair(tmp_path, hour) for hour in range(2)]
+    forcing_list = tmp_path / "forcing.txt"
+    forcing_list.write_text("".join(f'"{forcing}"\n' for forcing, _ in pairs))
+
+    def render(*extra: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [
+                sys.executable,
+                str(RENDERER),
+                "--static-file",
+                str(static),
+                "--forcing-file-list",
+                str(forcing_list),
+                "--start-date",
+                "2020-01-01 00:00:00",
+                "--end-date",
+                "2020-01-01 01:00:00",
+                "--output-dir",
+                str(tmp_path / "output"),
+                "--restart-dir",
+                str(tmp_path / "restart"),
+                "--restart-from",
+                "2020-01-01 00:00:00",
+                *extra,
+                "--output",
+                str(tmp_path / "input.nml"),
+            ],
+            text=True,
+            capture_output=True,
+        )
+
+    result = render()
+    assert result.returncode == 0, result.stderr
+    assert "override_check = .False." in (tmp_path / "input.nml").read_text()
+
+    result = render("--restart-override-check")
+    assert result.returncode == 0, result.stderr
+    assert "override_check = .True." in (tmp_path / "input.nml").read_text()
+
+    wrapper = SEGMENT_WRAPPER.read_text()
+    assert "HICAR_RESTART_OVERRIDE_CHECK" in wrapper
+    assert "restart_override_check" in wrapper
+
+
 def test_segment_wrapper_uses_validated_build_provenance_for_hicar_identity() -> None:
     text = SEGMENT_WRAPPER.read_text()
     assert "build_provenance=${HICAR_BUILD_PROVENANCE:?}" in text

@@ -70,6 +70,14 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--restart-dir", type=Path, required=True)
     parser.add_argument("--restart-from")
+    parser.add_argument(
+        "--restart-override-check",
+        action="store_true",
+        help=(
+            "permit an intentional configuration change from --restart-from; "
+            "the default remains fail-closed"
+        ),
+    )
     parser.add_argument("--restart-interval", type=int, default=24)
     parser.add_argument("--output-interval", type=int, default=600)
     parser.add_argument("--radiation-update-interval", type=float, default=600.0)
@@ -234,11 +242,14 @@ def main() -> int:
     if args.restart_from:
         if timestamp(args.restart_from) != start:
             raise SystemExit("--restart-from must equal --start-date")
+        override_check = ".True." if args.restart_override_check else ".False."
         restart_lines += (
             "\n  restart_run = .True."
             f"\n  restart_date = '{args.restart_from}'"
-            "\n  override_check = .False."
+            f"\n  override_check = {override_check}"
         )
+    elif args.restart_override_check:
+        raise SystemExit("--restart-override-check requires --restart-from")
 
     output_variables = {
         "station": "'precipitation', 'psfc', 'taix', 'hus2m', 'u10m', 'v10m'",

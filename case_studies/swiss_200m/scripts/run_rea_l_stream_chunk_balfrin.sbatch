@@ -47,6 +47,7 @@ radiation_update_interval=${HICAR_RADIATION_UPDATE_INTERVAL:-600.0}
 radiation_scheme=${HICAR_RADIATION_SCHEME:-rrtmgp}
 model_debug=${HICAR_MODEL_DEBUG:-0}
 disable_sx=${HICAR_DISABLE_SX:-0}
+restart_override_check=${HICAR_RESTART_OVERRIDE_CHECK:-0}
 alpha_const=${HICAR_ALPHA_CONST:-1.0}
 allow_input_superset=${HICAR_ALLOW_INPUT_SUPERSET:-0}
 acc_synchronous=${HICAR_ACC_SYNCHRONOUS:-0}
@@ -79,6 +80,13 @@ if test -n "$restart_input"; then
   test -e "$staged" || ln -s "$(realpath "$restart_input")" "$staged"
   restart_args=(--restart-from "${start/T/ }")
   validation_restart_args=(--continued)
+fi
+restart_override_args=()
+if [[ "$restart_override_check" == 1 ]]; then
+  test -n "$restart_input" || {
+    echo "HICAR_RESTART_OVERRIDE_CHECK=1 requires RESTART_INPUT" >&2; exit 2;
+  }
+  restart_override_args=(--restart-override-check)
 fi
 
 read -r checkpoint_seconds integration_seconds < <("$python" - "$start" "$end" "$model_end" <<'PY'
@@ -132,6 +140,7 @@ fi
   --radiation-update-interval "$radiation_update_interval" \
   --restart-interval "$restart_records" \
   "${restart_args[@]}" \
+  "${restart_override_args[@]}" \
   --output-dir "$run/output" \
   --restart-dir "$run/restart" \
   --output "$run/input.nml"
@@ -182,9 +191,9 @@ test -s "$restart" || { echo "missing terminal restart: $restart" >&2; exit 1; }
   >"$run/segment_validation.json"
 
 "$python" - "$run/segment.json" "$start" "$end" "$model_end" "$static" \
-  "$exe" "$restart" "$build_provenance" <<'PY'
+  "$exe" "$restart" "$build_provenance" "$restart_override_check" <<'PY'
 import json, pathlib, re, sys
-report, start, end, model_end, static, exe, restart, provenance = sys.argv[1:]
+report, start, end, model_end, static, exe, restart, provenance, override = sys.argv[1:]
 build = dict(
     line.split("=", 1)
     for line in pathlib.Path(provenance).read_text().splitlines()
@@ -198,6 +207,7 @@ validation.update({
     "start": start, "end": end, "model_end": model_end, "hicar_commit": commit,
     "static": static, "executable": exe, "restart": restart,
     "hicar_build_provenance": provenance,
+    "restart_override_check": override == "1",
 })
 pathlib.Path(report).write_text(json.dumps(validation, indent=2, sort_keys=True) + "\n")
 PY
