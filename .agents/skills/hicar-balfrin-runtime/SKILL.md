@@ -33,7 +33,12 @@ the ownership authority across login nodes and is released automatically when
 the owner dies. `controller.pid` and `controller.host` are operator-friendly
 mirrors only and can be stale after an ungraceful exit. A second watcher must
 fail without submitting or reconciling anything; one-shot invocations remain
-non-exclusive.
+non-exclusive. Balfrin login-node process namespaces are separate: `ps` or
+`pgrep` on whichever node the `balfrin` alias selected cannot establish that a
+controller recorded on another login node has died. Read `controller.host`
+first and inspect the PID on that exact host; use the shared-filesystem lock as
+the final ownership authority.
+
 Each model attempt:
 
 - names its configured partition explicitly, validates live exact-group access,
