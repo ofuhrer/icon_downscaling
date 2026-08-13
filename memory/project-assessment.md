@@ -8,8 +8,15 @@ national evaluation. Segmented restarts are numerically, not bitwise,
 reproducible. The preregistered wind decision is **mixed**, not added-value
 qualification: vector RMSE is non-degrading in all four events and materially
 better in autumn, but scalar speed RMSE is materially worse in winter, spring
-and summer. The required interpolation-only control is now the active
-experiment; no parameter-tuning matrix is justified before that comparison.
+and summer. The interpolation-only control is complete and reproduces the
+evaluator's native-REA-L station RMSEs to `1.8e-15 m s-1`. It is neutral versus
+REA-L in winter, spring and summer but materially worse in autumn. HICAR adds
+no material vector benefit over interpolation in the first three events and
+materially degrades their speed, while it materially improves both speed and
+vector error over interpolation in autumn. This isolates an amplitude-damping
+tradeoff rather than robust four-event dynamical added value. One bounded
+Sx/TPI-off spring restart sensitivity is now the active causal test; no tuning
+matrix is justified.
 
 Fresh independent daylight replicas showed that the selected one-block RRTMGP
 configuration still separates after repeated radiation calls, despite being
@@ -328,9 +335,37 @@ regression. The campaign nevertheless misses the vector replication gate (one
 material improvement rather than two) and speed support is degrading. This is
 evidence that alpha-one HICAR changes vector direction beneficially in the
 autumn event but does not establish robust four-event value, while its speed
-amplitude is generally worse than native REA-L. The next causal question is
-whether target-grid hicarprep interpolation alone matches or beats both; if it
-does, the cheaper control should replace HICAR for the current wind objective.
+amplitude is generally worse than native REA-L.
+
+The identically sampled interpolation-only control answers the required first
+causal question. Its fixed cohort is the same 147 stations; every event has 25
+matched endpoints and 24 scored intervals. The independently reconstructed
+REA-L station RMSEs agree with the evaluator for all 1,176 season/station/
+metric comparisons to a maximum absolute difference of `1.78e-15 m s-1`.
+Equal-station network RMSEs are:
+
+| Event | metric | interpolation | HICAR | REA-L | HICAR - interpolation |
+| --- | --- | ---: | ---: | ---: | ---: |
+| DJF | speed | 1.897 | 2.128 | 1.960 | +0.231 |
+| DJF | vector | 2.600 | 2.625 | 2.660 | +0.025 |
+| MAM | speed | 1.461 | 1.800 | 1.459 | +0.338 |
+| MAM | vector | 2.287 | 2.360 | 2.275 | +0.073 |
+| JJA | speed | 1.502 | 1.836 | 1.522 | +0.334 |
+| JJA | vector | 2.359 | 2.341 | 2.376 | -0.019 |
+| SON | speed | 3.699 | 3.164 | 3.130 | -0.535 |
+| SON | vector | 5.513 | 4.605 | 5.079 | -0.908 |
+
+In DJF/MAM/JJA the control's mean station speed-standard-deviation ratio is
+0.92--0.95, whereas HICAR compresses it to 0.60--0.67 and adds roughly
+0.6--0.84 m s-1 of mean negative speed bias. In SON the control and REA-L are
+too variable (ratios 1.45 and 1.39); HICAR reduces the ratio to 1.05. Correlation
+changes little. A few exposed or high-elevation stations dominate the autumn
+national control penalty: at MRP, for example, control mean speed is 15.54
+m s-1 versus 5.45 observed and 10.61 REA-L, while HICAR reduces it to 5.96.
+ATT, GOR, PIL, COV, SAE and related sites show the same direction. The evidence
+therefore points to excessive control wind amplitude over resolved terrain and
+a HICAR damping mechanism that is useful in this strong event but over-active
+in the other three.
 
 ## Remaining work
 
@@ -341,14 +376,19 @@ approximation, not a convergence claim. All four season-specific runtime
 domains are complete. The clean final HICAR source is built with NVHPC/OpenACC
 and NCCL; the executable is pinned by checksum.
 
-1. Retrieve and validate the bounded interpolation-only control now running
-   from the already prepared hourly target-grid U/V. It uses the same land-cell
-   station mapping, exact 24 ending-hour pairs and scalar-speed/vector-direction
-   construction, but no HICAR integration or projection.
-2. Compare the control with both HICAR and native REA-L on the fixed national
-   cohort. Prefer the control if it matches or beats alpha-one HICAR without
-   degrading relative to REA-L. Only if HICAR clearly beats that control should
-   one mechanism-led sensitivity be selected from the observed error anatomy.
+1. Complete the single predeclared amplitude-mechanism discriminator: restart
+   spring at its validated +24 h checkpoint, hold forcing/domain/executable/
+   alpha/physics/topology fixed, and run 00--01 UTC with the bundled Sx/TPI
+   correction disabled. Compare all six ending-ten-minute samples at the exact
+   station cells with the existing baseline hour. This tests Sx/TPI causality;
+   it is not a parameter sweep.
+2. If removing Sx/TPI materially recovers spring speed without vector damage,
+   test that same intervention against the autumn ridge event before selecting
+   a reference. If spring barely changes, attribute the damping to the common
+   surface/PBL trajectory and stop rather than opening an unconstrained tuning
+   matrix. Until this distinction is resolved, interpolation-only is the
+   conservative operational wind baseline and alpha-one HICAR remains an R&D
+   experiment with event-dependent value.
 
 Do not tune individual parameters until this reference result identifies a
 specific scientific ambiguity. Do not resume open-ended RRTMGP debugging while
