@@ -317,7 +317,9 @@ and NCCL; the executable is pinned by checksum.
 
 1. All 196 hourly regular-forcing records are validated and ready. Advance the
    remaining restart-chain segments one qualified 12-node segment at a time on
-   `normal`; six of sixteen segments are complete.
+   `normal`; seven of sixteen segments are complete. Winter and spring have
+   completed their first 24 hours, summer has completed its first 24 hours,
+   and autumn has completed its first 12 hours.
 2. Evaluate the completed trajectories against all usable SwissMetNet stations
    and native REA-L-CH1, then decide from those results whether the bounded
    alpha-one projection provides useful downscaling or only a stable control.
