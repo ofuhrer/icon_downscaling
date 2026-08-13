@@ -2,10 +2,14 @@
 
 ## Current conclusion
 
-The project has a literature-led reference configuration and a GPU path that
-is bit-reproducible across independent placements. Segmented restarts are
-numerically, not bitwise, reproducible. It does not yet have a scientifically
-evaluated national all-season result for that complete configuration.
+The project has a literature-led reference configuration, a GPU path that is
+bit-reproducible across independent placements, and a completed four-event
+national evaluation. Segmented restarts are numerically, not bitwise,
+reproducible. The preregistered wind decision is **mixed**, not added-value
+qualification: vector RMSE is non-degrading in all four events and materially
+better in autumn, but scalar speed RMSE is materially worse in winter, spring
+and summer. The required interpolation-only control is now the active
+experiment; no parameter-tuning matrix is justified before that comparison.
 
 Fresh independent daylight replicas showed that the selected one-block RRTMGP
 configuration still separates after repeated radiation calls, despite being
@@ -306,6 +310,28 @@ required evidence is absent. The executable truth table, thresholds, cohort,
 source reconciliation, leave-one-event-out gate and safeguards were fixed
 before the seasonal scores were available.
 
+All 16 campaign segments completed and passed their terminal validators. The
+final evaluation uses a fixed 147-station intersection, with 24 exact common
+ending-hour pairs for both wind metrics in every event. Its equal-station
+results are:
+
+| Event | speed delta HICAR-REA-L (m s-1) | vector delta (m s-1) | classification |
+| --- | ---: | ---: | --- |
+| DJF | +0.169 | -0.035 | degraded |
+| MAM | +0.341 | +0.085 | degraded |
+| JJA | +0.314 | -0.035 | degraded |
+| SON | +0.034 | -0.474 | qualified |
+
+Vector leave-one-event-out station-event medians improve under every omission,
+and ridge, valley and >=1500 m safeguards pass without repeated broad vector
+regression. The campaign nevertheless misses the vector replication gate (one
+material improvement rather than two) and speed support is degrading. This is
+evidence that alpha-one HICAR changes vector direction beneficially in the
+autumn event but does not establish robust four-event value, while its speed
+amplitude is generally worse than native REA-L. The next causal question is
+whether target-grid hicarprep interpolation alone matches or beats both; if it
+does, the cheaper control should replace HICAR for the current wind objective.
+
 ## Remaining work
 
 The final 15 km static is complete and contains HLM/SVF/slope/aspect computed
@@ -315,18 +341,14 @@ approximation, not a convergence claim. All four season-specific runtime
 domains are complete. The clean final HICAR source is built with NVHPC/OpenACC
 and NCCL; the executable is pinned by checksum.
 
-1. All 196 hourly regular-forcing records are validated and ready. Advance the
-   remaining restart-chain segments one qualified 12-node segment at a time on
-   `normal`; ten of sixteen segments are complete. Winter has completed its
-   full 48-hour trajectory, spring its first 36 hours, summer its first 24
-   hours, and autumn its first 12 hours. Both winter evaluation segments and
-   the first spring evaluation segment passed the terminal validator with
-   finite fields and bounded near-surface winds. Winter's terminal 48-hour
-   screen was fully finite, with 10 m and 50 m wind maxima of 16.44 and
-   16.29 m s-1 and no cell above 20 m s-1.
-2. Evaluate the completed trajectories against all usable SwissMetNet stations
-   and native REA-L-CH1, then decide from those results whether the bounded
-   alpha-one projection provides useful downscaling or only a stable control.
+1. Retrieve and validate the bounded interpolation-only control now running
+   from the already prepared hourly target-grid U/V. It uses the same land-cell
+   station mapping, exact 24 ending-hour pairs and scalar-speed/vector-direction
+   construction, but no HICAR integration or projection.
+2. Compare the control with both HICAR and native REA-L on the fixed national
+   cohort. Prefer the control if it matches or beats alpha-one HICAR without
+   degrading relative to REA-L. Only if HICAR clearly beats that control should
+   one mechanism-led sensitivity be selected from the observed error anatomy.
 
 Do not tune individual parameters until this reference result identifies a
 specific scientific ambiguity. Do not resume open-ended RRTMGP debugging while
