@@ -1171,8 +1171,16 @@ def main() -> int:
                 continue
             model_record = model_records[valid]
             reference_dataset = reference_records[valid]
-            lead_accumulator = lead_time_accumulators.setdefault(
-                lead_hour, create_accumulators(classes)
+            # The inclusive evaluation-start endpoint supplies the preceding
+            # state for ending-hour means and precipitation differences.  It
+            # is not itself a scored interval, so do not publish an all-zero
+            # lead-time entry for that baseline endpoint.
+            lead_accumulator = (
+                lead_time_accumulators.setdefault(
+                    lead_hour, create_accumulators(classes)
+                )
+                if previous_model_time is not None
+                else None
             )
 
             hicar_temperature_series = sample_hicar_series(
@@ -1471,12 +1479,13 @@ def main() -> int:
                     site_index,
                     common,
                 )
-                add_common_site_values(
-                    lead_accumulator,
-                    classes,
-                    site_index,
-                    common,
-                )
+                if lead_accumulator is not None:
+                    add_common_site_values(
+                        lead_accumulator,
+                        classes,
+                        site_index,
+                        common,
+                    )
                 add_common_site_values(
                     site_accumulators[site.key],
                     single_site_classes,

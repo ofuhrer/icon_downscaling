@@ -597,7 +597,7 @@ def test_full_station_comparison_reports_exact_synthetic_match(tmp_path):
     assert mapping["sites"][0]["unconstrained_hicar_cell_surface"] == "land"
     assert mapping["sites"][0]["surface_mapping_override"] is False
     assert len(payload["matched_model_times"]) == 3
-    assert sorted(payload["lead_time_metrics"]) == ["0", "1", "2"]
+    assert sorted(payload["lead_time_metrics"]) == ["1", "2"]
     assert (
         payload["lead_time_metrics"]["2"]["hicar"]["all_sites"]
         ["wind_speed_10m_m_s"]["count"]
