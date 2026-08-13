@@ -15,8 +15,12 @@ no material vector benefit over interpolation in the first three events and
 materially degrades their speed, while it materially improves both speed and
 vector error over interpolation in autumn. This isolates an amplitude-damping
 tradeoff rather than robust four-event dynamical added value. One bounded
-Sx/TPI-off spring restart sensitivity is now the active causal test; no tuning
-matrix is justified.
+Sx/TPI-off spring restart sensitivity establishes immediate causal over-damping:
+national speed RMSE improves materially from 1.800 to 1.627 m s-1, vector RMSE
+improves neutrally from 2.254 to 2.200 m s-1, and the high-elevation subset
+improves materially in both. The sensitivity is nationally neutral versus
+REA-L (speed 1.632, vector 2.216 m s-1). A matching bounded autumn confirmation
+is now the active test; no wider tuning matrix is justified.
 
 Fresh independent daylight replicas showed that the selected one-block RRTMGP
 configuration still separates after repeated radiation calls, despite being
@@ -376,19 +380,24 @@ approximation, not a convergence claim. All four season-specific runtime
 domains are complete. The clean final HICAR source is built with NVHPC/OpenACC
 and NCCL; the executable is pinned by checksum.
 
-1. Complete the single predeclared amplitude-mechanism discriminator: restart
-   spring at its validated +24 h checkpoint, hold forcing/domain/executable/
-   alpha/physics/topology fixed, and run 00--01 UTC with the bundled Sx/TPI
-   correction disabled. Compare all six ending-ten-minute samples at the exact
-   station cells with the existing baseline hour. This tests Sx/TPI causality;
-   it is not a parameter sweep.
-2. If removing Sx/TPI materially recovers spring speed without vector damage,
-   test that same intervention against the autumn ridge event before selecting
-   a reference. If spring barely changes, attribute the damping to the common
-   surface/PBL trajectory and stop rather than opening an unconstrained tuning
-   matrix. Until this distinction is resolved, interpolation-only is the
-   conservative operational wind baseline and alpha-one HICAR remains an R&D
-   experiment with event-dependent value.
+1. Complete the already-submitted autumn 00--01 UTC confirmation with the same
+   +24 h restart, executable, alpha, physics and 12-node topology, changing
+   only bundled Sx/TPI. Spring met the predeclared trigger: speed improves by
+   0.173 m s-1 nationally without vector degradation; 90/147 station speed
+   RMSEs improve, and high/ridge/valley speed strata improve materially.
+2. If autumn preserves its material vector advantage while correcting speed,
+   select alpha-one HICAR without Sx/TPI as the next R&D reference and require a
+   fresh multi-event evaluation before production. If autumn loses that vector
+   advantage or shows the opposite causal response, retain interpolation-only
+   as the operational baseline and describe HICAR's terrain-amplitude response
+   as event-dependent rather than tuning another parameter.
+
+The spring sensitivity intentionally changes `wind/Sx` across a validated
+restart. Ordinary restarts remain fail-closed. The experiment uses the explicit
+restart override, records the sole `T` to `F` mismatch, and separately allows
+only the known missing `domain.height_lowest_level` provenance attribute from
+the older 4a425677 executable. Wrong or non-finite numeric attributes still
+fail validation.
 
 Do not tune individual parameters until this reference result identifies a
 specific scientific ambiguity. Do not resume open-ended RRTMGP debugging while

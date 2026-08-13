@@ -69,6 +69,15 @@ Sparse LBC is optional experimental input, not part of the selected reference.
 Keep HICAR initialization/projection enabled once at the start of each chain;
 restarts must restore the full model state.
 
+Ordinary continuation must keep restart configuration comparison fail-closed.
+For a predeclared causal sensitivity that intentionally changes one namelist
+option across a validated checkpoint, set `HICAR_RESTART_OVERRIDE_CHECK=1`,
+record the exact mismatch from HICAR's restart report, and change nothing else.
+Do not edit the checkpoint. Builds predating restart-domain provenance may use
+`HICAR_ALLOW_MISSING_RESTART_DOMAIN_PROVENANCE=1`; this accepts only a missing
+`domain.height_lowest_level=20` attribute, never a wrong/non-finite value or
+any other mismatch.
+
 Success requires HICAR's completion message, nonempty output, and the expected
 terminal restart. For scientific assessment also inspect solver residuals,
 field extrema, time continuity, and comparison metrics.
