@@ -36,15 +36,17 @@ def test_scalar_metrics_and_vector_rmse_are_exact():
 
 
 def test_paired_horizontal_samples_selects_station_diagonal():
-    values_2d = np.arange(9, dtype=np.float64).reshape(3, 3)
+    values_2d = np.arange(20, dtype=np.float64).reshape(4, 5)
+    y_indices = np.array([0, 2, 3])
+    x_indices = np.array([1, 4, 0])
     np.testing.assert_array_equal(
-        MODULE.paired_horizontal_samples(values_2d, 3),
-        np.array([0.0, 4.0, 8.0]),
+        MODULE.paired_horizontal_samples(values_2d, y_indices, x_indices),
+        np.array([1.0, 14.0, 15.0]),
     )
     values_3d = np.stack((values_2d, values_2d + 10.0))
     np.testing.assert_array_equal(
-        MODULE.paired_horizontal_samples(values_3d, 3),
-        np.array([[0.0, 4.0, 8.0], [10.0, 14.0, 18.0]]),
+        MODULE.paired_horizontal_samples(values_3d, y_indices, x_indices),
+        np.array([[1.0, 14.0, 15.0], [11.0, 24.0, 25.0]]),
     )
 
 

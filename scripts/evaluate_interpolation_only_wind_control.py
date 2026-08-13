@@ -123,51 +123,72 @@ def forcing_time(dataset: netCDF4.Dataset) -> datetime:
     return value.astimezone(timezone.utc).replace(microsecond=0)
 
 
-def paired_horizontal_samples(values: np.ndarray, station_count: int) -> np.ndarray:
-    """Select paired (y, x) points from netCDF4 orthogonal-indexing output."""
+def paired_horizontal_samples(
+    values: np.ndarray, y_indices: np.ndarray, x_indices: np.ndarray
+) -> np.ndarray:
+    """Select paired (y, x) points from an in-memory horizontal field."""
     array = np.asarray(values, dtype=np.float64)
-    expected_horizontal_shape = (station_count, station_count)
-    if array.shape[-2:] != expected_horizontal_shape:
-        raise ValueError(
-            "unexpected orthogonal station-sampling shape "
-            f"{array.shape}; expected trailing dimensions {expected_horizontal_shape}"
-        )
-    indices = np.arange(station_count)
-    return array[..., indices, indices]
+    if len(y_indices) != len(x_indices):
+        raise ValueError("paired station index arrays differ in length")
+    return array[..., y_indices, x_indices]
 
 
-def sample_prepared_wind_10m(
+def prepared_wind_geometry(
     path: Path, y_indices: np.ndarray, x_indices: np.ndarray
-) -> tuple[datetime, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, str]:
+    """Read the static interpolation weight once for a season's forcing records."""
     with netCDF4.Dataset(path) as dataset:
-        valid = forcing_time(dataset)
-        required = ("U", "V", "HFL", "HSURF")
-        missing = [name for name in required if name not in dataset.variables]
+        missing = [name for name in ("HFL", "HSURF") if name not in dataset.variables]
         if missing:
-            raise ValueError(f"{path}: forcing variables missing: {missing}")
-        if getattr(dataset, "wind_representation", "") != (
-            "earth-relative U/V and terrain-adjusted W on exact target HFL mass levels; "
-            "HICAR performs final grid rotation and variational projection"
-        ):
-            raise ValueError(f"{path}: unexpected wind representation")
-        station_count = len(y_indices)
-        u = paired_horizontal_samples(
-            dataset.variables["U"][0, :2, y_indices, x_indices], station_count
-        )
-        v = paired_horizontal_samples(
-            dataset.variables["V"][0, :2, y_indices, x_indices], station_count
-        )
+            raise ValueError(f"{path}: forcing geometry variables missing: {missing}")
+        static_identity = str(getattr(dataset, "static_sha256", ""))
+        if not static_identity:
+            raise ValueError(f"{path}: static_sha256 is missing")
+        # The variables are chunked in large 20-level horizontal slabs.  A
+        # contiguous two-level read visits each needed chunk once; netCDF4's
+        # orthogonal array indexing otherwise re-reads the same chunks for the
+        # Cartesian product of station y/x indices.
         hfl = paired_horizontal_samples(
-            dataset.variables["HFL"][:2, y_indices, x_indices], station_count
+            dataset.variables["HFL"][:2, :, :], y_indices, x_indices
         )
         hsurf = paired_horizontal_samples(
-            dataset.variables["HSURF"][y_indices, x_indices], station_count
+            dataset.variables["HSURF"][:, :], y_indices, x_indices
         )
     height = hfl - hsurf[None, :]
     denominator = height[1] - height[0]
     if not np.all(np.isfinite(height)) or np.any(denominator <= 0.0):
         raise ValueError(f"{path}: invalid lowest-level height geometry")
-    weight = np.clip((10.0 - height[0]) / denominator, 0.0, 1.0)
+    return np.clip((10.0 - height[0]) / denominator, 0.0, 1.0), static_identity
+
+
+def sample_prepared_wind_10m(
+    path: Path,
+    y_indices: np.ndarray,
+    x_indices: np.ndarray,
+    weight: np.ndarray,
+    expected_static_identity: str,
+) -> tuple[datetime, np.ndarray, np.ndarray]:
+    with netCDF4.Dataset(path) as dataset:
+        valid = forcing_time(dataset)
+        required = ("U", "V")
+        missing = [name for name in required if name not in dataset.variables]
+        if missing:
+            raise ValueError(f"{path}: forcing variables missing: {missing}")
+        if str(getattr(dataset, "static_sha256", "")) != expected_static_identity:
+            raise ValueError(f"{path}: static identity differs within one season")
+        if getattr(dataset, "wind_representation", "") != (
+            "earth-relative U/V and terrain-adjusted W on exact target HFL mass levels; "
+            "HICAR performs final grid rotation and variational projection"
+        ):
+            raise ValueError(f"{path}: unexpected wind representation")
+        u = paired_horizontal_samples(
+            dataset.variables["U"][0, :2, :, :], y_indices, x_indices
+        )
+        v = paired_horizontal_samples(
+            dataset.variables["V"][0, :2, :, :], y_indices, x_indices
+        )
+    if u.shape != (2, len(y_indices)) or v.shape != u.shape or weight.shape != u.shape[1:]:
+        raise ValueError(f"{path}: inconsistent prepared wind sampling shapes")
     return valid, u[0] + weight * (u[1] - u[0]), v[0] + weight * (v[1] - v[0])
 
 
@@ -230,11 +251,17 @@ def evaluate_season(
     reference = read_reference_wind(reference_path)
     control_endpoints: dict[datetime, tuple[np.ndarray, np.ndarray]] = {}
     input_records = []
+    first_path = forcing_dir / f"{forcing_prefix}{expected_times[0]:%Y%m%d_%H%M}.nc"
+    if not first_path.is_file() or not Path(f"{first_path}.ready").is_file():
+        raise ValueError(f"{label}: forcing payload/ready pair missing: {first_path}")
+    weight, static_identity = prepared_wind_geometry(first_path, y_indices, x_indices)
     for valid in expected_times:
         path = forcing_dir / f"{forcing_prefix}{valid:%Y%m%d_%H%M}.nc"
         if not path.is_file() or not Path(f"{path}.ready").is_file():
             raise ValueError(f"{label}: forcing payload/ready pair missing: {path}")
-        decoded, u, v = sample_prepared_wind_10m(path, y_indices, x_indices)
+        decoded, u, v = sample_prepared_wind_10m(
+            path, y_indices, x_indices, weight, static_identity
+        )
         if decoded != valid:
             raise ValueError(f"{path}: valid time {decoded} differs from {valid}")
         control_endpoints[valid] = (u, v)
@@ -328,6 +355,7 @@ def evaluate_season(
         "mapped_station_count": len(keys),
         "complete_station_count": len(site_metrics),
         "observation_inventory": observation_inventory,
+        "static_sha256": static_identity,
         "input_records": input_records,
         "site_metrics": site_metrics,
     }
@@ -401,6 +429,7 @@ def main() -> int:
         "method": {
             "control": "hicarprep target-grid earth-relative U/V, no HICAR integration or projection",
             "vertical_sampling": "linear interpolation of the two lowest HFL mass levels to 10 m AGL, clipped to their bracket",
+            "forcing_io": "contiguous first-two-level U/V reads matching the forcing chunk layout; HFL/HSURF geometry cached once per season",
             "temporal_sampling": "adjacent hourly endpoints; scalar speed mean plus mean-vector direction",
             "pairing": "exact finite control/REA-L/SwissMetNet triplets",
         },
