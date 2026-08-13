@@ -317,11 +317,13 @@ and NCCL; the executable is pinned by checksum.
 
 1. All 196 hourly regular-forcing records are validated and ready. Advance the
    remaining restart-chain segments one qualified 12-node segment at a time on
-   `normal`; nine of sixteen segments are complete. Winter and spring have
-   completed their first 36 hours, summer has completed its first 24 hours,
-   and autumn has completed its first 12 hours. The first 12-hour evaluation
-   segment for both winter and spring passed the terminal validator with
-   finite fields and bounded near-surface winds.
+   `normal`; ten of sixteen segments are complete. Winter has completed its
+   full 48-hour trajectory, spring its first 36 hours, summer its first 24
+   hours, and autumn its first 12 hours. Both winter evaluation segments and
+   the first spring evaluation segment passed the terminal validator with
+   finite fields and bounded near-surface winds. Winter's terminal 48-hour
+   screen was fully finite, with 10 m and 50 m wind maxima of 16.44 and
+   16.29 m s-1 and no cell above 20 m s-1.
 2. Evaluate the completed trajectories against all usable SwissMetNet stations
    and native REA-L-CH1, then decide from those results whether the bounded
    alpha-one projection provides useful downscaling or only a stable control.
