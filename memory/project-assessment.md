@@ -230,6 +230,12 @@ than a claimed optimum.
   ratios were 2.5%, 2.1%, 1.6% and 9.4%, and 10 m vector-wind RMSE was
   8.7e-9 m s-1. Local extrema warrant monitoring, but this is numerical restart
   reproducibility adequate for the present wind assessment, not bit identity.
+  The first real Sx/TPI-off national restart independently shows no wind jump:
+  over 2,928,375 core cells, the 12:00--12:10 vector-increment RMSE is
+  0.107 m s-1 at 10 m and 0.123 m s-1 at 50 m, respectively 0.90 and 0.93
+  times the larger adjacent ten-minute increment. All four 11:50--12:20
+  states are finite; the known +0.432 s serializer offset was normalized only
+  for matching timestamps.
 - The final alpha-one, corrected-water daylight qualification completed all
   continuous, full-list segmented and segment-local-list trajectories. The two
   segmented modes were bit-identical in outputs and restart states; all fields
