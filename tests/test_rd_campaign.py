@@ -167,6 +167,7 @@ def campaign(
     model_partition="preemptible",
     max_active_models=None,
     model_max_partition_fraction=None,
+    allow_missing_restart_domain_provenance=False,
 ) -> Campaign:
     config = {
         "root": str(tmp_path / "campaign"),
@@ -187,6 +188,9 @@ def campaign(
         "radiation_update_interval": 600,
         "radiation_scheme": radiation_scheme,
         "model_partition": model_partition,
+        "allow_missing_restart_domain_provenance": (
+            allow_missing_restart_domain_provenance
+        ),
         "seasons": seasons or [{
             "name": "autumn",
             "start": "2020-10-02T00:00:00",
@@ -460,7 +464,10 @@ def test_radiation_configuration_is_explicit_in_model_environment(
     tmp_path, monkeypatch
 ) -> None:
     configured = campaign(
-        tmp_path, full_season_input_lists=False, radiation_scheme="rrtmg"
+        tmp_path,
+        full_season_input_lists=False,
+        radiation_scheme="rrtmg",
+        allow_missing_restart_domain_provenance=True,
     )
     configured.config["seasons"][0]["end"] = "2020-10-02T01:00:00"
     configured.seasons = [
@@ -490,6 +497,7 @@ def test_radiation_configuration_is_explicit_in_model_environment(
     assert submitted[0]["HICAR_RADIATION_UPDATE_INTERVAL"] == "600.0"
     assert submitted[0]["HICAR_RADIATION_SCHEME"] == "rrtmg"
     assert submitted[0]["HICAR_ALPHA_CONST"] == "1.0"
+    assert submitted[0]["HICAR_ALLOW_MISSING_RESTART_DOMAIN_PROVENANCE"] == "1"
     assert submitted[0]["HICAR_BUILD_PROVENANCE"] == "build.txt"
 
 

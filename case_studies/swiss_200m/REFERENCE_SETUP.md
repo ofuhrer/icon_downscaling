@@ -188,6 +188,12 @@ result.
   and autumn evaluation events. A final daylight turnover and
   continuous-versus-restart check is required after the complete setup
   changes, not for tuning it.
+- The pinned campaign executable predates serialization of
+  `domain.height_lowest_level`. Set the manifest-recorded
+  `allow_missing_restart_domain_provenance=true` compatibility option: it
+  accepts only that absent 20 m attribute, while wrong or non-finite values and
+  every other mismatch remain fatal. The rendered namelist and validated
+  static geometry independently retain the exact 20 m configuration.
 - Each segment lists only the hourly regular-forcing records bracketing that
   segment. Ready records for the next segment can therefore be generated while
   the current segment runs; the shared endpoint is reused. A daylight 2 x 1 h
