@@ -31,9 +31,12 @@ result identifies a specific scientific ambiguity.
   autumn vector advantage over REA-L. A matched winter block independently
   shows a broad but bounded response: Sx/TPI-off is faster in about 89% of
   core-land samples, by +0.286 m s-1 at 10 m and +0.233 m s-1 at 50 m on
-  average, with no values above 30 m s-1 in either case. This selects the next
-  R&D reference, but still requires the fresh four-event station evaluation
-  before production use;
+  average, with no values above 30 m s-1 in either case. At +24 h it reduces
+  full-domain RMSE against interpolated forcing from 1.021 to 0.643 m s-1 at
+  10 m and 0.907 to 0.579 m s-1 at 50 m, while remaining finite and bounded.
+  This selects the next R&D reference, but forcing agreement is not station
+  skill: the fresh four-event station evaluation remains required before
+  production use;
 - Morrison microphysics, YSU PBL, Noah-MP surface-exchange option 1 with the
   revised-MM5 atmospheric surface layer, prescribed simple-water SST, and RRTMG
   every 600 s, with YSU top-down radiative mixing explicitly off;

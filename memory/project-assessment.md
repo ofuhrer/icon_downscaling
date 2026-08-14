@@ -33,7 +33,11 @@ samples from 16:10--20:00, Sx/TPI-off is faster than the otherwise identical
 Sx/TPI-on control in 89.7% of 10 m samples and 88.9% of 50 m samples, with
 mean speed changes of +0.286 and +0.233 m s-1 respectively. Neither case has a
 value above 30 m s-1. This supports removal of excessive damping but is not a
-station-skill result.
+station-skill result. At the exact +24 h evaluation-start endpoint, Sx/TPI-off
+also reduces full-domain speed RMSE against the vertically interpolated
+forcing from 1.021 to 0.643 m s-1 at 10 m and from 0.907 to 0.579 m s-1 at
+50 m; correlations increase from 0.925/0.964 to 0.965/0.983. This confirms a
+closer target-grid amplitude/structure match, not observational skill.
 
 Fresh independent daylight replicas showed that the selected one-block RRTMGP
 configuration still separates after repeated radiation calls, despite being
