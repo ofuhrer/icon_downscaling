@@ -28,10 +28,11 @@ result identifies a specific scientific ambiguity.
   show that the former Sx 600 m/30 degree/500 m smoothing plus TPI 4 km/200 m
   setup materially over-damps national speed in both spring and autumn. Turning
   it off improves speed without material vector degradation and retains the
-  autumn vector advantage over REA-L. A matched winter block independently
-  shows a broad but bounded response: Sx/TPI-off is faster in about 89% of
-  core-land samples, by +0.286 m s-1 at 10 m and +0.233 m s-1 at 50 m on
-  average, with no values above 30 m s-1 in either case. At +24 h it reduces
+  autumn vector advantage over REA-L. The complete first scored winter 12 h
+  segment independently shows a broad but bounded response: across 204,787,800
+  core-land samples, Sx/TPI-off is faster in 90.6% of 10 m and 89.9% of 50 m
+  samples, by +0.318 and +0.268 m s-1 on average. Every predeclared elevation
+  band responds positively and neither case exceeds 30 m s-1. At +24 h it reduces
   full-domain RMSE against interpolated forcing from 1.021 to 0.643 m s-1 at
   10 m and 0.907 to 0.579 m s-1 at 50 m, while remaining finite and bounded.
   This selects the next R&D reference, but forcing agreement is not station
@@ -73,7 +74,11 @@ R&D campaign and must remain visible in segment diagnostics.
   aggregate 600 s HICAR output to the SwissMetNet definition, approximate
   REA-L interval means from consecutive hourly endpoints, inverse-rotate HICAR
   grid-relative wind before vector metrics, and report sampling and
-  height-adjustment choices.
+  height-adjustment choices;
+- an interpolation-only control comparison must use exactly the national
+  postprocessor's preregistered four-event/two-metric station cohort. Require
+  exact cohort-key equality and independently reconstructed REA-L station RMSE
+  parity before interpreting HICAR-versus-control differences.
 
 Do not equate a stable short run with scientific skill. Extend duration or add
 regimes only after the current experiment distinguishes the competing
