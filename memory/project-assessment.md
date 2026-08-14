@@ -147,6 +147,12 @@ stability.
   are not sufficiently established to define the national reference.
 - Missing QI is explicitly zero; QR/QS/QG are not invented. Supersaturation is
   retained. Cold-cloud and precipitation spin-up remain interpretation limits.
+  The fresh Sx/TPI-off spring trajectory confirms that this is independent of
+  the selected wind modification: during its first two hours all fields and
+  winds stayed finite and bounded, but the maximum 10-minute precipitation
+  increment reached 23.15 kg m-2 and the two-hour cumulative maximum reached
+  59.98 kg m-2. Cloud and precipitation skill therefore remain outside the
+  campaign claim even if the horizontal-wind evaluation succeeds.
 - Prepared physical W is locally very large over the steepest resolved terrain:
   about -25 m s-1 in the winter forcing near the first 200 m AGL. HICAR's
   corresponding CFL-limiting physical component was about -21 m s-1 while the
