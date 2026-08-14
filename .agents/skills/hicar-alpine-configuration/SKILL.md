@@ -24,8 +24,12 @@ result identifies a specific scientific ambiguity.
   winter initialization); alpha 1 bounded the maximum at 21.085 m s-1 with no
   cells above 30 m s-1. This is the bounded R&D reference, not a claim that
   fixed alpha is the published or scientifically optimal choice;
-- Sx on with 600 m search, 30 degree scale and 500 m smoothing; TPI search
-  4 km and scale 200;
+- bundled Sx/TPI wind modification off. Controlled +24 h restart sensitivities
+  show that the former Sx 600 m/30 degree/500 m smoothing plus TPI 4 km/200 m
+  setup materially over-damps national speed in both spring and autumn. Turning
+  it off improves speed without material vector degradation and retains the
+  autumn vector advantage over REA-L. This selects the next R&D reference, but
+  still requires a fresh four-event integration before production use;
 - Morrison microphysics, YSU PBL, Noah-MP surface-exchange option 1 with the
   revised-MM5 atmospheric surface layer, prescribed simple-water SST, and RRTMG
   every 600 s, with YSU top-down radiative mixing explicitly off;
