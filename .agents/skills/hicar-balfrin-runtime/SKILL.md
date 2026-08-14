@@ -69,6 +69,14 @@ Sparse LBC is optional experimental input, not part of the selected reference.
 Keep HICAR initialization/projection enabled once at the start of each chain;
 restarts must restore the full model state.
 
+`HICAR/run` is ignored and is therefore absent from a fresh recursive Git
+clone even when the coordinator and HICAR submodule are otherwise complete.
+Populate that support tree from the checksum-identical pinned build/source
+before launching. The campaign controller must fail its runtime-asset preflight
+before `sbatch` if the executable, `NoahmpTable.TBL`, or any of the three
+support directories is absent; do not spend model retries discovering this in
+the batch wrapper.
+
 Ordinary continuation must keep restart configuration comparison fail-closed.
 For a predeclared causal sensitivity that intentionally changes one namelist
 option across a validated checkpoint, set `HICAR_RESTART_OVERRIDE_CHECK=1`,

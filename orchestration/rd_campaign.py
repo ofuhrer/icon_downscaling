@@ -233,6 +233,32 @@ def validate_partition(partition: str) -> dict[str, str]:
     return fields
 
 
+def validate_hicar_runtime_assets(config: dict[str, object]) -> None:
+    """Reject an incomplete HICAR runtime before allocating model nodes."""
+    executable = Path(str(config["hicar_executable"]))
+    support = Path(str(config["hicar_support_dir"]))
+    required = (
+        executable,
+        support / "NoahmpTable.TBL",
+        support / "rrtmg_support",
+        support / "rrtmgp_support",
+        support / "mp_support",
+    )
+    missing = [str(path) for path in required if not path.exists()]
+    empty = [
+        str(path)
+        for path in (executable, support / "NoahmpTable.TBL")
+        if path.is_file() and path.stat().st_size == 0
+    ]
+    if missing or empty:
+        details = []
+        if missing:
+            details.append("missing: " + ", ".join(missing))
+        if empty:
+            details.append("empty: " + ", ".join(empty))
+        raise RuntimeError("incomplete HICAR runtime assets (" + "; ".join(details) + ")")
+
+
 def submit(
     script: Path,
     environment: dict[str, str],
@@ -348,6 +374,7 @@ class Campaign:
     def initialize(self) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
         self.forcing.mkdir(parents=True, exist_ok=True)
+        validate_hicar_runtime_assets(self.config)
         coordinator_source = source_identity(self.repo)
         hicar_source = source_identity(self.repo / "HICAR")
         if coordinator_source["dirty"] or hicar_source["dirty"]:

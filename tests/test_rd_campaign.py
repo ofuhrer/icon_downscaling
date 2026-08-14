@@ -14,6 +14,7 @@ from orchestration.rd_campaign import (
     WatchControllerLock,
     hours,
     segments,
+    validate_hicar_runtime_assets,
 )
 
 
@@ -49,6 +50,45 @@ def test_fractional_segment_length() -> None:
         (datetime(2020, 2, 10, 0, 0), datetime(2020, 2, 10, 1, 30)),
         (datetime(2020, 2, 10, 1, 30), datetime(2020, 2, 10, 2, 0)),
     ]
+
+
+def test_hicar_runtime_asset_preflight_rejects_missing_ignored_support(
+    tmp_path,
+) -> None:
+    executable = tmp_path / "HICAR_gpu"
+    executable.write_bytes(b"executable")
+    support = tmp_path / "run"
+    support.mkdir()
+    config = {
+        "hicar_executable": str(executable),
+        "hicar_support_dir": str(support),
+    }
+
+    with pytest.raises(RuntimeError, match="NoahmpTable.TBL"):
+        validate_hicar_runtime_assets(config)
+
+    (support / "NoahmpTable.TBL").write_text("table")
+    for name in ("rrtmg_support", "rrtmgp_support", "mp_support"):
+        (support / name).mkdir()
+    validate_hicar_runtime_assets(config)
+
+
+def test_hicar_runtime_asset_preflight_rejects_empty_executable(tmp_path) -> None:
+    executable = tmp_path / "HICAR_gpu"
+    executable.touch()
+    support = tmp_path / "run"
+    support.mkdir()
+    (support / "NoahmpTable.TBL").write_text("table")
+    for name in ("rrtmg_support", "rrtmgp_support", "mp_support"):
+        (support / name).mkdir()
+
+    with pytest.raises(RuntimeError, match="empty:.*HICAR_gpu"):
+        validate_hicar_runtime_assets(
+            {
+                "hicar_executable": str(executable),
+                "hicar_support_dir": str(support),
+            }
+        )
 
 
 def test_watch_lock_rejects_a_second_process_without_disturbing_owner(
