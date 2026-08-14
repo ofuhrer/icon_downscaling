@@ -54,7 +54,13 @@ terminal restart and completion marker passed the campaign validator. On this
 selected 12-node RRTMG trajectory, the HICAR timing report attributes 3093 of
 4351 compute seconds (71%) to radiation and 758 seconds (17%) to advection,
 while reported output time is only 36 seconds. Radiation, not NetCDF output,
-is therefore the dominant model cost for this configuration.
+is therefore the dominant model cost for this configuration. Spring has now
+completed its first 12-hour segment as well: all 73 exact 10-minute records
+across four files passed the in-job validator and independent scans of all 27
+time-dependent physical-core fields. The 10 m and 50 m maxima were 14.77 and
+16.41 m s-1, with no value above 30 m s-1, and the exact 12 UTC restart and
+completion marker were published. Its restart continuation is queued as the
+sole next model job.
 
 Fresh independent daylight replicas showed that the selected one-block RRTMGP
 configuration still separates after repeated radiation calls, despite being
@@ -456,7 +462,8 @@ and NCCL; the executable is pinned by checksum.
    segments, 12-node topology, RRTMG and regular boundary relaxation so the
    intervention remains isolated. Winter has completed and passed all four
    segment validators plus the independent all-output finiteness/wind-bounds
-   scan; spring is now running under the one-model normal-partition cap.
+   scan; spring is 1/4 complete and its segment-1 restart continuation is
+   queued under the one-model normal-partition cap.
 2. Evaluate that fresh campaign on the locked 147-station cohort and the
    preregistered vector/speed and terrain safeguards. Until it passes the full
    multi-event decision, retain interpolation-only as the operational baseline
