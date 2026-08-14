@@ -62,9 +62,14 @@ are 18.05 and 17.92 m s-1, with no value above 30 m s-1. Every segment
 published its exact terminal restart and completion marker. The final spring
 segment again shows that radiation dominates this configuration: 4192 of 5565
 reported compute seconds (75%) are radiation, 740 seconds (13%) are advection
-and only 36 seconds are output. Summer segment 0 has started as the sole
-12-node job on `normal`, so the campaign is 8/16 segments complete while
-remaining below the 50% node-use bound.
+and only 36 seconds are output. Summer segment 0 has now completed and passed
+the same independent audit: all 73 exact records and all 27 time-dependent
+physical-core fields are finite, the 10 m/50 m maxima are 19.20/19.86 m s-1,
+and no value exceeds 30 m s-1. Daylight radiation accounts for 4326 of 5228
+reported compute seconds (83%), while output accounts for only 35 seconds.
+Summer segment 1 is queued as the sole next 12-node job on `normal`, so the
+campaign is 9/16 segments complete while remaining below the 50% node-use
+bound.
 
 Fresh independent daylight replicas showed that the selected one-block RRTMGP
 configuration still separates after repeated radiation calls, despite being
@@ -467,9 +472,9 @@ and NCCL; the executable is pinned by checksum.
    intervention remains isolated. Winter has completed and passed all four
    segment validators plus the independent all-output finiteness/wind-bounds
    scan; spring has also completed all four segments and passed the same
-   independent 289-record finiteness and wind-bound audit. Summer segment 0 is
-   now running under the one-model normal-partition cap, with autumn still to
-   follow.
+   independent 289-record finiteness and wind-bound audit. Summer segment 0
+   has completed with 73 finite, bounded records and segment 1 is queued under
+   the one-model normal-partition cap, with autumn still to follow.
 2. Evaluate that fresh campaign on the locked 147-station cohort and the
    preregistered vector/speed and terrain safeguards. Until it passes the full
    multi-event decision, retain interpolation-only as the operational baseline
