@@ -28,8 +28,12 @@ result identifies a specific scientific ambiguity.
   show that the former Sx 600 m/30 degree/500 m smoothing plus TPI 4 km/200 m
   setup materially over-damps national speed in both spring and autumn. Turning
   it off improves speed without material vector degradation and retains the
-  autumn vector advantage over REA-L. This selects the next R&D reference, but
-  still requires a fresh four-event integration before production use;
+  autumn vector advantage over REA-L. A matched winter block independently
+  shows a broad but bounded response: Sx/TPI-off is faster in about 89% of
+  core-land samples, by +0.286 m s-1 at 10 m and +0.233 m s-1 at 50 m on
+  average, with no values above 30 m s-1 in either case. This selects the next
+  R&D reference, but still requires the fresh four-event station evaluation
+  before production use;
 - Morrison microphysics, YSU PBL, Noah-MP surface-exchange option 1 with the
   revised-MM5 atmospheric surface layer, prescribed simple-water SST, and RRTMG
   every 600 s, with YSU top-down radiative mixing explicitly off;

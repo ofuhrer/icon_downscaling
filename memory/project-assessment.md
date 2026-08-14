@@ -27,7 +27,13 @@ materially. Alpha-one HICAR without bundled Sx/TPI is therefore the selected
 next R&D reference. This bounded one-hour evidence establishes mechanism, not
 four-event skill; a fresh multi-event Sx/TPI-off integration is now running
 sequentially on the capacity-bounded `normal` partition and requires its locked
-evaluation before production use.
+evaluation before production use. Its first matched winter continuation block
+already confirms a broad, bounded amplitude effect: over 68,262,600 core-land
+samples from 16:10--20:00, Sx/TPI-off is faster than the otherwise identical
+Sx/TPI-on control in 89.7% of 10 m samples and 88.9% of 50 m samples, with
+mean speed changes of +0.286 and +0.233 m s-1 respectively. Neither case has a
+value above 30 m s-1. This supports removal of excessive damping but is not a
+station-skill result.
 
 Fresh independent daylight replicas showed that the selected one-block RRTMGP
 configuration still separates after repeated radiation calls, despite being
