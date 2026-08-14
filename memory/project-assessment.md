@@ -213,9 +213,16 @@ than a claimed optimum.
 - The 12-node/48-compute-rank RRTMG setup is bit-reproducible across independent
   GPU placements for a one-hour daylight trajectory and terminal restart. The
   run took 18 min 33--53 s including 34 GB restart publication, so a 12-hour
-  segment is projected to fit the six-hour preemptible allocation with useful
-  margin. With the final SST products, full-list and streaming segmented runs
-  were bit-identical. Continuous versus restarted output separated first in
+  segment was initially projected to fit the six-hour allocation. The first
+  completed full national campaign segment now replaces that extrapolation:
+  12 simulated hours took 4491 s of HICAR time (9.62 simulated hours per wall
+  hour) and 1 h 18 min 28 s including wrapper work. RRTMG radiation consumed
+  3413 s, or 76.0% of total model time; advection used 14.7%, halo wait 3.0%,
+  input plus output 1.17%, and wind balance 0.16%. Radiation is therefore the
+  first performance target if this physics stack is retained, but its locked
+  600 s cadence must remain unchanged during the four-event comparison. With
+  the final SST products, full-list and streaming segmented runs were
+  bit-identical. Continuous versus restarted output separated first in
   land-surface/PBL fields at 10:10, but not in 10 m wind or radiation. At that
   time RMSE was 0.65 W m-2 for latent heat, 0.76 W m-2 for sensible heat,
   0.031 K for skin temperature and 40.6 m for PBL height: respectively 5.6%,
