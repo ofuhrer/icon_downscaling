@@ -101,8 +101,15 @@ The complete rationale and option-by-option specification is in
 `case_studies/swiss_200m/REFERENCE_SETUP.md`. The closest published precedent is
 the January 250 m Swiss-Alps HICAR experiment of Reynolds et al. (2023); no
 published national, all-season 100--200 m HICAR wind validation exists. The
-reference is therefore an untuned, internally coherent starting point rather
-than a claimed optimum.
+longest explicitly documented continuous atmospheric HICAR integration found
+in a targeted primary-literature search through August 2026 is the 1 km parent
+run from October 2021 to May 2022 in Reynolds et al. (2024). Berg et al. (2024)
+used HICAR-derived forcing across October 2016--July 2017 for catchment snow
+simulations, but does not establish one continuous atmospheric trajectory. No
+published five-year or multi-year atmospheric HICAR integration was found.
+The reference is therefore an untuned, internally coherent starting point
+rather than a claimed optimum or an extrapolation from demonstrated multi-year
+stability.
 
 ### Domain and vertical grid
 

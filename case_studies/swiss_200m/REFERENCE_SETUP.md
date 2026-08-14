@@ -20,7 +20,12 @@ study
 ([Berg et al., 2024](https://doi.org/10.3389/feart.2024.1393260)). These
 studies constrain process choices, but none establishes a national,
 all-season 100--200 m wind configuration or a published multi-year wind
-climatology.
+climatology. A targeted search of the primary HICAR literature through August
+2026 found no published five-year or multi-year atmospheric HICAR integration.
+The longest explicitly documented continuous integration found was the 1 km
+October 2021--May 2022 parent run; the longer 2016/2017 snow study establishes
+season-spanning use of HICAR-derived forcing, but does not state that the
+atmospheric fields came from one continuous HICAR trajectory.
 
 ### Published evidence boundary
 
@@ -28,7 +33,7 @@ climatology.
 | --- | --- | --- | --- |
 | Reynolds et al. (2023), HICAR v1.1 | January 2017, 250 m, roughly 280 x 170 km; COSMO1 forcing | National Alpine scale; SLEVE and variational wind; TPI/Sx; Noah, Morrison, YSU and RRTMG | Quantitative national station-wind skill, other seasons, Noah-MP or this fork's wind operator |
 | Reynolds et al. (2024) | 1 km parent from 1 October 2021--10 May 2022; nested 50 m run from 25 April--10 May over the Davos region | Noah-MP, revised-MM5 surface exchange, YSU, RRTMG, terrain direct/diffuse radiation and high-resolution wind/temperature observations | Seasonal 50 m atmospheric integration or national-domain behavior |
-| Berg et al. (2024) | HICAR-derived 50, 100 and 250 m forcing for 1 October 2016--31 July 2017 over a 14 x 12.5 km Davos domain | Seasonal continuity and downstream snow-pattern value | Direct atmospheric wind verification or national transferability |
+| Berg et al. (2024) | HICAR-derived 50, 100 and 250 m forcing supplied to snow simulations for 1 October 2016--31 July 2017 over a 14 x 12.5 km Davos domain; continuity of the atmospheric HICAR integration is not specified | Season-spanning downstream use and snow-pattern value | One continuous atmospheric integration, direct atmospheric wind verification or national transferability |
 | This reference | Four independent 48 h, 200 m national events driven by REA-L-CH1; second 24 h scored at SwissMetNet sites | Controlled national wind added-value test across four seasons | A climatology, multi-year stability or optimal parameter tuning |
 
 The selected setup therefore preserves published components only where they
