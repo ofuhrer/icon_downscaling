@@ -324,6 +324,24 @@ after evaluation, profile and optimize the RRTMG implementation first; input
 streaming and forcing generation remain throughput concerns for long
 production, but they are not the dominant cost inside HICAR.
 
+The current RRTMG branch provides a specific first profiling target. Each full
+radiation call invokes `domain%update_host()` before the CPU RRTMG SW/LW
+kernels and `domain%update_device()` afterwards. Those domain methods transfer
+every allocated 2-D and 3-D field plus the principal tendency arrays, rather
+than only the fields consumed or produced by radiation. The reported radiation
+timer therefore combines bulk device/host copies, RRTMG SW, repeated LW setup,
+RRTMG LW, and result copies; it does **not** prove that the radiative-transfer
+kernel alone consumes 76%.
+
+The smallest post-evaluation performance experiment is to add timers around
+those five phases on the same 12-node case. If transfers are material, replace
+the whole-domain synchronization with explicit RRTMG input/output field lists
+and require an exact one-hour A/A comparison plus a complete restart before a
+throughput benchmark. Keep radiation physics and 600 s cadence fixed. Do not
+substitute RRTMGP as a performance shortcut: its repeated-call trajectory was
+withdrawn for reproducibility, so it is a separate scientific/engineering
+qualification problem.
+
 ## CPU reference
 
 The frozen 250 m one-hour CPU release run completed in about 18 seconds versus about 99 seconds for debug on the tested setup. Release differed slightly from debug because of aggressive optimization but remained finite and physically comparable. Use debug for diagnosis, not throughput estimates.
