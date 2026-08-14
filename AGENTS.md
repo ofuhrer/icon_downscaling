@@ -58,7 +58,7 @@ optional unless they materially affect those requirements.
 - HICAR remote: `git@github.com:ofuhrer/HICAR.git`
 - Validated engineering branch: `feature/icon_downscaling`
 - Current experimental HICAR baseline:
-  `5d5574959f5c62feb183d184ab6ef99d2adfce80`
+  `5bee3c9264fb299260561959c66bed0422c8a219`
 - Available long/costly-run workflow: short segments managed by
   `orchestration/rd_campaign.py`
 

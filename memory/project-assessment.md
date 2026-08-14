@@ -197,6 +197,14 @@ stability.
 
 - Namelist rendering resolves NZ and density advection and rejects unresolved
   tokens or incompatible vertical geometry.
+- The retained post-campaign HICAR source is `5bee3c92`, a metadata-only
+  descendant of the running campaign's immutable `4a425677` executable. It
+  serializes `domain.auto_level`, `height_lowest_level`, `model_top_height` and
+  `stretch_fac` into output/restart provenance, eliminating the campaign's
+  narrow missing-20-m compatibility exception for future runs. The focused and
+  full CPU tester passed, and the clean canonical NVHPC/OpenACC+NCCL release
+  build completed as Balfrin job `5099057` in 5 min 16 s; executable SHA-256 is
+  `e8bfe2e68e192c80888553a68072c8dbc2fb42789d09c2dd809ea679ccff926e`.
 - Static construction is reproducible and includes authoritative HHL/HFL.
   Invariant terrain/mask/soil fields and the WorldCover 2021 epoch land-use
   product are kept separate and are joined explicitly during initialization.
