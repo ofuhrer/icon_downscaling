@@ -38,13 +38,15 @@ also reduces full-domain speed RMSE against the vertically interpolated
 forcing from 1.021 to 0.643 m s-1 at 10 m and from 0.907 to 0.579 m s-1 at
 50 m; correlations increase from 0.925/0.964 to 0.965/0.983. This confirms a
 closer target-grid amplitude/structure match, not observational skill. The
-effect persists into the first scored 00:10--04:00 block: Sx/TPI-off is faster
-in 90.2% of 10 m and 89.5% of 50 m core-land samples, by +0.315 and
-+0.262 m s-1 on average, while both variants remain below 30 m s-1. The
-response is not a summit-only artifact: the mean 10 m speed increase is
-positive in every predeclared elevation band, ranging from +0.244 m s-1 below
-500 m to +0.405 m s-1 at 1500--2000 m. The upper tail grows with elevation,
-but even the >=3000 m band remains bounded with no value above 30 m s-1.
+effect persists through the complete first scored 12 h segment: across
+204,787,800 core-land samples, Sx/TPI-off is faster in 90.6% of 10 m and 89.9%
+of 50 m samples, by +0.318 and +0.268 m s-1 on average. It is not a summit-only
+artifact: the mean 10 m increase is positive in every predeclared elevation
+band, ranging from +0.261 m s-1 below 500 m to +0.388 m s-1 at 1500--2000 m.
+The upper-tail response grows with elevation, but both variants remain finite
+and bounded with no value above 30 m s-1. This establishes mechanism and
+scored-period persistence; only the locked station evaluation establishes
+skill.
 
 Fresh independent daylight replicas showed that the selected one-block RRTMGP
 configuration still separates after repeated radiation calls, despite being
