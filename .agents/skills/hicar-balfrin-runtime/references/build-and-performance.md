@@ -294,6 +294,36 @@ two I/O servers, initialized multi-node NCCL, wrote output, and completed in
 13 s. It validates topology and correctness only; it is not a multi-node
 performance measurement.
 
+## National 200 m runtime profile
+
+Winter Sx/TPI-off campaign segment job `5098113` provides the first measured
+full-domain performance profile for the selected scientific stack. It advanced
+12 simulated hours on 12 A100 nodes with 48 compute ranks plus 12 CPU-only I/O
+ranks, RRTMG and output both at 600 s cadence. HICAR completed the integration
+in 4491.221 s, or 9.62 simulated hours per wall-clock hour. The enclosing batch
+lasted 01:18:28, or 9.18 simulated hours per wall-clock hour; its nonzero final
+status came only from the subsequently corrected missing legacy restart-
+provenance check and does not invalidate the model timing.
+
+| Timed component | Mean seconds | Share of HICAR total |
+|---|---:|---:|
+| RRTMG radiation | 3413.264 | 76.0% |
+| Advection | 658.906 | 14.7% |
+| Halo wait | 135.371 | 3.0% |
+| Microphysics | 102.172 | 2.3% |
+| PBL | 48.807 | 1.1% |
+| Output | 33.613 | 0.75% |
+| LSM | 19.969 | 0.44% |
+| Input | 18.671 | 0.42% |
+| Wind balance | 7.076 | 0.16% |
+
+Radiation, not forcing I/O or the variational wind solve, is therefore the
+primary runtime target. Do not alter the locked 600 s radiation cadence during
+the four-event scientific comparison. If the selected physics is retained
+after evaluation, profile and optimize the RRTMG implementation first; input
+streaming and forcing generation remain throughput concerns for long
+production, but they are not the dominant cost inside HICAR.
+
 ## CPU reference
 
 The frozen 250 m one-hour CPU release run completed in about 18 seconds versus about 99 seconds for debug on the tested setup. Release differed slightly from debug because of aggressive optimization but remained finite and physically comparable. Use debug for diagnosis, not throughput estimates.
