@@ -54,13 +54,17 @@ terminal restart and completion marker passed the campaign validator. On this
 selected 12-node RRTMG trajectory, the HICAR timing report attributes 3093 of
 4351 compute seconds (71%) to radiation and 758 seconds (17%) to advection,
 while reported output time is only 36 seconds. Radiation, not NetCDF output,
-is therefore the dominant model cost for this configuration. Spring has now
-completed its first 12-hour segment as well: all 73 exact 10-minute records
-across four files passed the in-job validator and independent scans of all 27
-time-dependent physical-core fields. The 10 m and 50 m maxima were 14.77 and
-16.41 m s-1, with no value above 30 m s-1, and the exact 12 UTC restart and
-completion marker were published. Its restart continuation is queued as the
-sole next model job.
+is therefore the dominant model cost for this configuration. Spring is now
+complete at 4/4 validated segments as well. Independent scans cover all 289
+exact 10-minute records from the 48-hour chain and all 27 time-dependent
+physical-core fields; every value is finite. The overall 10 m and 50 m maxima
+are 18.05 and 17.92 m s-1, with no value above 30 m s-1. Every segment
+published its exact terminal restart and completion marker. The final spring
+segment again shows that radiation dominates this configuration: 4192 of 5565
+reported compute seconds (75%) are radiation, 740 seconds (13%) are advection
+and only 36 seconds are output. Summer segment 0 has started as the sole
+12-node job on `normal`, so the campaign is 8/16 segments complete while
+remaining below the 50% node-use bound.
 
 Fresh independent daylight replicas showed that the selected one-block RRTMGP
 configuration still separates after repeated radiation calls, despite being
@@ -462,8 +466,10 @@ and NCCL; the executable is pinned by checksum.
    segments, 12-node topology, RRTMG and regular boundary relaxation so the
    intervention remains isolated. Winter has completed and passed all four
    segment validators plus the independent all-output finiteness/wind-bounds
-   scan; spring is 1/4 complete and its segment-1 restart continuation is
-   queued under the one-model normal-partition cap.
+   scan; spring has also completed all four segments and passed the same
+   independent 289-record finiteness and wind-bound audit. Summer segment 0 is
+   now running under the one-model normal-partition cap, with autumn still to
+   follow.
 2. Evaluate that fresh campaign on the locked 147-station cohort and the
    preregistered vector/speed and terrain safeguards. Until it passes the full
    multi-event decision, retain interpolation-only as the operational baseline
