@@ -84,7 +84,12 @@ record the exact mismatch from HICAR's restart report, and change nothing else.
 Do not edit the checkpoint. Builds predating restart-domain provenance may use
 `HICAR_ALLOW_MISSING_RESTART_DOMAIN_PROVENANCE=1`; this accepts only a missing
 `domain.height_lowest_level=20` attribute, never a wrong/non-finite value or
-any other mismatch.
+any other mismatch. The retained post-campaign baseline `5bee3c92` serializes
+`domain.auto_level`, `height_lowest_level`, `model_top_height` and
+`stretch_fac`; do not enable the compatibility exception for outputs written
+by that commit or later. It remains only for immutable `4a425677` campaign
+restarts whose 20 m geometry is independently bound by the rendered namelist
+and static-domain checks.
 
 Success requires HICAR's completion message, nonempty output, and the expected
 terminal restart. For scientific assessment also inspect solver residuals,
