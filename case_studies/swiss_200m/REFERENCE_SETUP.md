@@ -22,6 +22,22 @@ studies constrain process choices, but none establishes a national,
 all-season 100--200 m wind configuration or a published multi-year wind
 climatology.
 
+### Published evidence boundary
+
+| Study | Atmospheric scope | Relevant precedent | What it does not establish |
+| --- | --- | --- | --- |
+| Reynolds et al. (2023), HICAR v1.1 | January 2017, 250 m, roughly 280 x 170 km; COSMO1 forcing | National Alpine scale; SLEVE and variational wind; TPI/Sx; Noah, Morrison, YSU and RRTMG | Quantitative national station-wind skill, other seasons, Noah-MP or this fork's wind operator |
+| Reynolds et al. (2024) | 1 km parent from 1 October 2021--10 May 2022; nested 50 m run from 25 April--10 May over the Davos region | Noah-MP, revised-MM5 surface exchange, YSU, RRTMG, terrain direct/diffuse radiation and high-resolution wind/temperature observations | Seasonal 50 m atmospheric integration or national-domain behavior |
+| Berg et al. (2024) | HICAR-derived 50, 100 and 250 m forcing for 1 October 2016--31 July 2017 over a 14 x 12.5 km Davos domain | Seasonal continuity and downstream snow-pattern value | Direct atmospheric wind verification or national transferability |
+| This reference | Four independent 48 h, 200 m national events driven by REA-L-CH1; second 24 h scored at SwissMetNet sites | Controlled national wind added-value test across four seasons | A climatology, multi-year stability or optimal parameter tuning |
+
+The selected setup therefore preserves published components only where they
+remain compatible with direct evidence from this domain. Differences are
+deliberate and visible: REA-L rather than COSMO forcing, 80 vertical levels,
+the current adjoint projection with fixed alpha 1, Noah-MP option 1, regular
+full-domain relaxation, and bundled Sx/TPI disabled pending the four-event
+result.
+
 ## Domain and terrain
 
 - 200 m azimuthal-equidistant grid, 2061 x 1431 cells (412 x 286 km), centred
