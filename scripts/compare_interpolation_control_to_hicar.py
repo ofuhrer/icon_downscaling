@@ -42,7 +42,27 @@ def rmse_across_stations(values: list[float]) -> float:
     return float(np.sqrt(np.mean(np.square(values))))
 
 
-def compare(control: dict, evaluators: dict[str, dict], parity_tolerance: float) -> dict:
+def decision_cohort(summary: dict) -> set[str]:
+    try:
+        cohort = summary["wind_decision_readout"]["cohort"]
+        keys = cohort["station_keys"]
+        reported_count = int(cohort["station_count"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError("national summary lacks a valid wind decision cohort") from error
+    if not isinstance(keys, list) or not all(isinstance(key, str) and key for key in keys):
+        raise ValueError("national summary wind decision station_keys are invalid")
+    result = set(keys)
+    if len(result) != len(keys) or reported_count != len(result):
+        raise ValueError("national summary wind decision cohort count/keys are inconsistent")
+    return result
+
+
+def compare(
+    control: dict,
+    evaluators: dict[str, dict],
+    parity_tolerance: float,
+    expected_cohort: set[str] | None = None,
+) -> dict:
     if control.get("schema_version") != 1:
         raise ValueError("interpolation control must use schema_version 1")
     cohort = set.intersection(
@@ -54,6 +74,13 @@ def compare(control: dict, evaluators: dict[str, dict], parity_tolerance: float)
     )
     if not cohort:
         raise ValueError("fixed four-season comparison cohort is empty")
+    if expected_cohort is not None and cohort != expected_cohort:
+        missing = sorted(expected_cohort - cohort)
+        extra = sorted(cohort - expected_cohort)
+        raise ValueError(
+            "interpolation comparison cohort differs from the preregistered "
+            f"national decision cohort: missing={missing[:5]}, extra={extra[:5]}"
+        )
 
     parity_differences = []
     events = []
@@ -132,6 +159,13 @@ def compare(control: dict, evaluators: dict[str, dict], parity_tolerance: float)
         "schema_version": 1,
         "cohort_station_count": len(cohort),
         "cohort_station_keys": sorted(cohort),
+        "cohort_reconciliation": {
+            "expected_national_decision_cohort_supplied": expected_cohort is not None,
+            "exact_match": expected_cohort is None or cohort == expected_cohort,
+            "expected_station_count": (
+                len(expected_cohort) if expected_cohort is not None else None
+            ),
+        },
         "rea_l_metric_parity": {
             "comparison_count": len(parity_differences),
             "maximum_absolute_difference_m_s": maximum_parity_difference,
@@ -153,6 +187,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--control-report", required=True, type=Path)
     parser.add_argument("--evaluation-root", required=True, type=Path)
+    parser.add_argument("--national-summary", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--parity-tolerance", type=float, default=1.0e-12)
     args = parser.parse_args()
@@ -163,7 +198,13 @@ def main() -> int:
         )
         for season in SEASONS
     }
-    result = compare(control, evaluators, args.parity_tolerance)
+    summary = json.loads(args.national_summary.read_text(encoding="utf-8"))
+    result = compare(
+        control,
+        evaluators,
+        args.parity_tolerance,
+        expected_cohort=decision_cohort(summary),
+    )
     atomic_json(args.output, result)
     print(f"Wrote {args.output}")
     return 0

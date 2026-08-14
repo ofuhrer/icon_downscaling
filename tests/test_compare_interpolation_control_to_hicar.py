@@ -44,8 +44,13 @@ def fixtures(rea_offset: float = 0.0) -> tuple[dict, dict]:
 
 def test_compare_requires_and_reports_rea_l_parity():
     control, evaluators = fixtures()
-    result = MODULE.compare(control, evaluators, 1.0e-12)
+    result = MODULE.compare(control, evaluators, 1.0e-12, {"A:1", "B:2"})
     assert result["cohort_station_count"] == 2
+    assert result["cohort_reconciliation"] == {
+        "expected_national_decision_cohort_supplied": True,
+        "exact_match": True,
+        "expected_station_count": 2,
+    }
     assert result["rea_l_metric_parity"]["passed"] is True
     assert result["rea_l_metric_parity"]["maximum_absolute_difference_m_s"] == 0.0
     speed = result["event_evidence"][0]["metrics"]["wind_speed_10m_m_s"]
@@ -64,3 +69,27 @@ def test_compare_rejects_rea_l_metric_mismatch():
     control, evaluators = fixtures(rea_offset=1.0e-6)
     with pytest.raises(ValueError, match="REA-L station RMSE parity failed"):
         MODULE.compare(control, evaluators, 1.0e-12)
+
+
+def test_compare_rejects_cohort_different_from_national_decision():
+    control, evaluators = fixtures()
+    with pytest.raises(ValueError, match="preregistered national decision cohort"):
+        MODULE.compare(control, evaluators, 1.0e-12, {"A:1"})
+
+
+def test_decision_cohort_reconciles_count_and_unique_keys():
+    assert MODULE.decision_cohort(
+        {
+            "wind_decision_readout": {
+                "cohort": {"station_count": 2, "station_keys": ["A:1", "B:2"]}
+            }
+        }
+    ) == {"A:1", "B:2"}
+    with pytest.raises(ValueError, match="count/keys are inconsistent"):
+        MODULE.decision_cohort(
+            {
+                "wind_decision_readout": {
+                    "cohort": {"station_count": 2, "station_keys": ["A:1", "A:1"]}
+                }
+            }
+        )
