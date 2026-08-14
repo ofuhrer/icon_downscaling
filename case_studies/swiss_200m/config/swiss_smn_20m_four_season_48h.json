@@ -1,10 +1,10 @@
 {
-  "root": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/campaign_regular_relaxation_rrtmg_water_alpha1_v1",
-  "repo_root": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/source/coordinator",
+  "root": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/campaign_regular_relaxation_rrtmg_water_alpha1_sxoff_v1",
+  "repo_root": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/source/coordinator-sxoff-v1",
   "forcing_dir": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/input/forcing_sst_local_baseline_v1",
   "python": "/scratch/mch/olifu/icon_hicar/venv_static/bin/python",
   "hicar_executable": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/build/hicar-gpu-nccl-4a425677/HICAR_gpu",
-  "hicar_support_dir": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/source/coordinator/HICAR/run",
+  "hicar_support_dir": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/source/coordinator-sxoff-v1/HICAR/run",
   "hicar_build_provenance": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/build/hicar-gpu-nccl-4a425677/hicar_build_provenance.txt",
   "rbf_weights": "/scratch/mch/olifu/icon_hicar/rd/reference_setup/input/weights/rea_l_to_smn_40km_200m_reference.nc",
   "segment_hours": 12,
@@ -30,6 +30,7 @@
   "radiation_update_interval": 600,
   "radiation_scheme": "rrtmg",
   "alpha_const": 1.0,
+  "disable_sx": true,
   "seasons": [
     {
       "name": "winter",
