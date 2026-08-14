@@ -79,6 +79,51 @@ def require_finite_outputs(paths: list[Path]) -> None:
         raise SystemExit("non-finite model output in domain core: " + ", ".join(failures[:20]))
 
 
+def require_bounded_output_winds(
+    paths: list[Path], maximum_speed_ms: float
+) -> dict[str, float]:
+    """Require bounded 10 m and 50 m winds across every closed output file."""
+    maxima = {"wind10m_max_ms": 0.0, "wind50m_max_ms": 0.0}
+    for path in paths:
+        with netCDF4.Dataset(path) as dataset:
+            required = {"height_agl", "u10m", "v10m", "u_agl", "v_agl"}
+            missing = sorted(required.difference(dataset.variables))
+            if missing:
+                raise SystemExit(f"{path}: missing bounded-wind variables {missing}")
+            height_matches = np.flatnonzero(
+                np.isclose(np.asarray(dataset["height_agl"][:]), 50.0)
+            )
+            if height_matches.size != 1:
+                raise SystemExit(f"{path}: expected exactly one 50 m AGL output level")
+            height_index = int(height_matches[0])
+            specifications = (
+                ("wind10m_max_ms", "u10m", "v10m", None),
+                ("wind50m_max_ms", "u_agl", "v_agl", height_index),
+            )
+            for key, u_name, v_name, level in specifications:
+                if dataset[u_name].shape[0] != dataset[v_name].shape[0]:
+                    raise SystemExit(f"{path}: {u_name}/{v_name} time dimensions differ")
+                for index in range(dataset[u_name].shape[0]):
+                    if level is None:
+                        u_values = core_values(dataset[u_name][index])
+                        v_values = core_values(dataset[v_name][index])
+                    else:
+                        u_values = core_values(dataset[u_name][index, level])
+                        v_values = core_values(dataset[v_name][index, level])
+                    maxima[key] = max(
+                        maxima[key], float(np.max(np.hypot(u_values, v_values)))
+                    )
+    failures = {
+        name: value for name, value in maxima.items() if value > maximum_speed_ms
+    }
+    if failures:
+        raise SystemExit(
+            f"output wind speed exceeds {maximum_speed_ms:g} m s-1: "
+            + json.dumps(failures, sort_keys=True)
+        )
+    return {"limit_ms": maximum_speed_ms, **maxima}
+
+
 def require_restart_state(dataset: netCDF4.Dataset) -> None:
     bounds = {
         "potential_temperature": (150.0, 500.0),
@@ -174,6 +219,11 @@ def main() -> int:
         "--radiation-scheme", choices=("rrtmgp", "rrtmg"), default="rrtmgp"
     )
     parser.add_argument("--alpha-const", type=float, default=1.0)
+    parser.add_argument(
+        "--max-wind-speed-ms",
+        type=float,
+        help="optional fail-closed physical-core bound for 10 m and 50 m wind",
+    )
     parser.add_argument("--forcing-list", type=Path, required=True)
     parser.add_argument(
         "--boundary-list",
@@ -205,6 +255,13 @@ def main() -> int:
         end <= start
         or args.output_interval <= 0
         or args.radiation_update_interval <= 0.0
+        or (
+            args.max_wind_speed_ms is not None
+            and (
+                not math.isfinite(args.max_wind_speed_ms)
+                or args.max_wind_speed_ms <= 0.0
+            )
+        )
     ):
         raise SystemExit("invalid segment interval")
     if not start < restart_time <= end:
@@ -223,6 +280,11 @@ def main() -> int:
             f"do not equal expected {expected[0]}..{expected[-1]} ({len(expected)})"
         )
     require_finite_outputs(output_files)
+    wind_speed_bounds = (
+        require_bounded_output_winds(output_files, args.max_wind_speed_ms)
+        if args.max_wind_speed_ms is not None
+        else None
+    )
 
     restart_times = decode_times(args.restart)
     if restart_times != [restart_time]:
@@ -288,6 +350,7 @@ def main() -> int:
         "radiation_scheme": args.radiation_scheme,
         "input_list_policy": "bracketing_superset" if args.allow_input_superset else "exact_segment",
         "missing_domain_height_provenance": missing_domain_height_provenance,
+        "wind_speed_bounds": wind_speed_bounds,
     }, indent=2, sort_keys=True))
     return 0
 

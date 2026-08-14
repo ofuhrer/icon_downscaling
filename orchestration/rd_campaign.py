@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 import fcntl
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import socket
@@ -315,6 +316,10 @@ class Campaign:
         self.radiation_scheme = str(
             self.config.get("radiation_scheme", "rrtmgp")
         ).lower()
+        max_wind_speed = self.config.get("max_wind_speed_ms")
+        self.max_wind_speed_ms = (
+            None if max_wind_speed is None else float(max_wind_speed)
+        )
         self.use_sparse_lbc = bool(self.config.get("use_sparse_lbc", True))
         self.full_season_input_lists = bool(
             self.config.get("full_season_input_lists", False)
@@ -354,6 +359,11 @@ class Campaign:
             raise ValueError("input_partitions must not be empty")
         if self.radiation_scheme not in {"rrtmgp", "rrtmg"}:
             raise ValueError("radiation_scheme must be rrtmgp or rrtmg")
+        if self.max_wind_speed_ms is not None and (
+            not math.isfinite(self.max_wind_speed_ms)
+            or self.max_wind_speed_ms <= 0.0
+        ):
+            raise ValueError("max_wind_speed_ms must be finite and positive")
         if self.input_column_workers > self.input_cpus:
             raise ValueError("input_column_workers must not exceed input_cpus")
         if (
@@ -642,6 +652,11 @@ class Campaign:
                     "HICAR_RADIATION_SCHEME": self.radiation_scheme,
                     "HICAR_DISABLE_SX": "1" if self.config.get("disable_sx", False) else "0",
                     "HICAR_ALPHA_CONST": str(self.config.get("alpha_const", 1.0)),
+                    "HICAR_MAX_WIND_SPEED_MS": (
+                        ""
+                        if self.max_wind_speed_ms is None
+                        else str(self.max_wind_speed_ms)
+                    ),
                     "HICAR_ALLOW_MISSING_RESTART_DOMAIN_PROVENANCE": (
                         "1"
                         if self.config.get(

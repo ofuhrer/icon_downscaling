@@ -30,6 +30,7 @@
   "radiation_update_interval": 600,
   "radiation_scheme": "rrtmg",
   "alpha_const": 1.0,
+  "max_wind_speed_ms": 30.0,
   "disable_sx": true,
   "allow_missing_restart_domain_provenance": true,
   "seasons": [

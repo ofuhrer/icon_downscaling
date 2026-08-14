@@ -26,6 +26,7 @@
   "radiation_update_interval": 600,
   "radiation_scheme": "rrtmg",
   "alpha_const": 1.0,
+  "max_wind_speed_ms": 30.0,
   "seasons": [
     {
       "name": "autumn",

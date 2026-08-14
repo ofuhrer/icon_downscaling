@@ -167,6 +167,7 @@ def campaign(
     model_partition="preemptible",
     max_active_models=None,
     model_max_partition_fraction=None,
+    max_wind_speed_ms=None,
     allow_missing_restart_domain_provenance=False,
 ) -> Campaign:
     config = {
@@ -202,6 +203,8 @@ def campaign(
         config["max_active_models"] = max_active_models
     if model_max_partition_fraction is not None:
         config["model_max_partition_fraction"] = model_max_partition_fraction
+    if max_wind_speed_ms is not None:
+        config["max_wind_speed_ms"] = max_wind_speed_ms
     if input_lookahead_segments is not None:
         config["input_lookahead_segments"] = input_lookahead_segments
     path = tmp_path / "campaign.json"
@@ -467,6 +470,7 @@ def test_radiation_configuration_is_explicit_in_model_environment(
         tmp_path,
         full_season_input_lists=False,
         radiation_scheme="rrtmg",
+        max_wind_speed_ms=30.0,
         allow_missing_restart_domain_provenance=True,
     )
     configured.config["seasons"][0]["end"] = "2020-10-02T01:00:00"
@@ -497,8 +501,22 @@ def test_radiation_configuration_is_explicit_in_model_environment(
     assert submitted[0]["HICAR_RADIATION_UPDATE_INTERVAL"] == "600.0"
     assert submitted[0]["HICAR_RADIATION_SCHEME"] == "rrtmg"
     assert submitted[0]["HICAR_ALPHA_CONST"] == "1.0"
+    assert submitted[0]["HICAR_MAX_WIND_SPEED_MS"] == "30.0"
     assert submitted[0]["HICAR_ALLOW_MISSING_RESTART_DOMAIN_PROVENANCE"] == "1"
     assert submitted[0]["HICAR_BUILD_PROVENANCE"] == "build.txt"
+
+
+def test_invalid_maximum_wind_speed_is_rejected(tmp_path) -> None:
+    try:
+        campaign(
+            tmp_path,
+            full_season_input_lists=False,
+            max_wind_speed_ms=float("nan"),
+        )
+    except ValueError as error:
+        assert "max_wind_speed_ms" in str(error)
+    else:
+        raise AssertionError("non-finite maximum wind speed was accepted")
 
 
 def test_unknown_radiation_scheme_is_rejected(tmp_path) -> None:

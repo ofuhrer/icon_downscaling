@@ -68,6 +68,11 @@ R&D campaign and must remain visible in segment diagnostics.
 - finite P/T/moisture/winds, with upper-level extrema inspected;
 - converged wind solve and materially reduced continuity residual;
 - no discontinuity at restart joins;
+- the selected bounded R&D configs set `max_wind_speed_ms=30`; each completed
+  segment must scan all physical-core 10 m and 50 m winds and fail before its
+  completion marker if either exceeds that bound. This is a domain-specific
+  rejection gate for the diagnosed-alpha pathology, not a universal Alpine
+  wind climatology limit;
 - water/precipitation stores interpreted with cumulative versus interval
   semantics explicitly handled;
 - station and REA-L comparisons use identical ending-hour intervals/sites;

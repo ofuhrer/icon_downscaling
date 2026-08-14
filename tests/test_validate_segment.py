@@ -98,6 +98,39 @@ def test_legacy_domain_height_exception_is_exact_and_explicit() -> None:
     assert "domain.height_lowest_level" in wrong
 
 
+def test_output_wind_bound_checks_10m_and_50m(tmp_path) -> None:
+    path = tmp_path / "output.nc"
+    with netCDF4.Dataset(path, "w") as dataset:
+        dataset.createDimension("time", 1)
+        dataset.createDimension("height", 2)
+        dataset.createDimension("y", 8)
+        dataset.createDimension("x", 8)
+        height = dataset.createVariable("height_agl", "f4", ("height",))
+        height[:] = [20.0, 50.0]
+        for name, dimensions in {
+            "u10m": ("time", "y", "x"),
+            "v10m": ("time", "y", "x"),
+            "u_agl": ("time", "height", "y", "x"),
+            "v_agl": ("time", "height", "y", "x"),
+        }.items():
+            dataset.createVariable(name, "f4", dimensions)[:] = 0.0
+        dataset["u10m"][0, 3, 3] = 29.0
+        dataset["u_agl"][0, 1, 3, 3] = 28.0
+
+    maxima = VALIDATOR.require_bounded_output_winds([path], 30.0)
+    assert maxima["wind10m_max_ms"] == 29.0
+    assert maxima["wind50m_max_ms"] == 28.0
+
+    with netCDF4.Dataset(path, "a") as dataset:
+        dataset["v_agl"][0, 1, 3, 3] = 11.0
+    try:
+        VALIDATOR.require_bounded_output_winds([path], 30.0)
+    except SystemExit as error:
+        assert "exceeds 30" in str(error)
+    else:
+        raise AssertionError("excessive 50 m wind was accepted")
+
+
 def test_restart_comparison_excludes_three_cell_guard_region() -> None:
     class Variable:
         def __init__(self, values: np.ndarray):

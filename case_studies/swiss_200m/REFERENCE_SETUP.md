@@ -145,6 +145,11 @@ result.
   and linear-theory corrections remain off: the former was too strong in the
   published small-domain evaluation, and the latter would duplicate
   mountain-wave structure already present in REA-L.
+- Set the segment validator's physical-core 10 m/50 m wind bound to 30 m s-1
+  for these four bounded events. The dynamic-alpha initialization violated this
+  gate by a wide margin, whereas every qualified alpha-one/Sx-off result so far
+  remains below it. The threshold is explicit experiment acceptance, not a
+  claim that all physically possible Alpine winds are below 30 m s-1.
 
 ## Physical parameterizations
 

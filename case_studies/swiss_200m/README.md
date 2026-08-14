@@ -14,7 +14,9 @@ The selected baseline is explicit in `config/hicar_swiss_200m.nml.in`:
   conservative fixed alpha 1. The diagnosed dynamic-alpha coupling produced
   rejected localized high-terrain spikes in this fork/domain. The former
   Sx/TPI setup materially over-damped speed in bounded spring and autumn
-  sensitivities; both mechanisms remain explicit research alternatives;
+  sensitivities; both mechanisms remain explicit research alternatives. The
+  selected configs fail segment publication if physical-core 10 m or 50 m
+  wind exceeds the experiment-specific 30 m s-1 bound;
 - Noah-MP with SMI initialization and four depth-varying soil textures;
 - ICON SWE, snow depth/density, and bulk snow temperature on cold starts;
 - RRTMG every 600 s, with terrain shading and direct/diffuse shortwave
