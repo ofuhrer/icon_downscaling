@@ -14,7 +14,7 @@ REA-L in winter, spring and summer but materially worse in autumn. HICAR adds
 no material vector benefit over interpolation in the first three events and
 materially degrades their speed, while it materially improves both speed and
 vector error over interpolation in autumn. This isolates an amplitude-damping
-tradeoff rather than robust four-event dynamical added value. One bounded
+tradeoff rather than robust four-event dynamical added value. Bounded
 Sx/TPI-off restart sensitivities now establish immediate causal over-damping in
 both the spring weak-wind and autumn strong-wind events. In spring, national
 speed RMSE improves materially from 1.800 to 1.627 m s-1 while vector RMSE
@@ -25,8 +25,9 @@ speed (1.830 m s-1) and retains a material vector advantage over REA-L
 (2.613 versus 2.839 m s-1). High-elevation and ridge speed also improve
 materially. Alpha-one HICAR without bundled Sx/TPI is therefore the selected
 next R&D reference. This bounded one-hour evidence establishes mechanism, not
-four-event skill; a fresh multi-event Sx/TPI-off integration and evaluation is
-required before production use.
+four-event skill; a fresh multi-event Sx/TPI-off integration is now running
+sequentially on the capacity-bounded `normal` partition and requires its locked
+evaluation before production use.
 
 Fresh independent daylight replicas showed that the selected one-block RRTMGP
 configuration still separates after repeated radiation calls, despite being
@@ -142,11 +143,13 @@ than a claimed optimum.
 
 - RK3, CFL factor 1.6, third-order horizontal/vertical advection, FCT option 1,
   density transport and no extra constant-z diffusion.
-- The fork's adjoint variational wind projection with fixed alpha 1, Sx 600
-  m/30 degrees, TPI 4 km/200, 500 m smoothing, two passes, cap 2500 and hourly
-  updates; thermal and linear-theory corrections off. Dynamic alpha remains a
-  scientifically relevant mechanism but is excluded from this fork/domain
-  reference because of the quantified initialization spikes above.
+- The fork's adjoint variational wind projection with fixed alpha 1, bundled
+  Sx/TPI modification off, two passes, cap 2500 and hourly updates; thermal and
+  linear-theory corrections off. The former Sx 600 m/30 degree, TPI 4 km/200 m
+  and 500 m smoothing setup materially over-damped speed in exact spring and
+  autumn +24 h sensitivities. Dynamic alpha remains a scientifically relevant
+  mechanism but is excluded from this fork/domain reference because of the
+  quantified initialization spikes above.
 - Morrison, YSU, Noah-MP, revised-MM5, simple prescribed-water temperature,
   RRTMG and Noah-MP internal snow; no cumulus scheme. YSU top-down radiative
   mixing remains explicitly disabled.
@@ -386,11 +389,11 @@ approximation, not a convergence claim. All four season-specific runtime
 domains are complete. The clean final HICAR source is built with NVHPC/OpenACC
 and NCCL; the executable is pinned by checksum.
 
-1. Create a fresh four-event configuration with alpha one and bundled Sx/TPI
-   off, reusing the validated executable, statics and ready forcing cache. Keep
-   the same 48 h trajectories, 24 h spin-up, four 12 h segments, 12-node
-   topology, RRTMG and regular boundary relaxation so the intervention remains
-   isolated.
+1. Complete the running fresh four-event campaign with alpha one and bundled
+   Sx/TPI off. It reuses the validated executable, statics and ready forcing
+   cache and keeps the same 48 h trajectories, 24 h spin-up, four 12 h
+   segments, 12-node topology, RRTMG and regular boundary relaxation so the
+   intervention remains isolated.
 2. Evaluate that fresh campaign on the locked 147-station cohort and the
    preregistered vector/speed and terrain safeguards. Until it passes the full
    multi-event decision, retain interpolation-only as the operational baseline

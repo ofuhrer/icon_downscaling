@@ -7,15 +7,20 @@ HICAR practice and the documented behavior of the present source. Parameter
 tuning starts only after this complete setup has been run against SwissMetNet
 and native REA-L-CH1 on identical station/time pairs.
 
-The closest published precedent is HICAR v1.1 over the Swiss Alps
-([Reynolds et al., 2023](https://doi.org/10.5194/gmd-16-5049-2023)). Its
-national experiment was 250 m and January-only, so no published HICAR setup is
-an already validated national, all-season 100--200 m wind configuration. The
-later 50 m experiments
-([Reynolds et al., 2024](https://doi.org/10.3389/feart.2024.1388416)) and
-seasonal snow work
-([Berg et al., 2024](https://doi.org/10.3389/feart.2024.1393260)) constrain
-surface and terrain-radiation choices but cover much smaller domains.
+The closest published national precedent is HICAR v1.1 over the Swiss Alps
+([Reynolds et al., 2023](https://doi.org/10.5194/gmd-16-5049-2023)): a roughly
+280 x 170 km, 250 m simulation for January 2017, evaluated primarily through
+monthly precipitation patterns and qualitative flow examples. It is not an
+all-season national wind validation. Later work ran a 1 km parent from
+October 2021 to May 2022 but the nested 50 m atmospheric experiment covered
+only 25 April--10 May over a much smaller domain
+([Reynolds et al., 2024](https://doi.org/10.3389/feart.2024.1388416)). HICAR
+also supplied 50--250 m forcing for a catchment-scale 2016/2017 snow-season
+study
+([Berg et al., 2024](https://doi.org/10.3389/feart.2024.1393260)). These
+studies constrain process choices, but none establishes a national,
+all-season 100--200 m wind configuration or a published multi-year wind
+climatology.
 
 ## Domain and terrain
 
@@ -105,12 +110,20 @@ surface and terrain-radiation choices but cover much smaller domains.
   30 m s-1; the 50 m maximum fell from 34.60 to 21.262 m s-1. This rejects that
   fork/domain coupling for the selected campaign. Fixed alpha is the stable
   end member, not the published dynamic HICAR reference or a claimed optimum.
-- Apply Sx/TPI with `Sx_dmax=600 m`, `Sx_scale_ang=30 degrees`,
-  `TPI_dmax=4000 m`, `TPI_scale=200`, and 500 m wind smoothing. Use two wind
-  adjustment passes, a 2500-iteration solver cap and one update per hourly
-  input interval. Thermal and linear-theory corrections remain off: the
-  former was too strong in the published small-domain evaluation, and the
-  latter would duplicate mountain-wave structure already present in REA-L.
+- Disable the bundled Sx/TPI wind modification in the selected reference.
+  Published HICAR v1.1 used a 4 km TPI exposure term and stability-dependent
+  3-D Sx sheltering, while explicitly describing its correction values as a
+  sparse, partly empirical parameter sample. In exact +24 h sensitivities,
+  disabling this project's former 600 m/30 degree Sx, 4 km/200 m TPI and
+  500 m smoothing materially improved spring and autumn speed RMSE without a
+  material vector-RMSE penalty, and retained autumn's vector advantage over
+  REA-L. This is an evidence-based departure from the published formulation,
+  not a claim that terrain exposure is unimportant; the fresh four-event run
+  must establish whether it generalizes. Use two wind-adjustment passes, a
+  2500-iteration solver cap and one update per hourly input interval. Thermal
+  and linear-theory corrections remain off: the former was too strong in the
+  published small-domain evaluation, and the latter would duplicate
+  mountain-wave structure already present in REA-L.
 
 ## Physical parameterizations
 
@@ -153,10 +166,12 @@ surface and terrain-radiation choices but cover much smaller domains.
 ## Runs and verification
 
 - Each season is one 48 h continuous physical trajectory split into 12 h
-  restart segments on the preemptible partition. The first 24 h are spin-up;
-  the following 24 h reproduce the selected winter, spring, summer and autumn
-  evaluation events. A final daylight turnover and continuous-versus-restart
-  check is required after the complete setup changes, not for tuning it.
+  restart segments. Run these on `normal`, at most one 12-node segment at a
+  time, with the controller's 50% partition-capacity guard. The first 24 h are
+  spin-up; the following 24 h reproduce the selected winter, spring, summer
+  and autumn evaluation events. A final daylight turnover and
+  continuous-versus-restart check is required after the complete setup
+  changes, not for tuning it.
 - Each segment lists only the hourly regular-forcing records bracketing that
   segment. Ready records for the next segment can therefore be generated while
   the current segment runs; the shared endpoint is reused. A daylight 2 x 1 h
