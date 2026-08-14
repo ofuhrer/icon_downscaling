@@ -46,7 +46,15 @@ band, ranging from +0.261 m s-1 below 500 m to +0.388 m s-1 at 1500--2000 m.
 The upper-tail response grows with elevation, but both variants remain finite
 and bounded with no value above 30 m s-1. This establishes mechanism and
 scored-period persistence; only the locked station evaluation establishes
-skill.
+skill. Winter is now complete at 4/4 validated 12-hour segments. The final
+scored segment contains 72 exact 10-minute records in three closed files; all
+27 time-dependent physical-core fields are finite, and its 10 m/50 m wind
+maxima are 23.57/25.58 m s-1 with no value above 30 m s-1. Its exact 00 UTC
+terminal restart and completion marker passed the campaign validator. On this
+selected 12-node RRTMG trajectory, the HICAR timing report attributes 3093 of
+4351 compute seconds (71%) to radiation and 758 seconds (17%) to advection,
+while reported output time is only 36 seconds. Radiation, not NetCDF output,
+is therefore the dominant model cost for this configuration.
 
 Fresh independent daylight replicas showed that the selected one-block RRTMGP
 configuration still separates after repeated radiation calls, despite being
@@ -440,7 +448,9 @@ and NCCL; the executable is pinned by checksum.
    Sx/TPI off. It reuses the validated executable, statics and ready forcing
    cache and keeps the same 48 h trajectories, 24 h spin-up, four 12 h
    segments, 12-node topology, RRTMG and regular boundary relaxation so the
-   intervention remains isolated.
+   intervention remains isolated. Winter has completed and passed all four
+   segment validators plus the independent all-output finiteness/wind-bounds
+   scan; spring is now running under the one-model normal-partition cap.
 2. Evaluate that fresh campaign on the locked 147-station cohort and the
    preregistered vector/speed and terrain safeguards. Until it passes the full
    multi-event decision, retain interpolation-only as the operational baseline
