@@ -2,3 +2,10 @@
 
 pytest>=8
 ruff>=0.13
+
+# Read and execute the readiness-analysis notebook in the portable test suite.
+ipykernel>=6.29
+matplotlib>=3.8
+nbclient>=0.10
+nbformat>=5.10
+pandas>=2.2
