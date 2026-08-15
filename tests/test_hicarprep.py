@@ -73,6 +73,9 @@ from preprocessing.hicarprep.surface import (
 from preprocessing.hicarprep.surface_validation import validate_surface_case
 
 
+NOAHMP_STAS_FIXTURE = Path(__file__).parent / "fixtures" / "noahmp_stas_hydraulics.tbl"
+
+
 class RegistryAndStaticTests(unittest.TestCase):
     def test_registry_separates_long_run_lifetimes(self) -> None:
         registry = FieldRegistry.default()
@@ -1324,8 +1327,7 @@ class SurfaceStateTests(unittest.TestCase):
         mass = np.full((thickness.size, 1), source_theta) * (1000.0 * thickness[:, None])
         relative = icon_soil_water_to_relative_saturation(mass, np.array([5]))
         np.testing.assert_allclose(relative, source_fraction)
-        table = Path(__file__).resolve().parents[1] / "HICAR" / "run" / "NoahmpTable.TBL"
-        hydraulics = parse_noahmp_stas_hydraulics(table)
+        hydraulics = parse_noahmp_stas_hydraulics(NOAHMP_STAS_FIXTURE)
         target = noahmp_relative_saturation_to_vwc(
             np.full((4, 1, 1), source_fraction), np.array([[6]]), hydraulics
         )
@@ -1410,7 +1412,7 @@ class SurfaceStateTests(unittest.TestCase):
                 dataset.valid_time = "2020-01-01T00:00:00Z"
 
             weights = build_rbf_weights(source_lat, source_lon, target_lat, target_lon, donors=10)
-            table = Path(__file__).resolve().parents[1] / "HICAR" / "run" / "NoahmpTable.TBL"
+            table = NOAHMP_STAS_FIXTURE
             prepare_surface_state(
                 source,
                 static,

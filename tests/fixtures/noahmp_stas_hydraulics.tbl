@@ -1,0 +1,9 @@
+! Minimal Noah-MP STAS hydraulics fixture for portable coordinator tests.
+! Values match the table copied from the pinned Noah-MP source by HICAR's
+! CMake configuration; unrelated runtime parameters are intentionally omitted.
+&noahmp_soil_stas_parameters
+ DRYSMC = 0.010, 0.028, 0.047, 0.084, 0.061, 0.066, 0.069, 0.120, 0.103, 0.100, 0.126, 0.138, 0.066, 0.000, 0.006, 0.028, 0.030, 0.006, 0.010
+ MAXSMC = 0.339, 0.421, 0.434, 0.476, 0.484, 0.439, 0.404, 0.464, 0.465, 0.406, 0.468, 0.468, 0.439, 1.000, 0.200, 0.421, 0.468, 0.200, 0.339
+ REFSMC = 0.192, 0.283, 0.312, 0.360, 0.347, 0.329, 0.315, 0.387, 0.382, 0.338, 0.404, 0.412, 0.329, 0.000, 0.170, 0.283, 0.454, 0.170, 0.192
+ WLTSMC = 0.010, 0.028, 0.047, 0.084, 0.061, 0.066, 0.069, 0.120, 0.103, 0.100, 0.126, 0.138, 0.066, 0.000, 0.006, 0.028, 0.030, 0.006, 0.010
+/
