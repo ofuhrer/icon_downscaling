@@ -3,31 +3,49 @@
 ## Current conclusion
 
 The project has a literature-led reference configuration, a GPU path that is
-bit-reproducible across independent placements, and a completed four-event
-national evaluation. Segmented restarts are numerically, not bitwise,
-reproducible. The preregistered wind decision is **mixed**, not added-value
-qualification: vector RMSE is non-degrading in all four events and materially
-better in autumn, but scalar speed RMSE is materially worse in winter, spring
-and summer. The interpolation-only control is complete and reproduces the
-evaluator's native-REA-L station RMSEs to `1.8e-15 m s-1`. It is neutral versus
-REA-L in winter, spring and summer but materially worse in autumn. HICAR adds
-no material vector benefit over interpolation in the first three events and
-materially degrades their speed, while it materially improves both speed and
-vector error over interpolation in autumn. This isolates an amplitude-damping
-tradeoff rather than robust four-event dynamical added value. Bounded
-Sx/TPI-off restart sensitivities now establish immediate causal over-damping in
-both the spring weak-wind and autumn strong-wind events. In spring, national
-speed RMSE improves materially from 1.800 to 1.627 m s-1 while vector RMSE
-improves neutrally from 2.254 to 2.200 m s-1. In autumn, speed improves
-materially from 2.042 to 1.753 m s-1 while vector RMSE remains neutral at
-2.605 versus 2.613 m s-1. The autumn sensitivity is neutral versus REA-L for
-speed (1.830 m s-1) and retains a material vector advantage over REA-L
-(2.613 versus 2.839 m s-1). High-elevation and ridge speed also improve
-materially. Alpha-one HICAR without bundled Sx/TPI is therefore the selected
-next R&D reference. This bounded one-hour evidence establishes mechanism, not
-four-event skill; a fresh multi-event Sx/TPI-off integration is now running
-sequentially on the capacity-bounded `normal` partition and requires its locked
-evaluation before production use. Its first matched winter continuation block
+bit-reproducible across independent placements, and two completed four-event
+national evaluations that isolate bundled Sx/TPI damping. Segmented restarts
+are numerically, not bitwise, reproducible. The original alpha-one/Sx-on
+campaign was **mixed**: vector RMSE was non-degrading in all four events and
+materially better in autumn, while speed RMSE was materially worse in winter,
+spring and summer. The fresh, otherwise identical Sx/TPI-off campaign is
+**neutral**, not added-value qualification: all eight event/metric changes
+against native REA-L are materially neutral, all vector safeguards pass, and
+no event supplies a material vector or speed improvement.
+
+On the locked 147-station cohort, Sx/TPI-off speed/vector RMSE is
+`1.914/2.556` (DJF), `1.469/2.257` (MAM), `1.550/2.289` (JJA), and
+`3.257/5.059 m s-1` (SON). Relative to Sx-on, disabling Sx/TPI changes
+speed/vector RMSE by `-0.214/-0.069`, `-0.330/-0.102`, `-0.286/-0.052`, and
+`+0.093/+0.454 m s-1`, respectively. It therefore materially repairs the
+speed penalty in the first three events but materially loses the Sx-on autumn
+vector advantage. Mean station speed-standard-deviation ratios change from
+`0.601/0.674/0.625/1.045` with Sx on to
+`0.846/0.931/0.865/1.434` with Sx off, while mean speed correlation changes by
+at most `0.013`. The intervention controls amplitude rather than temporal
+skill: Sx-on over-damps common/weak regimes, whereas Sx-off over-amplifies the
+strong autumn regime.
+
+The interpolation-only control is complete and reproduces the evaluator's
+native-REA-L station RMSEs to `1.8e-15 m s-1`. Sx/TPI-off HICAR is materially
+neutral relative to that control in DJF, MAM and JJA. In SON it improves speed
+and vector RMSE materially by `0.442` and `0.454 m s-1`, but remains neutral
+against REA-L itself. This establishes a real event-dependent dynamical effect,
+not robust four-event end-to-end value. Neither fixed Sx setting satisfies the
+preregistered strong or qualified gate. The production decision is therefore
+to retain native REA-L/interpolation-only as the operational baseline and not
+scale HICAR to the 20-year archive. Alpha-one/Sx-off remains the bounded,
+scientifically interpretable HICAR research reference if broader event testing
+is later justified; it is not production-qualified and does not open another
+tuning matrix.
+
+The earlier bounded Sx/TPI-off restart sensitivities correctly diagnosed the
+amplitude mechanism but did not predict its full-event autumn sign. In spring,
+one-hour speed RMSE improved materially from 1.800 to 1.627 m s-1 while vector
+RMSE changed neutrally from 2.254 to 2.200 m s-1. In autumn, the one-hour
+speed/vector changes also appeared favorable or neutral. The full four-event
+campaign supersedes those short-window skill estimates. Its first matched
+winter continuation block
 already confirms a broad, bounded amplitude effect: over 68,262,600 core-land
 samples from 16:10--20:00, Sx/TPI-off is faster than the otherwise identical
 Sx/TPI-on control in 89.7% of 10 m samples and 88.9% of 50 m samples, with
@@ -70,11 +88,18 @@ reported compute seconds (83%), while output accounts for only 35 seconds.
 Summer is now complete at 4/4: all four segment validators passed their
 required field-finiteness and 30 m s-1 wind-bound scans, every continuation
 has 72 exact output times, and the final 00 UTC restart and completion marker
-were published. Autumn segment 0 has started cleanly and produced its first
-integrated 00:10 output with a `7.59e-6` conservation residual against the
-`2e-5` gate. The campaign is therefore 12/16 segments complete while
-remaining at one 12-node job (26% of the live `normal` partition), below the
-50% node-use bound.
+were published. Autumn is also complete at 4/4. Its final segment completed
+successfully, published the exact `2020-10-03T00:00:00` terminal restart, and
+passed the campaign validator. The Sx/TPI-off campaign is therefore 16/16
+segments complete; the controller exited normally and no model job remains.
+The compact campaign/evaluation evidence is checksum-published at
+`/store_new/mch/msopr/olifu/icon_downscaling/swiss_200m/`
+`evaluation_regular_relaxation_rrtmg_water_alpha1_sxoff_v1`. Its ready marker
+binds 69 files and all 16 completed-segment records through `SHA256SUMS` digest
+`17220dad092120caef5ed3c6a15de02037433a880a250a912acc5edec6e8f247`.
+The canonical Sx/TPI-off evaluation-manifest, national-summary,
+interpolation-control, and HICAR/control-comparison SHA-256 values are
+`f7cd9289...`, `6f0897cf...`, `c015c3d5...`, and `8cdcfc2e...`, respectively.
 
 Fresh independent daylight replicas showed that the selected one-block RRTMGP
 configuration still separates after repeated radiation calls, despite being
@@ -232,7 +257,7 @@ stability.
 - Namelist rendering resolves NZ and density advection and rejects unresolved
   tokens or incompatible vertical geometry.
 - The retained post-campaign HICAR source is `5bee3c92`, a metadata-only
-  descendant of the running campaign's immutable `4a425677` executable. It
+  descendant of the completed campaign's immutable `4a425677` executable. It
   serializes `domain.auto_level`, `height_lowest_level`, `model_top_height` and
   `stretch_fac` into output/restart provenance, eliminating the campaign's
   narrow missing-20-m compatibility exception for future runs. The focused and
@@ -461,7 +486,7 @@ therefore points to excessive control wind amplitude over resolved terrain and
 a HICAR damping mechanism that is useful in this strong event but over-active
 in the other three.
 
-## Remaining work
+## Decision closure and optional follow-up
 
 The final 15 km static is complete and contains HLM/SVF/slope/aspect computed
 with HORAYZON from a 20.2 km exterior REA-L terrain band, EGM2008 and 90
@@ -470,21 +495,17 @@ approximation, not a convergence claim. All four season-specific runtime
 domains are complete. The clean final HICAR source is built with NVHPC/OpenACC
 and NCCL; the executable is pinned by checksum.
 
-1. Complete the running fresh four-event campaign with alpha one and bundled
-   Sx/TPI off. It reuses the validated executable, statics and ready forcing
-   cache and keeps the same 48 h trajectories, 24 h spin-up, four 12 h
-   segments, 12-node topology, RRTMG and regular boundary relaxation so the
-   intervention remains isolated. Winter has completed and passed all four
-   segment validators plus the independent all-output finiteness/wind-bounds
-   scan; spring has also completed all four segments and passed the same
-   independent 289-record finiteness and wind-bound audit. Summer has also
-   completed all four segments with passing terminal validators and exact
-   restarts. Autumn segment 0 is now running under the one-model
-   normal-partition cap.
-2. Evaluate that fresh campaign on the locked 147-station cohort and the
-   preregistered vector/speed and terrain safeguards. Until it passes the full
-   multi-event decision, retain interpolation-only as the operational baseline
-   and describe Sx/TPI-off HICAR as the scientifically preferred candidate.
+1. The fresh four-event campaign with alpha one and bundled Sx/TPI off is
+   complete. All 16 segments passed their terminal validators and published
+   their exact restarts and completion markers while retaining the isolated
+   48 h trajectories, 24 h spin-up, 12 h segmentation, 12-node topology,
+   RRTMG and regular boundary relaxation.
+2. The locked 147-station evaluation and identically sampled interpolation
+   control are complete. The Sx/TPI-off result is neutral in every event and
+   passes the terrain safeguards, but it does not meet the replicated vector
+   or speed improvement gates. Retain interpolation-only/native REA-L as the
+   operational baseline. Any broader HICAR experiment must be motivated as a
+   new event-regime question rather than continuation of this tuning sequence.
 
 The spring sensitivity intentionally changes `wind/Sx` across a validated
 restart. Ordinary restarts remain fail-closed. The experiment uses the explicit

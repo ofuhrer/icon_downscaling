@@ -13,10 +13,12 @@ The selected baseline is explicit in `config/hicar_swiss_200m.nml.in`:
 - adjoint variational wind, bundled Sx/TPI off, density advection, and
   conservative fixed alpha 1. The diagnosed dynamic-alpha coupling produced
   rejected localized high-terrain spikes in this fork/domain. The former
-  Sx/TPI setup materially over-damped speed in bounded spring and autumn
-  sensitivities; both mechanisms remain explicit research alternatives. The
-  selected configs fail segment publication if physical-core 10 m or 50 m
-  wind exceeds the experiment-specific 30 m s-1 bound;
+  Sx/TPI setup materially over-damped speed in DJF/MAM/JJA, while disabling it
+  over-amplified the strong SON regime and lost the Sx-on autumn vector
+  advantage. The complete four-event Sx-off result is neutral against REA-L,
+  so this remains a bounded research baseline rather than a 20-year production
+  choice. The selected configs fail segment publication if physical-core 10 m
+  or 50 m wind exceeds the experiment-specific 30 m s-1 bound;
 - Noah-MP with SMI initialization and four depth-varying soil textures;
 - ICON SWE, snow depth/density, and bulk snow temperature on cold starts;
 - RRTMG every 600 s, with terrain shading and direct/diffuse shortwave
@@ -36,6 +38,9 @@ The maintained scripts build HICAR, prepare atmospheric and land input, render
 the namelist, run one restartable segment, retrieve SwissMetNet data, and
 compare HICAR with stations and REA-L. Experimental alternatives should be
 small explicit diffs from this baseline, not additional workflow profiles.
+For operational long-period wind extraction, retain native REA-L or the
+identically sampled interpolation-only path: neither tested fixed Sx setting
+demonstrated robust four-event HICAR added value.
 
 The renderer automatically wires optional `VEGFRA`, `LAI`, `ALBEDO`, and
 maximum vegetation-fraction fields found in the runtime domain. Use

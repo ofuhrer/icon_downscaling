@@ -1,11 +1,12 @@
 # Swiss 200 m scientific reference setup
 
 This is the untuned reference for four-season wind downscaling. It is a
-scientific specification, not a claim that HICAR has already demonstrated
-added value over REA-L-CH1. Settings are selected together from published
-HICAR practice and the documented behavior of the present source. Parameter
-tuning starts only after this complete setup has been run against SwissMetNet
-and native REA-L-CH1 on identical station/time pairs.
+scientific specification, not a claim that HICAR has demonstrated added value
+over REA-L-CH1. The complete setup has now been evaluated on identical
+SwissMetNet/native-REA-L station-time pairs with bundled Sx/TPI both on and
+off. Neither fixed setting meets the preregistered added-value gate; the
+Sx/TPI-off form below is retained as the bounded research reference, while
+native REA-L/interpolation-only remains the operational baseline.
 
 The closest published national precedent is HICAR v1.1 over the Swiss Alps
 ([Reynolds et al., 2023](https://doi.org/10.5194/gmd-16-5049-2023)): a roughly
@@ -40,8 +41,8 @@ The selected setup therefore preserves published components only where they
 remain compatible with direct evidence from this domain. Differences are
 deliberate and visible: REA-L rather than COSMO forcing, 80 vertical levels,
 the current adjoint projection with fixed alpha 1, Noah-MP option 1, regular
-full-domain relaxation, and bundled Sx/TPI disabled pending the four-event
-result.
+full-domain relaxation, and bundled Sx/TPI disabled as the bounded research
+reference after the four-event comparison.
 
 ## Domain and terrain
 
@@ -136,11 +137,12 @@ result.
   3-D Sx sheltering, while explicitly describing its correction values as a
   sparse, partly empirical parameter sample. In exact +24 h sensitivities,
   disabling this project's former 600 m/30 degree Sx, 4 km/200 m TPI and
-  500 m smoothing materially improved spring and autumn speed RMSE without a
-  material vector-RMSE penalty, and retained autumn's vector advantage over
-  REA-L. This is an evidence-based departure from the published formulation,
-  not a claim that terrain exposure is unimportant; the fresh four-event run
-  must establish whether it generalizes. Use two wind-adjustment passes, a
+  500 m smoothing materially improves full-event speed RMSE in DJF/MAM/JJA,
+  but worsens SON vector RMSE by 0.454 m s-1 and removes the Sx-on autumn
+  advantage. The Sx-off campaign is materially neutral against REA-L in all
+  four events. This is an evidence-based bounded research choice, not a claim
+  that terrain exposure is unimportant or that the change generalizes to
+  production. Use two wind-adjustment passes, a
   2500-iteration solver cap and one update per hourly input interval. Thermal
   and linear-theory corrections remain off: the former was too strong in the
   published small-domain evaluation, and the latter would duplicate
@@ -206,7 +208,7 @@ result.
   static geometry independently retain the exact 20 m configuration. Future
   builds use HICAR `5bee3c92`, which serializes `auto_level`, lowest level,
   model top and stretch factor directly and therefore does not need this
-  compatibility exception; the running campaign remains immutable at its
+  compatibility exception; the completed campaign remains immutable at its
   original `4a425677` executable.
 - Each segment lists only the hourly regular-forcing records bracketing that
   segment. Ready records for the next segment can therefore be generated while

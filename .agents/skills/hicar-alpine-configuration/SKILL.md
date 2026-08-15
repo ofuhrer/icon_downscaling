@@ -24,20 +24,18 @@ result identifies a specific scientific ambiguity.
   winter initialization); alpha 1 bounded the maximum at 21.085 m s-1 with no
   cells above 30 m s-1. This is the bounded R&D reference, not a claim that
   fixed alpha is the published or scientifically optimal choice;
-- bundled Sx/TPI wind modification off. Controlled +24 h restart sensitivities
-  show that the former Sx 600 m/30 degree/500 m smoothing plus TPI 4 km/200 m
-  setup materially over-damps national speed in both spring and autumn. Turning
-  it off improves speed without material vector degradation and retains the
-  autumn vector advantage over REA-L. The complete first scored winter 12 h
-  segment independently shows a broad but bounded response: across 204,787,800
-  core-land samples, Sx/TPI-off is faster in 90.6% of 10 m and 89.9% of 50 m
-  samples, by +0.318 and +0.268 m s-1 on average. Every predeclared elevation
-  band responds positively and neither case exceeds 30 m s-1. At +24 h it reduces
-  full-domain RMSE against interpolated forcing from 1.021 to 0.643 m s-1 at
-  10 m and 0.907 to 0.579 m s-1 at 50 m, while remaining finite and bounded.
-  This selects the next R&D reference, but forcing agreement is not station
-  skill: the fresh four-event station evaluation remains required before
-  production use;
+- bundled Sx/TPI wind modification off for the bounded research reference.
+  The complete locked 147-station evaluation classifies Sx/TPI-off as neutral
+  against native REA-L in all four events. Relative to Sx-on it materially
+  repairs speed RMSE in DJF/MAM/JJA by 0.214/0.330/0.286 m s-1, but materially
+  worsens SON vector RMSE by 0.454 m s-1. Mean speed-variability ratios move
+  from 0.601/0.674/0.625/1.045 with Sx on to
+  0.846/0.931/0.865/1.434 with Sx off, while correlation is nearly unchanged.
+  Bundled Sx/TPI is therefore an event-dependent amplitude control: on
+  over-damps the first three events and off over-amplifies autumn. Neither
+  fixed setting qualifies for 20-year production. Retain Sx/TPI-off only as
+  the simpler, bounded HICAR research baseline; native REA-L/interpolation-only
+  remains the operational baseline;
 - Morrison microphysics, YSU PBL, Noah-MP surface-exchange option 1 with the
   revised-MM5 atmospheric surface layer, prescribed simple-water SST, and RRTMG
   every 600 s, with YSU top-down radiative mixing explicitly off;
@@ -84,6 +82,10 @@ R&D campaign and must remain visible in segment diagnostics.
   postprocessor's preregistered four-event/two-metric station cohort. Require
   exact cohort-key equality and independently reconstructed REA-L station RMSE
   parity before interpreting HICAR-versus-control differences.
+- do not scale a fixed Sx-on or Sx-off HICAR configuration to a long archive
+  from these four events. Sx/TPI-off materially beats interpolation only in
+  autumn and is neutral in the other events; that is regime-dependent process
+  evidence, not robust production added value.
 
 Do not equate a stable short run with scientific skill. Extend duration or add
 regimes only after the current experiment distinguishes the competing
