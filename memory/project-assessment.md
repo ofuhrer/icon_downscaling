@@ -67,9 +67,14 @@ the same independent audit: all 73 exact records and all 27 time-dependent
 physical-core fields are finite, the 10 m/50 m maxima are 19.20/19.86 m s-1,
 and no value exceeds 30 m s-1. Daylight radiation accounts for 4326 of 5228
 reported compute seconds (83%), while output accounts for only 35 seconds.
-Summer segment 1 is queued as the sole next 12-node job on `normal`, so the
-campaign is 9/16 segments complete while remaining below the 50% node-use
-bound.
+Summer is now complete at 4/4: all four segment validators passed their
+required field-finiteness and 30 m s-1 wind-bound scans, every continuation
+has 72 exact output times, and the final 00 UTC restart and completion marker
+were published. Autumn segment 0 has started cleanly and produced its first
+integrated 00:10 output with a `7.59e-6` conservation residual against the
+`2e-5` gate. The campaign is therefore 12/16 segments complete while
+remaining at one 12-node job (26% of the live `normal` partition), below the
+50% node-use bound.
 
 Fresh independent daylight replicas showed that the selected one-block RRTMGP
 configuration still separates after repeated radiation calls, despite being
@@ -472,9 +477,10 @@ and NCCL; the executable is pinned by checksum.
    intervention remains isolated. Winter has completed and passed all four
    segment validators plus the independent all-output finiteness/wind-bounds
    scan; spring has also completed all four segments and passed the same
-   independent 289-record finiteness and wind-bound audit. Summer segment 0
-   has completed with 73 finite, bounded records and segment 1 is queued under
-   the one-model normal-partition cap, with autumn still to follow.
+   independent 289-record finiteness and wind-bound audit. Summer has also
+   completed all four segments with passing terminal validators and exact
+   restarts. Autumn segment 0 is now running under the one-model
+   normal-partition cap.
 2. Evaluate that fresh campaign on the locked 147-station cohort and the
    preregistered vector/speed and terrain safeguards. Until it passes the full
    multi-event decision, retain interpolation-only as the operational baseline
