@@ -1,11 +1,10 @@
-# Project: ICON-to-HICAR Alpine downscaling
+# Project: ICON-HICAR Alpine experiments
 
 ## Purpose and mode
 
-Determine whether and how roughly 1 km MeteoSwiss ICON should be downscaled
-with HICAR to 100--250 m over Alpine domains. The 20-year REA-L-CH1 application
-is not selected; this project is in scientific R&D. The current decision and
-next admissible questions are in `memory/project-assessment.md`.
+Scientific R&D with HICAR and roughly 1 km MeteoSwiss ICON over 100--250 m
+Alpine domains. Current evidence, limitations, and retained state are in
+`memory/project-assessment.md`.
 
 Optimize for learning rate: state the uncertainty, run the smallest controlled
 experiment or existing-data analysis that distinguishes the hypotheses,
@@ -28,9 +27,9 @@ makes them material.
 - Durable root: `/store_new/mch/msopr/olifu/icon_downscaling`
 - Long-run controller: `orchestration/rd_campaign.py`
 
-Keep current synthesis in `memory/project-assessment.md` and exact run details
-in concise case manifests. Do not create diaries, command transcripts, or
-general evidence ledgers; replace superseded text.
+Keep current evidence synthesis in `memory/project-assessment.md` and exact run
+details in concise case manifests. Do not create diaries, command transcripts,
+or general evidence ledgers; replace superseded text.
 
 ## Routing
 
@@ -60,4 +59,4 @@ configs, literals, or incomplete graph coverage. Projects are `icon_hicar` and
   ready marker. Before deletion, audit jobs and retained evidence; delete only
   validated exact targets through a CPU partition, then re-audit.
 - Update a skill only for reusable procedure/invariant changes and project
-  assessment only when the conclusion, priority, or capability changes.
+  assessment only when the evidence, priority, or capability changes.

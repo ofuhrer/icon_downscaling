@@ -1,9 +1,8 @@
-# ICON-to-HICAR Alpine downscaling
+# ICON-HICAR Alpine experiments
 
-Scientific R&D on downscaling MeteoSwiss ICON REA-L-CH1 from roughly 1 km to
-200 m over Switzerland with HICAR. The tested configuration is **not** selected
-for the 20-year archive; see `memory/project-assessment.md` for the decision and
-admissible follow-up.
+Scientific R&D with HICAR and MeteoSwiss ICON REA-L-CH1 over a 200 m Swiss
+domain. See `memory/project-assessment.md` for current evidence, limitations,
+and retained state.
 
 Core components:
 

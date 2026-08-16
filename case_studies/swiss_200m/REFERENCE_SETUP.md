@@ -1,10 +1,8 @@
 # Swiss 200 m scientific reference setup
 
-This is an untuned research reference, not a production recommendation. Two
-four-season, identically sampled campaigns found neither fixed Sx/TPI setting
-added-value qualified; native REA-L/interpolation-only remains operational,
-and Sx-off is retained only as the bounded HICAR research form. The quantitative
-decision is in `memory/project-assessment.md`.
+This file records the untuned configuration evaluated in two four-season,
+identically sampled campaigns. Quantitative results are in
+`memory/project-assessment.md`.
 
 Published HICAR work supports Alpine SLEVE/variational-wind physics, but not a
 national all-season 100--200 m wind climatology: Reynolds et al. (2023) studied

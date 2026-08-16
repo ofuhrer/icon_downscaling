@@ -1,14 +1,8 @@
-# ICON-to-HICAR scientific assessment
+# ICON-HICAR experimental evidence
 
-## Decision
+## Four-event campaign result
 
-Do **not** scale the tested HICAR configuration to the 20-year REA-L-CH1
-archive. Native REA-L/interpolation-only remains the operational baseline.
-Fixed-alpha-one with bundled Sx/TPI damping off is a bounded HICAR research
-reference only when a new event-regime hypothesis justifies work; it is not
-production-qualified and does not open another tuning matrix.
-
-The locked 147-station, four-season evidence is decisive:
+The locked 147-station, four-season comparison produced:
 
 | Result | DJF | MAM | JJA | SON |
 | --- | ---: | ---: | ---: | ---: |
@@ -22,8 +16,7 @@ other three events. Sx-off was materially neutral against REA-L in all eight
 event/metric tests: it repaired common/weak-regime over-damping but over-
 amplified the strong autumn regime. The matched interpolation-only control
 reproduced native-REA-L station RMSE to `1.8e-15 m s-1`; HICAR was neutral to
-it in DJF/MAM/JJA and better only in SON. This is a real event-dependent
-dynamical effect, not robust four-event added value.
+it in DJF/MAM/JJA and better only in SON. The effect is event-dependent.
 
 All 16 campaign segments passed. The 69-file evidence is published at
 `/store_new/mch/msopr/olifu/icon_downscaling/swiss_200m/`
@@ -36,8 +29,8 @@ The scientific specification and literature boundary are in
 `case_studies/swiss_200m/REFERENCE_SETUP.md`. In brief: 2061 x 1431 cells at
 200 m; 80 SLEVE levels to 15 km; native hourly REA-L through `hicarprep`;
 regular full-domain relaxation; fixed alpha 1 and Sx/TPI off; Morrison, YSU,
-Noah-MP/revised-MM5, prescribed water temperature, and 600 s radiation. Claims
-are limited to horizontal surface-wind downscaling; terrain-following W, cloud,
+Noah-MP/revised-MM5, prescribed water temperature, and 600 s radiation.
+Evaluation covered horizontal surface wind; terrain-following W, cloud,
 precipitation, lake thermodynamics, and slow land state remain limitations.
 
 HICAR production is `feature/icon_downscaling` at `0b9b0cb6`; its tree equals
@@ -65,7 +58,7 @@ Full-domain two-hour radiation was 4.875--4.881 s and total model time
 and 3.56x wall speedup; this is not a measured 12-hour result and does not
 alter the completed RRTMG trajectory.
 
-## Retained state and admissible follow-up
+## Retained state
 
 Balfrin `$SCRATCH/icon_hicar` is intentionally empty; new work must recreate
 its runtime and inputs. Durable storage retains only the final campaign
@@ -73,8 +66,3 @@ evidence and `swiss_200m/hicar_surface_verification_v1`, whose digest is
 `a26f6a524deb7f41f67302d4bf56103102a453a0d2ef51f276cfa2b0524ff644`.
 Legacy recovery/qualification data are not recoverable. Git retains coordinator
 `main` and HICAR `main` plus `feature/icon_downscaling`.
-
-Only a new hypothesis may reopen work: regime-conditioned damping, terrain-W
-conditioning, lake thermodynamics, or cold-cloud/precipitation spin-up. Do not
-resume generic production or parameter tuning without evidence that can change
-the decision.

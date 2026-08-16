@@ -73,8 +73,8 @@ publication.
 
 1. Audit jobs, dependencies, controllers, Git reachability, and retained
    evidence; cancel only obsolete jobs.
-2. Preserve unique source in a remote ref or verified Git bundle and preserve
-   only evidence that changes future decisions.
+2. Preserve unique source in a remote ref or verified Git bundle and retain
+   evidence needed to interpret or reproduce future work.
 3. Retain expensive inputs only when a named next experiment needs them;
    builds, clones, failed runs, duplicate restarts, and transient logs are
    scratch.

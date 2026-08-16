@@ -1,6 +1,6 @@
 ---
 name: icon-balfrin-grib
-description: Find and inspect MeteoSwiss ICON-CH1-EPS or ICON REA-L-CH1 source data on Balfrin, decode local GRIB parameters, identify full-column dynamic/static file families, and select inputs for ICON-to-HICAR downscaling. Use for archive paths, FDB access, ecCodes setup, file naming, variables, levels, timestamps, or GRIB metadata validation.
+description: Find and inspect MeteoSwiss ICON-CH1-EPS or ICON REA-L-CH1 source data on Balfrin, decode local GRIB parameters, identify full-column dynamic/static file families, and select HICAR inputs. Use for archive paths, FDB access, ecCodes setup, file naming, variables, levels, timestamps, or GRIB metadata validation.
 ---
 
 # ICON source data on Balfrin
@@ -117,7 +117,7 @@ Validate message counts, vertical-level coverage, reference/valid times, grid po
   gust semantics distinct in manifests and derived products.
 - Do not use `VMAX_10M` as a HICAR wind component or dynamical forcing. It
   has no direction and represents a time maximum. Preserve it as a sidecar
-  diagnostic for gust validation, calibration, or statistical downscaling.
+  diagnostic for gust validation or calibration.
 
 ## Safety and reproducibility
 

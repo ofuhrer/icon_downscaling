@@ -7,10 +7,9 @@ description: Choose and validate HICAR namelist, vertical grid, terrain coordina
 
 The authoritative national specification is
 `case_studies/swiss_200m/REFERENCE_SETUP.md`; sensitivity evidence is in
-`references/sensitivity-results.md`. Treat it as a bounded research reference,
-not a production default.
+`references/sensitivity-results.md`.
 
-## Selected 200 m reference
+## Evaluated 200 m configuration
 
 - 2061 x 1431 AEQD grid, 40 km external margin, GLO-30 surface terrain with a
   30 km blend to REA-L at the boundary.
@@ -24,11 +23,10 @@ not a production default.
 - Morrison, YSU, Noah-MP/revised-MM5, prescribed water temperature, terrain-
   corrected 600 s radiation, no cumulus.
 
-Dynamic alpha is rejected for this fork/domain: an otherwise fixed winter
-initialization reached 139.30 m s-1 at 10 m, versus 21.085 m s-1 for alpha 1.
-The campaign's 30 m s-1 validation bound is an explicit four-event gate, not a
-universal physical limit. Sx-off is retained for interpretability, although it
-was neutral rather than added-value qualified.
+With dynamic alpha, an otherwise fixed winter initialization reached 139.30
+m s-1 at 10 m, versus 21.085 m s-1 for alpha 1. The campaign used alpha 1.
+Its 30 m s-1 validation bound is an explicit four-event gate, not a universal
+physical limit. The Sx-off comparison was event-dependent.
 
 ## Trust checks
 
