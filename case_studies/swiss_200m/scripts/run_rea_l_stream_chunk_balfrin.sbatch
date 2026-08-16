@@ -54,6 +54,7 @@ max_wind_speed_ms=${HICAR_MAX_WIND_SPEED_MS:-}
 allow_input_superset=${HICAR_ALLOW_INPUT_SUPERSET:-0}
 acc_synchronous=${HICAR_ACC_SYNCHRONOUS:-0}
 defer_uploads=${HICAR_DEFER_UPLOADS:-0}
+gpu_metrics_interval=${HICAR_GPU_METRICS_INTERVAL_SECONDS:-0}
 cfl_reduction=${HICAR_CFL_REDUCTION_FACTOR:-1.6}
 renderer="$repo_root/case_studies/swiss_200m/scripts/render_hicar_namelist.py"
 wrapper=${HICAR_RANK_WRAPPER:-"$repo_root/case_studies/swiss_200m/scripts/gpu_rank_wrapper.sh"}
@@ -185,21 +186,53 @@ case "$defer_uploads" in
     ;;
   *) echo "HICAR_DEFER_UPLOADS must be 0 or 1" >&2; exit 2 ;;
 esac
+[[ "$gpu_metrics_interval" =~ ^[0-9]+$ ]] || {
+  echo "HICAR_GPU_METRICS_INTERVAL_SECONDS must be a non-negative integer" >&2
+  exit 2
+}
 
 child=
+gpu_metrics_child=
+stop_gpu_metrics() {
+  test -z "$gpu_metrics_child" || kill -TERM "$gpu_metrics_child" 2>/dev/null || true
+  wait "$gpu_metrics_child" 2>/dev/null || true
+  gpu_metrics_child=
+}
 terminate() {
   test -z "$child" || kill -TERM "$child" 2>/dev/null || true
   wait "$child" 2>/dev/null || true
+  stop_gpu_metrics
   exit 143
 }
 trap terminate TERM INT
+trap stop_gpu_metrics EXIT
 
 cd "$run"
+if (( gpu_metrics_interval > 0 )); then
+  command -v nvidia-smi >/dev/null || {
+    echo "nvidia-smi is required when GPU metrics sampling is enabled" >&2
+    exit 2
+  }
+  metrics="$run/gpu_metrics_first_node.csv"
+  (
+    printf 'epoch_seconds,node,index,memory_used_mib,memory_total_mib,utilization_gpu_percent\n'
+    node=$(hostname)
+    while true; do
+      epoch=$(date +%s)
+      nvidia-smi \
+        --query-gpu=index,memory.used,memory.total,utilization.gpu \
+        --format=csv,noheader,nounits | sed "s/^/$epoch,$node,/"
+      sleep "$gpu_metrics_interval"
+    done
+  ) >"$metrics" &
+  gpu_metrics_child=$!
+fi
 srun --distribution=block:block --cpu-bind=none "$wrapper" "$exe" "$run/input.nml" \
   >"$run/model.out" 2>&1 &
 child=$!
 wait "$child"
 child=
+stop_gpu_metrics
 
 grep -q 'Simulation completed successfully!' "$run/model.out"
 grep -q 'HICAR discretely adjoint wind projection enabled' "$run/model.out"

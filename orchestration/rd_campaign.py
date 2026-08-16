@@ -318,6 +318,9 @@ class Campaign:
         ).lower()
         self.acc_synchronous = bool(self.config.get("acc_synchronous", False))
         self.defer_uploads = bool(self.config.get("defer_uploads", False))
+        self.gpu_metrics_interval_seconds = int(
+            self.config.get("gpu_metrics_interval_seconds", 0)
+        )
         max_wind_speed = self.config.get("max_wind_speed_ms")
         self.max_wind_speed_ms = (
             None if max_wind_speed is None else float(max_wind_speed)
@@ -352,6 +355,7 @@ class Campaign:
             or self.model_nodes <= 0
             or self.max_active_models <= 0
             or self.radiation_update_interval <= 0
+            or self.gpu_metrics_interval_seconds < 0
         ):
             raise ValueError(
                 "segment length, attempts, resource counts, and radiation cadence "
@@ -678,6 +682,9 @@ class Campaign:
                     ),
                     "HICAR_DEFER_UPLOADS": (
                         "1" if self.defer_uploads else "0"
+                    ),
+                    "HICAR_GPU_METRICS_INTERVAL_SECONDS": str(
+                        self.gpu_metrics_interval_seconds
                     ),
                 }
                 job = submit(

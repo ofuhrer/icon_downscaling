@@ -157,6 +157,13 @@ def test_segment_wrapper_stages_both_radiation_support_sets() -> None:
     assert "for asset in NoahmpTable.TBL rrtmg_support rrtmgp_support mp_support" in text
 
 
+def test_segment_wrapper_gpu_metrics_sampling_is_explicit_and_default_off() -> None:
+    text = SEGMENT_WRAPPER.read_text()
+    assert "HICAR_GPU_METRICS_INTERVAL_SECONDS:-0" in text
+    assert "gpu_metrics_first_node.csv" in text
+    assert "--query-gpu=index,memory.used,memory.total,utilization.gpu" in text
+
+
 def test_renderer_restart_override_is_explicit_and_default_off(tmp_path: Path) -> None:
     static = tmp_path / "static.nc"
     static_file(static)

@@ -171,6 +171,7 @@ def campaign(
     allow_missing_restart_domain_provenance=False,
     acc_synchronous=False,
     defer_uploads=False,
+    gpu_metrics_interval_seconds=0,
 ) -> Campaign:
     config = {
         "root": str(tmp_path / "campaign"),
@@ -196,6 +197,7 @@ def campaign(
         ),
         "acc_synchronous": acc_synchronous,
         "defer_uploads": defer_uploads,
+        "gpu_metrics_interval_seconds": gpu_metrics_interval_seconds,
         "seasons": seasons or [{
             "name": "autumn",
             "start": "2020-10-02T00:00:00",
@@ -477,6 +479,7 @@ def test_radiation_configuration_is_explicit_in_model_environment(
         max_wind_speed_ms=30.0,
         allow_missing_restart_domain_provenance=True,
         defer_uploads=True,
+        gpu_metrics_interval_seconds=2,
     )
     configured.config["seasons"][0]["end"] = "2020-10-02T01:00:00"
     configured.seasons = [
@@ -509,7 +512,17 @@ def test_radiation_configuration_is_explicit_in_model_environment(
     assert submitted[0]["HICAR_MAX_WIND_SPEED_MS"] == "30.0"
     assert submitted[0]["HICAR_ALLOW_MISSING_RESTART_DOMAIN_PROVENANCE"] == "1"
     assert submitted[0]["HICAR_DEFER_UPLOADS"] == "1"
+    assert submitted[0]["HICAR_GPU_METRICS_INTERVAL_SECONDS"] == "2"
     assert submitted[0]["HICAR_BUILD_PROVENANCE"] == "build.txt"
+
+
+def test_negative_gpu_metrics_interval_is_rejected(tmp_path) -> None:
+    with pytest.raises(ValueError, match="resource counts"):
+        campaign(
+            tmp_path,
+            full_season_input_lists=False,
+            gpu_metrics_interval_seconds=-1,
+        )
 
 
 def test_defer_uploads_rejects_synchronous_openacc(tmp_path) -> None:
