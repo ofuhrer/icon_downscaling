@@ -178,14 +178,26 @@ reference after the four-event comparison.
 ## Radiation
 
 - Use RRTMG at 600 s, UTC, cloud-fraction option 3 and maximum-random overlap.
-  This bounded reference avoids the unresolved RRTMGP daylight A/A divergence.
-  Independent 12-node daylight replicas were exact for all seven output states
-  and all terminal-restart variables. The one-hour jobs, including 34 GB
-  restart publication, took less than 19 minutes. RRTMG is a physics
-  substitution, not a numerically equivalent implementation of RRTMGP. The
-  corrected-SST two-hour test established numerical rather than bitwise restart
-  reproducibility; its small, decaying land/PBL perturbation is accepted for
-  the wind-focused R&D campaign and remains visible in segment diagnostics.
+  This is the frozen physics used by the completed national campaign; changing
+  it would define a new trajectory. Independent 12-node RRTMG daylight
+  replicas were exact for all seven output states and all terminal-restart
+  variables. The one-hour jobs, including 34 GB restart publication, took less
+  than 19 minutes. RRTMG is a physics substitution, not a numerically
+  equivalent implementation of RRTMGP. The corrected-SST two-hour campaign
+  test established numerical rather than bitwise restart reproducibility; its
+  small, decaying land/PBL perturbation is accepted for the completed
+  wind-focused R&D campaign and remains visible in segment diagnostics.
+- Subsequent performance work qualified GPU RTE-RRTMGP v1.9.3 on the same
+  full-Swiss 12-node topology. That path requires HICAR commits `c4e0aa81`
+  (reset Noah-MP's hidden energy workspace) and `cd94b79b` (select RRTMGP's
+  existing sequential tropopause `minmaxloc` helper for NVHPC OpenACC), in
+  addition to the v1.9.3 API/build changes. The latter avoids the NVHPC 24.5
+  device `MINLOC`/`MAXLOC` scalar-live-out code generation that caused
+  topology-sensitive 32-column radiation differences.
+  Its two-hour continuous and restarted trajectories are bitwise identical at
+  every retained output and across all 199 join and terminal restart variables.
+  This qualification is an acceleration option for new experiments; it does
+  not retroactively change the completed RRTMG campaign.
 - Enable terrain shading plus direct and diffuse shortwave corrections after
   HLM, SVF, slope and aspect have been generated and checked. Keep reflected
   shortwave and terrain longwave off in this first RRTMG baseline so their

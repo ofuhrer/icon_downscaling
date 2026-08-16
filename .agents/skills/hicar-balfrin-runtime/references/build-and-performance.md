@@ -30,6 +30,13 @@
 - Treat a completed compile as insufficient. Check the executable's dynamic
   linkage, require no `not found` entries, record its SHA-256, and run a small
   topology-matched smoke case before scientific work.
+- RTE-RRTMGP v1.9.3 renamed its kernel selector to `RTE_KERNEL_MODE`. For a
+  compatible GPU build, set both `KERNEL_MODE=accel` and
+  `RTE_KERNEL_MODE=accel`, then verify both cache entries and confirm that the
+  build compiles the `kernels/accel` sources. Setting only the old name silently
+  selects v1.9.3's default CPU kernels. The v1.9.3 cloud-ice bounds API also
+  uses `get_min_diameter_ice()`/`get_max_diameter_ice()`; HICAR already supplies
+  ice and snow diameters to this interface.
 
 If reusing an incremental build, first require:
 
@@ -318,11 +325,13 @@ provenance check and does not invalidate the model timing.
 | Wind balance | 7.076 | 0.16% |
 
 Radiation, not forcing I/O or the variational wind solve, is therefore the
-primary runtime target. Do not alter the locked 600 s radiation cadence during
-the four-event scientific comparison. If the selected physics is retained
-after evaluation, profile and optimize the RRTMG implementation first; input
-streaming and forcing generation remain throughput concerns for long
-production, but they are not the dominant cost inside HICAR.
+primary runtime target. Across all 16 successful campaign segments, median
+radiation time was 4300.620 of 5451.897 s: 75.7% of total HICAR time and 78.4%
+of physics time. The locked 600 s cadence remained unchanged during the
+four-event comparison. If the selected physics is retained, profile and
+optimize the RRTMG implementation first; input streaming and forcing
+generation remain throughput concerns for long production, but they are not
+the dominant cost inside HICAR.
 
 The current RRTMG branch provides a specific first profiling target. Each full
 radiation call invokes `domain%update_host()` before the CPU RRTMG SW/LW
@@ -333,14 +342,79 @@ timer therefore combines bulk device/host copies, RRTMG SW, repeated LW setup,
 RRTMG LW, and result copies; it does **not** prove that the radiative-transfer
 kernel alone consumes 76%.
 
-The smallest post-evaluation performance experiment is to add timers around
-those five phases on the same 12-node case. If transfers are material, replace
-the whole-domain synchronization with explicit RRTMG input/output field lists
-and require an exact one-hour A/A comparison plus a complete restart before a
-throughput benchmark. Keep radiation physics and 600 s cadence fixed. Do not
-substitute RRTMGP as a performance shortcut: its repeated-call trajectory was
-withdrawn for reproducibility, so it is a separate scientific/engineering
-qualification problem.
+An isolated one-node check resolved the first-level profile.
+The successful uninstrumented 701 x 701 x 80, 30-minute winter-midnight control
+used four GPU compute ranks plus one I/O rank and attributed 196.206 of 307.519
+physics seconds (63.8%) to radiation. A partial Nsight Systems CPU sample
+identified RRTMG longwave transport and its McICA cloud generator as the
+leading modeled-interval host symbols. `RRTMG_LWINIT` appeared in only six
+sampled call chains, so repeated setup is not the first target. Both legacy
+wrappers loop horizontally in serial with `ncol=1`; the release build has no
+OpenMP and each compute rank receives one CPU core. Noah-MP, Morrison, YSU/PBL,
+advection, wind projection and halo exchange all launch GPU kernels.
+
+The partial trace copied 36.44 GB host-to-device and 10.94 GB device-to-host in
+4.00 s of aggregate GPU copy-engine time, including initialization and
+non-radiation traffic. Transfers remain wasteful but are secondary to the CPU
+column work unless an NVTX-delimited radiation trace shows otherwise. The
+instrumented model itself exited with status 139 after 30% progress; use its
+trace for hotspot attribution only, and use the successful uninstrumented
+control for timing.
+
+Do not treat the existing Alpine bridge case as an absolute national surrogate:
+it has about twice the cells per GPU and a 1.41 s timestep versus 5.39--5.97 s
+in sampled national segments. Instead use the validated 495 x 495 x 80 crop on
+one node: its 61,256 cells per GPU match the national layout's 61,450. With
+RRTMGP v1.9.3 its radiation time was 4.398 s versus 4.614--4.623 s for two
+full-Swiss 12-node replicas, a difference of only 5%. It is therefore a good
+radiation implementation benchmark. It is not a whole-model scaling proxy:
+the national case has more timesteps and communication, so total time rose
+from 126.626 s to 205.702--206.654 s and advection/halo imbalance dominated.
+
+The first qualified acceleration candidate is RTE-RRTMGP v1.9.3 plus the HICAR
+build/API compatibility changes. The one-node trajectory and complete restart
+were bitwise identical to v1.9.2. More importantly, two cold full-Swiss
+12-node/48-compute-rank replicas on different node sets were exact at all 13
+ten-minute outputs and across all 198 terminal model-core restart variables.
+Radiation fell from 860.869 to 4.398 s in the matched daylight case (195.7x),
+physics from 913.224 to 49.781 s (18.3x), and total time from 999.474 to
+126.626 s (7.9x). This qualifies v1.9.3 as the minimum-version workaround for
+the v1.9.2 topology-sensitive repeated-call failure; it does not identify the
+individual upstream source change responsible.
+
+The full-Swiss restart investigation found two independent defects. Noah-MP's
+persistent-object optimization retained an internal energy workspace across
+calls, whereas a restarted process began with a fresh workspace. Recreate only
+that workspace before each Noah-MP input transfer. After that correction,
+full-topology cold replicas still separated in 32-column radiation strips.
+Both longwave and shortwave could differ, localizing the shared cause to gas
+optics rather than a broadband solver.
+
+With NVHPC 24.5, the accelerated v1.9.3 gas-optics compiler report lowered the
+device `MINLOC`/`MAXLOC` tropopause searches to inner sequential loops and
+reported `Scalar last value needed after loop for i$a`. RRTMGP already carries
+a sequential `minmaxloc` helper for unsafe GPU intrinsics, but selects it for
+NVHPC only under OpenMP. HICAR's OpenACC build must extend that guard to all
+`__NVCOMPILER` builds and give the helper arguments explicit intents. Accept
+the build only when the compiler report retains the outer vector(128) column
+loop but no longer contains the two intrinsic inner loops or scalar-live-out
+warnings. Keep the patch fail-closed against the pinned upstream source text.
+
+HICAR `cd94b79b` plus the Noah-MP workspace reset passed the one-node gate,
+two independent full-Swiss 12-node replicas, and the continuous-versus-restart
+gate. Every one of 13 retained outputs is bitwise identical; all 199 variables
+match at both the 10:00 join and 11:00 endpoint. The two full-domain replicas
+measured 4.875 and 4.881 s in radiation and 210.080 and 211.828 s total, so the
+workaround has no material throughput cost.
+
+Replacing the measured 3413.264 s radiation portion of the original national
+12-hour segment with the observed approximately 4.88 s per two hours estimates
+about 1107 s HICAR time, 4.06x faster than 4491.221 s. If the original 216.8 s
+of wrapper overhead is unchanged, estimated wall time is 22.1 instead of 78.5
+minutes, or 3.56x faster. Treat this as an Amdahl-style estimate with fixed
+non-radiation work and 600 s cadence, not a measured 12-hour GPU run. Keep
+radiation physics and cadence fixed for implementation tests; a cadence change
+is a separate scientific sensitivity.
 
 ## CPU reference
 
