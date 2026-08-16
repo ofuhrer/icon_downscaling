@@ -305,6 +305,7 @@ class Campaign:
         self.input_rbf_backend = str(self.config.get("input_rbf_backend", "numpy"))
         if self.input_rbf_backend not in {"numpy", "numba"}:
             raise ValueError("input_rbf_backend must be numpy or numba")
+        self.input_rbf_threads = int(self.config.get("input_rbf_threads", 1))
         self.input_memory = str(self.config.get("input_memory", "64G"))
         self.input_time = str(self.config.get("input_time", "01:00:00"))
         self.input_exclusive = bool(self.config.get("input_exclusive", False))
@@ -358,6 +359,7 @@ class Campaign:
             or self.max_active_inputs <= 0
             or self.input_cpus <= 0
             or self.input_column_workers <= 0
+            or self.input_rbf_threads <= 0
             or self.model_nodes <= 0
             or self.max_active_models <= 0
             or self.radiation_update_interval <= 0
@@ -378,6 +380,8 @@ class Campaign:
             raise ValueError("max_wind_speed_ms must be finite and positive")
         if self.input_column_workers > self.input_cpus:
             raise ValueError("input_column_workers must not exceed input_cpus")
+        if self.input_rbf_threads > self.input_cpus:
+            raise ValueError("input_rbf_threads must not exceed input_cpus")
         if self.input_lookahead_segments is not None and self.input_lookahead_segments < 0:
             raise ValueError("input_lookahead_segments must be a non-negative integer")
         if self.input_lookahead_segments is not None and self.full_season_input_lists:
@@ -525,7 +529,7 @@ class Campaign:
                     "HICARPREP_VECTOR_WEIGHTS": self.config.get("vector_weights", ""),
                     "HICARPREP_COLUMN_WORKERS": str(self.input_column_workers),
                     "HICARPREP_RBF_BACKEND": self.input_rbf_backend,
-                    "HICARPREP_RBF_THREADS": str(self.input_cpus),
+                    "HICARPREP_RBF_THREADS": str(self.input_rbf_threads),
                     "NUMBA_CACHE_DIR": str(self.input_numba_cache),
                     "HICARPREP_WRITE_LBC": "1" if self.use_sparse_lbc else "0",
                     "HICAR_PYTHON": self.config["python"],

@@ -31,6 +31,7 @@ vector_weights=${HICARPREP_VECTOR_WEIGHTS:-}
 python=${HICAR_PYTHON:-python3}
 column_workers=${HICARPREP_COLUMN_WORKERS:-1}
 rbf_backend=${HICARPREP_RBF_BACKEND:-numpy}
+rbf_threads=${HICARPREP_RBF_THREADS:-1}
 write_lbc=${HICARPREP_WRITE_LBC:-0}
 trusted_static_digest=${HICAR_STATIC_SHA256:-}
 if ! [[ "$column_workers" =~ ^[1-9][0-9]*$ ]]; then
@@ -45,6 +46,15 @@ if [[ "$rbf_backend" != numpy && "$rbf_backend" != numba ]]; then
   echo "HICARPREP_RBF_BACKEND must be numpy or numba" >&2
   exit 2
 fi
+if ! [[ "$rbf_threads" =~ ^[1-9][0-9]*$ ]]; then
+  echo "HICARPREP_RBF_THREADS must be a positive integer" >&2
+  exit 2
+fi
+if test -n "${SLURM_CPUS_PER_TASK:-}" && (( rbf_threads > SLURM_CPUS_PER_TASK )); then
+  echo "HICARPREP_RBF_THREADS exceeds SLURM_CPUS_PER_TASK" >&2
+  exit 2
+fi
+export HICARPREP_RBF_THREADS="$rbf_threads"
 if [[ "$write_lbc" != 0 && "$write_lbc" != 1 ]]; then
   echo "HICARPREP_WRITE_LBC must be 0 or 1" >&2
   exit 2
