@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-08-16",
+  "objective": "Qualify restart-safe hourly wind-climatology output and lossless compaction on the production GPU/NCCL build path.",
+  "source": {
+    "production_base_commit": "0545a55d20d76441c9eff5e8a297babccc49f440",
+    "production_commit": "5503dacd6e97b1dc0dd77f182d0c875f34e243cd",
+    "validation_commit": "e82680ffd72fb2a3cdc5e3484a0644978f67f777",
+    "validation_commit_scope": "detached Balfrin validation commit containing the local HICAR worktree changes",
+    "production_tree": "6d95eb9306ea9bb946a7dd72f711a23c368f7927",
+    "validation_tree_matches_production": true,
+    "executable_sha256": "e049a427fbfe12e8d50ce54114e77978aed6d666ec689eb206179f8d1a85e3dc",
+    "build_job_id": 5117193,
+    "build_state": "COMPLETED",
+    "variant": "gpu-nccl",
+    "mode": "release"
+  },
+  "integration": {
+    "job_id": 5117508,
+    "state": "COMPLETED",
+    "elapsed": "00:01:19",
+    "topology": "one debug node, four A100 compute ranks and one CPU I/O rank",
+    "case": "Gaudergrat_250m, 2017-02-14 00:00--02:00 UTC",
+    "restart_gate": "restart at 01:00 UTC and reproduce the 02:00 UTC endpoint",
+    "report_status": "pass",
+    "cold_start_missing_fraction_all_eight_fields": 1.0,
+    "terminal_finite_fraction_all_eight_fields": 1.0,
+    "terminal_restart_bitwise_equal_all_eight_fields": true,
+    "statistical_invariant_violation_counts": {
+      "agl": 0,
+      "10m": 0
+    },
+    "validation_tolerances": {
+      "timestamp_seconds": 0.5,
+      "wind_invariant_m_s": 0.0005
+    },
+    "encoded_time_offset_seconds": 0.432,
+    "scratch_run": "/scratch/mch/olifu/icon_hicar/wind_climatology_20260816/cases/wind_climatology_5117508",
+    "validation_report": "/scratch/mch/olifu/icon_hicar/wind_climatology_20260816/cases/wind_climatology_5117508/validation.json"
+  },
+  "lossless_compaction": {
+    "status": "pass",
+    "method": "NetCDF4 shuffle plus deflate level 1",
+    "input_bytes": 10927006,
+    "output_bytes": 3795682,
+    "compression_ratio": 2.878799119631202,
+    "input_sha256": "bfa130699fcba00a272340f60a762519faede099828e98d89ecc06d541f8781e",
+    "output_sha256": "b834fb892bf62d9717e0a57f39967181742105591c9a6357ad90adcc37ad887b",
+    "verification": "all variables and masks equal",
+    "capacity_use": "smoke result only; the all-fill cold-start record makes this unrepresentative of long production segments",
+    "report": "/scratch/mch/olifu/icon_hicar/wind_climatology_20260816/cases/wind_climatology_5117508/compression.json"
+  }
+}

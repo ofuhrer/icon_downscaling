@@ -177,6 +177,8 @@ def campaign(
     acc_synchronous=False,
     defer_uploads=False,
     gpu_metrics_interval_seconds=0,
+    output_profile="evaluation",
+    output_interval=600,
 ) -> Campaign:
     config = {
         "root": str(tmp_path / "campaign"),
@@ -202,6 +204,8 @@ def campaign(
         "acc_synchronous": acc_synchronous,
         "defer_uploads": defer_uploads,
         "gpu_metrics_interval_seconds": gpu_metrics_interval_seconds,
+        "output_profile": output_profile,
+        "output_interval": output_interval,
         "seasons": seasons
         or [
             {
@@ -224,6 +228,34 @@ def campaign(
     path = tmp_path / "campaign.json"
     path.write_text(json.dumps(config))
     return Campaign(path)
+
+
+def test_wind_climatology_campaign_requires_hourly_aligned_segments(tmp_path) -> None:
+    with pytest.raises(ValueError, match="output_interval=3600"):
+        campaign(
+            tmp_path,
+            full_season_input_lists=False,
+            output_profile="wind_climatology",
+            output_interval=600,
+        )
+
+    configured = campaign(
+        tmp_path,
+        full_season_input_lists=False,
+        output_profile="wind_climatology",
+        output_interval=3600,
+    )
+    assert configured.output_profile == "wind_climatology"
+    assert configured.output_interval == 3600
+
+    with pytest.raises(ValueError, match="whole UTC hours"):
+        campaign(
+            tmp_path,
+            full_season_input_lists=False,
+            output_profile="wind_climatology",
+            output_interval=3600,
+            segment_hours=1.5,
+        )
 
 
 def test_full_season_input_plan_is_shared_across_segments(tmp_path) -> None:

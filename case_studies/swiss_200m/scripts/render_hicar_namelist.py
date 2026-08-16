@@ -85,7 +85,9 @@ def main() -> int:
         "--radiation-scheme", choices=("rrtmgp", "rrtmg"), default="rrtmgp"
     )
     parser.add_argument(
-        "--output-profile", choices=("station", "evaluation", "debug"), default="evaluation"
+        "--output-profile",
+        choices=("station", "evaluation", "wind_climatology", "debug"),
+        default="evaluation",
     )
     parser.add_argument("--model-debug", action="store_true")
     parser.add_argument("--disable-sx", action="store_true")
@@ -113,6 +115,10 @@ def main() -> int:
         or args.radiation_update_interval <= 0.0
     ):
         raise SystemExit("output and restart intervals must be positive")
+    if args.output_profile == "wind_climatology" and args.output_interval != 3600:
+        raise SystemExit(
+            "wind_climatology output requires --output-interval 3600"
+        )
     if not 0.0 < args.cfl_reduction_factor <= 1.6:
         raise SystemExit("--cfl-reduction-factor must be in (0, 1.6]")
     if args.alpha_const != -1.0 and not 0.01 <= args.alpha_const <= 1.0:
@@ -258,6 +264,12 @@ def main() -> int:
             "'u_agl', 'v_agl', 'rho_agl', 'ustar', 'surface_roughness', 'sfc_Ri', 'hpbl', "
             "'rsds', 'lwtr', 'rlus', 'hfgs', 'hfss', 'hfls', 'tsfe', 'albedo', "
             "'snow_height', 'soil_column_total_water', 'soil_water_content', 'soil_temperature'"
+        ),
+        "wind_climatology": (
+            "'u_agl_mean_1h', 'v_agl_mean_1h', 'wind_speed_agl_mean_1h', "
+            "'wind_speed_agl_10min_max_1h', 'u10m_mean_1h', 'v10m_mean_1h', "
+            "'wind_speed_10m_mean_1h', 'wind_speed_10m_10min_max_1h', "
+            "'psfc', 'taix', 'hus2m', 'ustar', 'sfc_Ri', 'hpbl'"
         ),
         "debug": (
             "'u', 'v', 'w', 'pressure', 'temperature', 'potential_temperature', "

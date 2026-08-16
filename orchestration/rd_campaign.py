@@ -320,6 +320,8 @@ class Campaign:
         self.acc_synchronous = bool(self.config.get("acc_synchronous", False))
         self.defer_uploads = bool(self.config.get("defer_uploads", False))
         self.gpu_metrics_interval_seconds = int(self.config.get("gpu_metrics_interval_seconds", 0))
+        self.output_profile = str(self.config.get("output_profile", "evaluation"))
+        self.output_interval = int(self.config.get("output_interval", 600))
         max_wind_speed = self.config.get("max_wind_speed_ms")
         self.max_wind_speed_ms = None if max_wind_speed is None else float(max_wind_speed)
         self.use_sparse_lbc = bool(self.config.get("use_sparse_lbc", False))
@@ -364,6 +366,7 @@ class Campaign:
             or self.max_active_models <= 0
             or self.radiation_update_interval <= 0
             or self.gpu_metrics_interval_seconds < 0
+            or self.output_interval <= 0
         ):
             raise ValueError(
                 "segment length, attempts, resource counts, and radiation cadence must be positive"
@@ -372,6 +375,20 @@ class Campaign:
             raise ValueError("input_partitions must not be empty")
         if self.radiation_scheme not in {"rrtmgp", "rrtmg"}:
             raise ValueError("radiation_scheme must be rrtmgp or rrtmg")
+        if self.output_profile == "wind_climatology":
+            if self.output_interval != 3600:
+                raise ValueError(
+                    "wind_climatology campaigns require output_interval=3600"
+                )
+            if self.segment_hours != int(self.segment_hours) or any(
+                value.minute or value.second or value.microsecond
+                for season in self.seasons
+                for value in (season.start, season.end)
+            ):
+                raise ValueError(
+                    "wind_climatology campaign segments and season endpoints "
+                    "must align to whole UTC hours"
+                )
         if self.acc_synchronous and self.defer_uploads:
             raise ValueError("acc_synchronous and defer_uploads cannot both be enabled")
         if self.max_wind_speed_ms is not None and (
@@ -657,8 +674,8 @@ class Campaign:
                     "SEGMENT_END": end.strftime(TIME),
                     "SEGMENT_RUN_DIR": str(run_dir),
                     "RESTART_INPUT": str(previous_restart or ""),
-                    "OUTPUT_PROFILE": self.config.get("output_profile", "evaluation"),
-                    "OUTPUT_INTERVAL": str(self.config.get("output_interval", 600)),
+                    "OUTPUT_PROFILE": self.output_profile,
+                    "OUTPUT_INTERVAL": str(self.output_interval),
                     "HICAR_RADIATION_UPDATE_INTERVAL": str(self.radiation_update_interval),
                     "HICAR_RADIATION_SCHEME": self.radiation_scheme,
                     "HICAR_DISABLE_SX": "1" if self.config.get("disable_sx", False) else "0",

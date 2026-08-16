@@ -152,6 +152,66 @@ def test_renderer_selects_rrtmg_without_rrtmgp_block_stanza(tmp_path: Path) -> N
     assert "rrtmgp_block_N" not in text
 
 
+def test_renderer_wind_climatology_profile_is_hourly_and_lean(tmp_path: Path) -> None:
+    static = tmp_path / "static.nc"
+    static_file(static)
+    pairs = [input_pair(tmp_path, hour) for hour in range(2)]
+    forcing_list = tmp_path / "forcing.txt"
+    forcing_list.write_text("".join(f'"{forcing}"\n' for forcing, _ in pairs))
+    namelist = tmp_path / "input.nml"
+
+    base = [
+        sys.executable,
+        str(RENDERER),
+        "--static-file",
+        str(static),
+        "--forcing-file-list",
+        str(forcing_list),
+        "--start-date",
+        "2020-01-01 00:00:00",
+        "--end-date",
+        "2020-01-01 01:00:00",
+        "--output-profile",
+        "wind_climatology",
+        "--output-dir",
+        str(tmp_path / "output"),
+        "--restart-dir",
+        str(tmp_path / "restart"),
+        "--output",
+        str(namelist),
+    ]
+
+    rejected = subprocess.run(base, text=True, capture_output=True)
+    assert rejected.returncode != 0
+    assert "--output-interval 3600" in rejected.stderr
+
+    accepted = subprocess.run(
+        [*base[:-2], "--output-interval", "3600", *base[-2:]],
+        text=True,
+        capture_output=True,
+    )
+    assert accepted.returncode == 0, accepted.stderr
+    text = namelist.read_text()
+    output_vars = text.split("output_vars =", maxsplit=1)[1].split("/", maxsplit=1)[0]
+    assert "outputinterval = 3600" in text
+    for variable in (
+        "u_agl_mean_1h",
+        "v_agl_mean_1h",
+        "wind_speed_agl_mean_1h",
+        "wind_speed_agl_10min_max_1h",
+        "u10m_mean_1h",
+        "v10m_mean_1h",
+        "wind_speed_10m_mean_1h",
+        "wind_speed_10m_10min_max_1h",
+        "ustar",
+        "sfc_Ri",
+        "hpbl",
+    ):
+        assert f"'{variable}'" in output_vars
+    for excluded in ("soil_temperature", "soil_water_content", "rsds", "lwtr"):
+        assert f"'{excluded}'" not in output_vars
+
+
 def test_segment_wrapper_stages_both_radiation_support_sets() -> None:
     text = SEGMENT_WRAPPER.read_text()
     assert "for asset in NoahmpTable.TBL rrtmg_support rrtmgp_support mp_support" in text

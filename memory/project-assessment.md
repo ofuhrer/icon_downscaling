@@ -33,9 +33,33 @@ Noah-MP/revised-MM5, prescribed water temperature, and 600 s radiation.
 Evaluation covered horizontal surface wind; terrain-following W, cloud,
 precipitation, lake thermodynamics, and slow land state remain limitations.
 
-HICAR production is `feature/icon_downscaling` at `0545a55d`; it advances the
-qualified RRTMGP state with the theta-reduction scheduling change described
-below. Static/forcing validation preserves exact
+A wind-climatology output candidate now integrates exact adaptive timesteps
+into hourly vector means, scalar means, and maxima of six ten-minute scalar
+means at 50, 75, 100, 125, 150, 200, and 250 m AGL, plus the corresponding
+10-m fields for SwissMetNet verification. The production profile adds only six
+hourly surface health/context fields; static geometry is not repeated. It is
+38 float32 plane-equivalents per hour, about 78.6 TB raw for 20 years on the
+2.95-million-cell domain versus about 583 TB for the former 47-plane,
+ten-minute evaluation profile. The ten-minute maximum is a sustained-wind
+diagnostic, not a model gust. Cold starts are encoded with a real NetCDF fill
+value and campaign segments are restricted to whole-hour boundaries so hourly
+accumulators are empty at checkpoints.
+
+The final one-node GPU/NCCL gate (build job `5117193`, integration job
+`5117508`) completed a continuous two-hour Gaudergrat run and an independent
+restart from hour one. All eight terminal wind fields were bitwise equal,
+cold-start masks and terminal finite coverage were complete, and scalar/vector
+plus ten-minute-maximum invariants passed with a 5e-4 m/s float32 tolerance.
+Verified shuffle+deflate-1 compaction reduced the 10.93 MB smoke file to
+3.80 MB (2.88:1), but its one-third fill-record content makes the ratio
+unsuitable for capacity planning. Exact evidence is in
+`case_studies/swiss_200m/validation/wind_climatology_output_v1.json`; a
+representative production-segment compression and throughput measurement
+remains required before enabling automatic compaction or reserving storage.
+
+HICAR production is `feature/icon_downscaling` at `5503dacd`; it advances the
+qualified RRTMGP and theta-reduction state with the restart-safe hourly wind-
+climatology output described below. Static/forcing validation preserves exact
 HHL/HFL geometry, chronology, finite/range contracts, and runtime-domain
 identity. Deterministic eight-worker preparation reduced a representative
 national record from about 80 to 16 minutes. Exact 32,768-target RBF chunks
@@ -226,3 +250,6 @@ campaign evidence and `swiss_200m/hicar_surface_verification_v1`, whose digest i
 `a26f6a524deb7f41f67302d4bf56103102a453a0d2ef51f276cfa2b0524ff644`.
 Legacy recovery/qualification data are not recoverable. Git retains coordinator
 `main` and HICAR `main` plus `feature/icon_downscaling`.
+The transient wind-output candidate build and validated restart case are under
+`$SCRATCH/icon_hicar/wind_climatology_20260816`; the versioned evidence manifest
+contains their exact commit, executable checksum, job IDs, and report paths.
