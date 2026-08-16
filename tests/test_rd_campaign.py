@@ -410,6 +410,8 @@ def test_regular_relaxation_publishes_and_requires_only_forcing(tmp_path, monkey
     assert configured.prepare_inputs() == 1
     assert submitted[0]["HICARPREP_WRITE_LBC"] == "0"
     assert submitted[0]["HICARPREP_RBF_BACKEND"] == "numpy"
+    assert submitted[0]["HICARPREP_RBF_THREADS"] == "4"
+    assert submitted[0]["NUMBA_CACHE_DIR"].endswith("/campaign/input_numba_cache")
     assert submitted[0]["HICAR_STATIC_SHA256"] == "a" * 64
 
     for when in hours(configured.seasons[0].start, configured.seasons[0].end):

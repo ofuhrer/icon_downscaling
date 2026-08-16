@@ -308,6 +308,9 @@ class Campaign:
         self.input_memory = str(self.config.get("input_memory", "64G"))
         self.input_time = str(self.config.get("input_time", "01:00:00"))
         self.input_exclusive = bool(self.config.get("input_exclusive", False))
+        self.input_numba_cache = Path(
+            self.config.get("input_numba_cache_dir", self.root / "input_numba_cache")
+        )
         self.model_nodes = int(self.config.get("model_nodes", 2))
         self.model_time = str(self.config.get("model_time", "06:00:00"))
         self.model_partition = str(self.config.get("model_partition", "preemptible"))
@@ -476,6 +479,7 @@ class Campaign:
     def prepare_inputs(self, *, bounded: bool = True) -> int:
         input_jobs = self.root / "input_jobs"
         input_jobs.mkdir(parents=True, exist_ok=True)
+        self.input_numba_cache.mkdir(parents=True, exist_ok=True)
         active_by_partition = {partition: 0 for partition in self.input_partitions}
         per_partition = max(1, self.max_active_inputs // len(self.input_partitions))
         submitted = 0
@@ -521,6 +525,8 @@ class Campaign:
                     "HICARPREP_VECTOR_WEIGHTS": self.config.get("vector_weights", ""),
                     "HICARPREP_COLUMN_WORKERS": str(self.input_column_workers),
                     "HICARPREP_RBF_BACKEND": self.input_rbf_backend,
+                    "HICARPREP_RBF_THREADS": str(self.input_cpus),
+                    "NUMBA_CACHE_DIR": str(self.input_numba_cache),
                     "HICARPREP_WRITE_LBC": "1" if self.use_sparse_lbc else "0",
                     "HICAR_PYTHON": self.config["python"],
                 },

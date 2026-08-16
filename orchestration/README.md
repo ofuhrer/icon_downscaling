@@ -36,7 +36,9 @@ Without it, input generation retains the full validator. `use_sparse_lbc`
 defaults to false because regular forcing
 owns production relaxation; sparse-LBC experiments must opt in explicitly.
 `input_rbf_backend` (`numpy` or `numba`) makes the qualified accelerated path
-explicit in campaign provenance.
+explicit in campaign provenance. Compiled RBF and vertical-W kernels reuse the
+campaign-local `input_numba_cache` across hourly worker processes; campaigns
+may override it with `input_numba_cache_dir`.
 `radiation_scheme` selects `rrtmgp` or `rrtmg` and is passed through to both
 namelist rendering and restart validation. `defer_uploads` defaults to false;
 when enabled it opts the NVHPC OpenACC runtime into deferred data uploads with
