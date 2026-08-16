@@ -102,13 +102,17 @@ def convert_water_to_hicar_mixing_ratios(
     names = [name for name in WATER_FIELDS if name in state]
     if "QV" not in names:
         raise ValueError("water conversion requires QV")
-    total = sum(
-        (np.asarray(state[name], dtype=np.float64) for name in names), np.zeros_like(state["QV"])
-    )
+    total = np.zeros_like(state["QV"], dtype=np.float64)
+    for name in names:
+        np.add(total, np.asarray(state[name], dtype=np.float64), out=total)
     if not np.isfinite(total).all() or np.any(total < 0.0) or np.any(total >= 1.0):
         raise ValueError("ICON water mass fractions do not define a positive dry-air fraction")
     dry_fraction = 1.0 - total
-    result = {name: np.asarray(value).copy() for name, value in state.items()}
+    # Water fields and the dependent density diagnostic receive new arrays;
+    # all other state arrays are immutable inputs to this conversion and can be
+    # shared.  Copying the complete T/P/U/V/W/geometry state cost a full-domain
+    # memory pass without providing isolation that this function uses.
+    result = dict(state)
     for name in names:
         result[name] = np.asarray(state[name], dtype=np.float64) / dry_fraction
 
@@ -116,13 +120,57 @@ def convert_water_to_hicar_mixing_ratios(
     # change.  P and T are unchanged; condensate contributes mass but no gas
     # pressure, while vapor contributes with Rv/Rd = 1.608.
     if "RHO" in result:
-        total_mixing = sum((result[name] for name in names), np.zeros_like(result["QV"]))
+        total_mixing = np.zeros_like(result["QV"])
+        for name in names:
+            np.add(total_mixing, result[name], out=total_mixing)
         result["RHO"] = (
             result["P"]
             * (1.0 + total_mixing)
             / (287.05 * result["T"] * (1.0 + 1.608 * result["QV"]))
         )
     return result
+
+
+def _source_absent_zero_qi(source: netCDF4.Dataset) -> bool:
+    """Recognize the decoder's explicit operationally-absent QI contract."""
+    dataset_policy = str(getattr(source, "missing_qi_policy", "")).strip().lower()
+    dataset_policy = dataset_policy.replace("-", "_")
+    if dataset_policy != "source_absent_zero":
+        return False
+    if "QI" not in source.variables:
+        return True
+    variable_policy = str(getattr(source["QI"], "source_policy", "")).strip().lower()
+    return variable_policy.replace("-", "_") == "source_absent_zero"
+
+
+def _remap_hydrometeors(
+    source: netCDF4.Dataset,
+    weights: RBFWeights,
+    *,
+    rbf_backend: str,
+) -> tuple[dict[str, np.ndarray], bool]:
+    """Remap archived hydrometeors, skipping explicitly absent zero QI."""
+    qi_source_absent_zero = _source_absent_zero_qi(source)
+    missing_hydrometeors = [
+        name
+        for name in REQUIRED_HYDROMETEORS
+        if name not in source.variables and not (name == "QI" and qi_source_absent_zero)
+    ]
+    if missing_hydrometeors:
+        raise KeyError(
+            "canonical ICON state is missing required hydrometeors: "
+            + ", ".join(missing_hydrometeors)
+        )
+    hydro = {
+        name: weights.apply(
+            _level_cell(source, name, ("level", "full_level"), ("kg kg-1", "kg/kg", "1")),
+            monotone=True,
+            backend=rbf_backend,
+        )
+        for name in (*REQUIRED_HYDROMETEORS, *OPTIONAL_HYDROMETEORS)
+        if name in source.variables and not (name == "QI" and qi_source_absent_zero)
+    }
+    return hydro, qi_source_absent_zero
 
 
 def _mass_grid_wind(
@@ -970,23 +1018,9 @@ def transform_icon_state(
             vector_weights,
             rbf_backend=rbf_backend,
         )
-        missing_hydrometeors = [
-            name for name in REQUIRED_HYDROMETEORS if name not in source.variables
-        ]
-        if missing_hydrometeors:
-            raise KeyError(
-                "canonical ICON state is missing required hydrometeors: "
-                + ", ".join(missing_hydrometeors)
-            )
-        hydro = {
-            name: weights.apply(
-                _level_cell(source, name, ("level", "full_level"), ("kg kg-1", "kg/kg", "1")),
-                monotone=True,
-                backend=rbf_backend,
-            )
-            for name in (*REQUIRED_HYDROMETEORS, *OPTIONAL_HYDROMETEORS)
-            if name in source.variables
-        }
+        hydro, qi_source_absent_zero = _remap_hydrometeors(
+            source, weights, rbf_backend=rbf_backend
+        )
         source_w = weights.apply(
             _level_cell(source, "W", ("half_level", "interface"), ("m s-1", "m/s")),
             backend=rbf_backend,
@@ -1019,6 +1053,10 @@ def transform_icon_state(
         source_w=source_w,
         column_workers=column_workers,
     )
+    if qi_source_absent_zero:
+        # Keep the operational absence visible in diagnostics while avoiding
+        # horizontal and per-column interpolation of a guaranteed zero field.
+        state["QI"] = np.zeros_like(state["QV"])
     column_seconds = time.perf_counter() - columns_started
 
     vertical_velocity_started = time.perf_counter()
@@ -1069,6 +1107,11 @@ def transform_icon_state(
         "source_reference_time": reference_time,
         "source_forecast_step_hours": forecast_step_hours,
         "missing_qi_policy": missing_qi_policy,
+        "qi_remap_policy": (
+            "source_absent_zero_synthesized_on_target"
+            if qi_source_absent_zero
+            else "source_values_horizontally_and_vertically_remapped"
+        ),
         "source_vertical_order": source_order,
         **geometry_diagnostics,
         "terrain_difference_min_m": float(np.min(terrain_differences)),
