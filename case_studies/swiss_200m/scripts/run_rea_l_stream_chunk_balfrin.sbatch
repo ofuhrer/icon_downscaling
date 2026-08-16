@@ -53,6 +53,7 @@ alpha_const=${HICAR_ALPHA_CONST:-1.0}
 max_wind_speed_ms=${HICAR_MAX_WIND_SPEED_MS:-}
 allow_input_superset=${HICAR_ALLOW_INPUT_SUPERSET:-0}
 acc_synchronous=${HICAR_ACC_SYNCHRONOUS:-0}
+defer_uploads=${HICAR_DEFER_UPLOADS:-0}
 cfl_reduction=${HICAR_CFL_REDUCTION_FACTOR:-1.6}
 renderer="$repo_root/case_studies/swiss_200m/scripts/render_hicar_namelist.py"
 wrapper=${HICAR_RANK_WRAPPER:-"$repo_root/case_studies/swiss_200m/scripts/gpu_rank_wrapper.sh"}
@@ -170,6 +171,20 @@ if [[ "$acc_synchronous" == 1 ]]; then
 else
   unset NVCOMPILER_ACC_SYNCHRONOUS
 fi
+case "$defer_uploads" in
+  0)
+    unset NVCOMPILER_ACC_DEFER_UPLOADS NVCOMPILER_ACC_DEFER_UPLOADS_THRESHOLD
+    ;;
+  1)
+    [[ "$acc_synchronous" == 0 ]] || {
+      echo "HICAR_DEFER_UPLOADS=1 is incompatible with HICAR_ACC_SYNCHRONOUS=1" >&2
+      exit 2
+    }
+    export NVCOMPILER_ACC_DEFER_UPLOADS=1
+    export NVCOMPILER_ACC_DEFER_UPLOADS_THRESHOLD=1
+    ;;
+  *) echo "HICAR_DEFER_UPLOADS must be 0 or 1" >&2; exit 2 ;;
+esac
 
 child=
 terminate() {

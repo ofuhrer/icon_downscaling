@@ -32,8 +32,11 @@ RBF weights, and `seasons` with `name`, `start`, `end`, and the valid-time
 runtime-domain file. `use_sparse_lbc` defaults to true for old experiment
 configs; the selected regular-relaxation reference sets it false.
 `radiation_scheme` selects `rrtmgp` or `rrtmg` and is passed through to both
-namelist rendering and restart validation. Each season has its own forcing
-cache because records embed the runtime-domain identity.
+namelist rendering and restart validation. `defer_uploads` defaults to false;
+when enabled it opts the NVHPC OpenACC runtime into deferred data uploads with
+a one-byte threshold. It cannot be combined with `acc_synchronous` and should
+be enabled only after a topology-matched output/restart A/B gate. Each season
+has its own forcing cache because records embed the runtime-domain identity.
 
 The selected national campaign uses `model_partition=normal`,
 `max_active_models=1` and `model_max_partition_fraction=0.5`: one qualified

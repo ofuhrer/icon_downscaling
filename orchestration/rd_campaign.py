@@ -316,6 +316,8 @@ class Campaign:
         self.radiation_scheme = str(
             self.config.get("radiation_scheme", "rrtmgp")
         ).lower()
+        self.acc_synchronous = bool(self.config.get("acc_synchronous", False))
+        self.defer_uploads = bool(self.config.get("defer_uploads", False))
         max_wind_speed = self.config.get("max_wind_speed_ms")
         self.max_wind_speed_ms = (
             None if max_wind_speed is None else float(max_wind_speed)
@@ -359,6 +361,10 @@ class Campaign:
             raise ValueError("input_partitions must not be empty")
         if self.radiation_scheme not in {"rrtmgp", "rrtmg"}:
             raise ValueError("radiation_scheme must be rrtmgp or rrtmg")
+        if self.acc_synchronous and self.defer_uploads:
+            raise ValueError(
+                "acc_synchronous and defer_uploads cannot both be enabled"
+            )
         if self.max_wind_speed_ms is not None and (
             not math.isfinite(self.max_wind_speed_ms)
             or self.max_wind_speed_ms <= 0.0
@@ -668,7 +674,10 @@ class Campaign:
                         "1" if self.full_season_input_lists else "0"
                     ),
                     "HICAR_ACC_SYNCHRONOUS": (
-                        "1" if self.config.get("acc_synchronous", False) else "0"
+                        "1" if self.acc_synchronous else "0"
+                    ),
+                    "HICAR_DEFER_UPLOADS": (
+                        "1" if self.defer_uploads else "0"
                     ),
                 }
                 job = submit(
