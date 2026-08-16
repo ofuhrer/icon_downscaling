@@ -18,6 +18,10 @@ if str(ROOT) not in sys.path:
 from preprocessing.hicarprep.boundary import validate_boundary_sequence
 from preprocessing.hicarprep.pipeline import forcing_geometry_for_serialization
 from preprocessing.hicarprep.products import sha256
+from preprocessing.hicarprep.publication import (
+    relocate_publication_receipt,
+    validate_publication_receipt,
+)
 from preprocessing.hicarprep.sst import SST_POLICY_VERSION, SST_REMAP_POLICY
 
 
@@ -46,9 +50,60 @@ def main() -> int:
         type=Path,
         help="optional sparse-LBC companion when that relaxation path is selected",
     )
+    parser.add_argument("--published-forcing-path", type=Path)
+    parser.add_argument("--published-boundary-path", type=Path)
     parser.add_argument("--static-file", type=Path, required=True)
     parser.add_argument("--expected-valid-time")
+    parser.add_argument(
+        "--mode",
+        choices=("full", "publication"),
+        default="full",
+        help="full qualification or receipt-bound closed-file publication check",
+    )
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        help="closed-file manifest required by publication mode",
+    )
+    parser.add_argument(
+        "--expected-static-sha256",
+        help="optional trusted campaign/static digest for publication mode",
+    )
     args = parser.parse_args()
+
+    if args.mode == "publication":
+        if args.manifest is None:
+            raise SystemExit("publication mode requires --manifest")
+        if args.expected_static_sha256 is None:
+            raise SystemExit("publication mode requires --expected-static-sha256")
+        try:
+            report = validate_publication_receipt(
+                args.forcing_file,
+                args.static_file,
+                args.manifest,
+                expected_valid_time=args.expected_valid_time,
+                boundary_path=args.boundary_file,
+                expected_static_sha256=args.expected_static_sha256,
+            )
+        except (OSError, ValueError, KeyError) as exc:
+            raise SystemExit(str(exc)) from exc
+        if args.published_forcing_path is not None:
+            try:
+                relocate_publication_receipt(
+                    args.manifest,
+                    args.forcing_file,
+                    args.published_forcing_path,
+                    boundary_path=args.boundary_file,
+                    published_boundary_path=args.published_boundary_path,
+                )
+            except (OSError, ValueError, KeyError) as exc:
+                raise SystemExit(str(exc)) from exc
+        print(
+            f"PASS publication {args.forcing_file}"
+            + (f" {args.boundary_file}" if args.boundary_file is not None else "")
+            + f" {report['valid_time']}"
+        )
+        return 0
 
     forcing_sha256 = sha256(args.forcing_file)
     static_sha256 = sha256(args.static_file)

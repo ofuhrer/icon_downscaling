@@ -219,6 +219,7 @@ def _decode_icon_atmosphere(args: argparse.Namespace) -> int:
         args.valid_time,
         args.output,
         missing_qi_policy=args.missing_qi_policy,
+        compression_level=args.compression_level,
     )
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 0
@@ -264,20 +265,25 @@ def _prepare_hicar_forcing(args: argparse.Namespace) -> int:
             valid_time=str(diagnostics["valid_time"]),
             water_representation="dry-air mixing ratio",
         )
+    source_digest = sha256(args.icon_state)
+    static_digest = sha256(args.static)
+    target_sst_digest = sha256(args.target_sst)
+    weights_digest = sha256(args.weights)
+    output_digest = sha256(args.output)
     manifest = {
         "schema": "hicarprep-target-forcing-manifest-v1",
         "status": "PASS",
         "valid_time": str(diagnostics["valid_time"]).replace("Z", ""),
-        "source": {"path": str(args.icon_state), "sha256": sha256(args.icon_state)},
-        "static": {"path": str(args.static), "sha256": sha256(args.static)},
+        "source": {"path": str(args.icon_state), "sha256": source_digest},
+        "static": {"path": str(args.static), "sha256": static_digest},
         "target_sst": {
             "path": str(args.target_sst),
-            "sha256": sha256(args.target_sst),
+            "sha256": target_sst_digest,
         },
-        "weights": {"path": str(args.weights), "sha256": sha256(args.weights)},
-        "output": {"path": str(args.output), "sha256": sha256(args.output)},
+        "weights": {"path": str(args.weights), "sha256": weights_digest},
+        "output": {"path": str(args.output), "sha256": output_digest},
         "forcing_file": str(args.output),
-        "forcing_sha256": sha256(args.output),
+        "forcing_sha256": output_digest,
         "diagnostics": diagnostics,
         "water_representation": "dry-air mixing ratio",
         "lateral_relaxation_authority": lateral_relaxation_authority,
@@ -330,6 +336,14 @@ def parser() -> argparse.ArgumentParser:
         choices=("error", "source-absent-zero"),
         default="error",
         help="explicit policy for QI, which is absent from operational REA-L",
+    )
+    decode_atmosphere.add_argument(
+        "--compression-level",
+        type=int,
+        choices=range(10),
+        default=1,
+        metavar="0..9",
+        help="lossless deflate level for the job-local adapter (0 disables compression)",
     )
     decode_atmosphere.set_defaults(func=_decode_icon_atmosphere)
 

@@ -249,6 +249,19 @@ def _cell_variable(dataset: netCDF4.Dataset, name: str) -> np.ndarray:
     return values
 
 
+def native_storage_options(compression_level: int) -> dict[str, object]:
+    """Return lossless NetCDF options for the ephemeral native adapter."""
+    if isinstance(compression_level, bool) or not isinstance(compression_level, int):
+        raise ValueError("native compression level must be an integer")
+    if not 0 <= compression_level <= 9:
+        raise ValueError("native compression level must lie in 0..9")
+    return (
+        {"zlib": True, "complevel": compression_level, "shuffle": True}
+        if compression_level
+        else {}
+    )
+
+
 def decode_icon_atmosphere(
     dynamic_grib: Path,
     geometry_grib: Path,
@@ -257,12 +270,14 @@ def decode_icon_atmosphere(
     output: Path,
     *,
     missing_qi_policy: str = "error",
+    compression_level: int = 1,
 ) -> dict[str, object]:
     """Decode one operational REA-L valid time into canonical native ICON NetCDF."""
     if output.exists():
         raise FileExistsError(f"refusing to overwrite {output}")
     if missing_qi_policy not in {"error", "source-absent-zero"}:
         raise ValueError("unknown missing-QI policy")
+    compression = native_storage_options(compression_level)
     requested = iso_utc(valid_time)
     dynamic, dynamic_contract = index_inventory(
         read_grib_fields(dynamic_grib), (*FULL_LEVEL_SPECS, HALF_LEVEL_SPECS[0]), requested
@@ -321,27 +336,36 @@ def decode_icon_atmosphere(
             output_variables = {}
             for spec in FULL_LEVEL_SPECS:
                 variable = target.createVariable(
-                    spec.name, "f8", ("level", "cell"), zlib=True, chunksizes=(1, cell_count)
+                    spec.name,
+                    "f8",
+                    ("level", "cell"),
+                    chunksizes=(1, cell_count),
+                    **compression,
                 )
                 variable.units = str(metadata(dynamic[spec.name][1], "units"))
                 output_variables[spec.name] = variable
             qi = target.createVariable(
-                "QI", "f8", ("level", "cell"), zlib=True, chunksizes=(1, cell_count)
+                "QI", "f8", ("level", "cell"), chunksizes=(1, cell_count), **compression
             )
             qi.units = "kg kg-1"
             qi.source_policy = "source_absent_zero"
             w = target.createVariable(
-                "W", "f8", ("half_level", "cell"), zlib=True, chunksizes=(1, cell_count)
+                "W",
+                "f8",
+                ("half_level", "cell"),
+                chunksizes=(1, cell_count),
+                **compression,
             )
             w.units = str(metadata(dynamic["W"][1], "units"))
             hhl = target.createVariable(
-                "HHL", "f8", ("half_level", "cell"), zlib=True,
+                "HHL", "f8", ("half_level", "cell"),
                 chunksizes=(1, cell_count),
+                **compression,
             )
             hhl.units = str(metadata(geometry["HHL"][1], "units"))
             surface_variables = {}
             for spec in SURFACE_SPECS:
-                variable = target.createVariable(spec.name, "f8", ("cell",), zlib=True)
+                variable = target.createVariable(spec.name, "f8", ("cell",), **compression)
                 variable.units = str(metadata(geometry[spec.name][0], "units"))
                 surface_variables[spec.name] = variable
 
@@ -389,6 +413,11 @@ def decode_icon_atmosphere(
             target.vertical_order = "bottom_to_top"
             target.missing_qi_policy = "source_absent_zero"
             target.missing_source_hydrometeors = "QI,QR,QS,QG"
+            target.native_storage = (
+                f"lossless deflate level {compression_level} with shuffle"
+                if compression_level
+                else "uncompressed"
+            )
             target.dynamic_grib_sha256 = sha256(dynamic_grib)
             target.geometry_grib_sha256 = sha256(geometry_grib)
             target.icon_extpar_sha256 = sha256(icon_extpar)
@@ -411,6 +440,7 @@ def decode_icon_atmosphere(
         "horizontal_grid_uuid": uuid,
         "cell_count": cell_count,
         "missing_qi_policy": missing_qi_policy,
+        "compression_level": compression_level,
         "dynamic_message_count": dynamic_contract["message_count"],
         "geometry_message_count": geometry_contract["message_count"],
     }
