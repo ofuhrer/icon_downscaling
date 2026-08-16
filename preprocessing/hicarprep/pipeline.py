@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 import datetime as dt
 import hashlib
@@ -25,6 +26,7 @@ from .remap import (
 from .rotation import hicar_grid_rotation
 from .sst import SST_POLICY_VERSION, SST_REMAP_POLICY, load_target_sst
 from .vertical import (
+    _interpolate_ordered_height_profile,
     adjust_vertical_velocity,
     interpolate_interface_w_to_hfl,
     interpolate_height_profile,
@@ -35,6 +37,10 @@ from .vertical import (
 REQUIRED_FULL_LEVEL_FIELDS = ("T", "P", "QV")
 REQUIRED_HYDROMETEORS = ("QC", "QI")
 OPTIONAL_HYDROMETEORS = ("QR", "QS", "QG")
+FORCING_COMPRESSION_LEVEL = 1
+BOUNDARY_COMPRESSION_LEVEL = 1
+BOUNDARY_POINT_CHUNK_SIZE = 4_096
+BOUNDARY_STORAGE_DTYPE = "f4"
 
 
 def forcing_geometry_for_serialization(
@@ -374,27 +380,34 @@ def write_hicar_forcing_record(
     temporary = Path(temporary_name)
     try:
         with netCDF4.Dataset(temporary, "w") as dataset:
+            compression = {
+                "zlib": True,
+                "complevel": FORCING_COMPRESSION_LEVEL,
+                "shuffle": True,
+            }
             dataset.createDimension("y_1", ny)
             dataset.createDimension("x_1", nx)
             dataset.createDimension("z", levels)
             dataset.createDimension("z_hl", levels + 1)
             dataset.createDimension("time", None)
-            dataset.createVariable("lat_1", "f8", ("y_1", "x_1"), zlib=True)[:] = lat
-            dataset.createVariable("lon_1", "f8", ("y_1", "x_1"), zlib=True)[:] = lon
+            dataset.createVariable("lat_1", "f8", ("y_1", "x_1"), **compression)[:] = lat
+            dataset.createVariable("lon_1", "f8", ("y_1", "x_1"), **compression)[:] = lon
             dataset["lat_1"].units = "degrees_north"
             dataset["lon_1"].units = "degrees_east"
-            dataset.createVariable("HHL", "f4", ("z_hl", "y_1", "x_1"), zlib=True)[:] = (
+            dataset.createVariable("HHL", "f4", ("z_hl", "y_1", "x_1"), **compression)[:] = (
                 serialized_hhl
             )
-            dataset.createVariable("HFL", "f4", ("z", "y_1", "x_1"), zlib=True)[:] = serialized_hfl
-            dataset.createVariable("HSURF", "f4", ("y_1", "x_1"), zlib=True)[:] = terrain
-            dataset.createVariable("FR_LAND", "f4", ("y_1", "x_1"), zlib=True)[:] = land_fraction
-            sst_variable = dataset.createVariable("SST", "f4", ("time", "y_1", "x_1"), zlib=True)
+            dataset.createVariable("HFL", "f4", ("z", "y_1", "x_1"), **compression)[:] = serialized_hfl
+            dataset.createVariable("HSURF", "f4", ("y_1", "x_1"), **compression)[:] = terrain
+            dataset.createVariable("FR_LAND", "f4", ("y_1", "x_1"), **compression)[:] = land_fraction
+            sst_variable = dataset.createVariable(
+                "SST", "f4", ("time", "y_1", "x_1"), **compression
+            )
             sst_variable[0] = sst
             sst_variable.units = "K"
             sst_variable.hicar_support = "water cells"
             sst_unsupported_mask = dataset.createVariable(
-                "SST_unsupported_water_mask", "i1", ("y_1", "x_1"), zlib=True
+                "SST_unsupported_water_mask", "i1", ("y_1", "x_1"), **compression
             )
             sst_unsupported_mask[:] = sst_unsupported_water_mask
             sst_unsupported_mask.long_name = (
@@ -405,8 +418,8 @@ def write_hicar_forcing_record(
                 "SST_nearest_same_surface_candidate_distance_km",
                 "f8",
                 ("y_1", "x_1"),
-                zlib=True,
                 fill_value=np.nan,
+                **compression,
             )
             sst_candidate_distance[:] = sst_candidate_distance_km
             sst_candidate_distance.units = "km"
@@ -415,7 +428,7 @@ def write_hicar_forcing_record(
             )
             for name, values in payloads.items():
                 variable = dataset.createVariable(
-                    name, "f4", ("time", "z", "y_1", "x_1"), zlib=True
+                    name, "f4", ("time", "z", "y_1", "x_1"), **compression
                 )
                 variable[0] = values
             time = dataset.createVariable("time", "f8", ("time",))
@@ -461,6 +474,7 @@ def write_hicar_forcing_record(
             )
             dataset.target_grid_fingerprint = grid_fingerprint(lat, lon)
             dataset.geometry_serialization = "static_sleve_with_one_ulp_top_cover"
+            dataset.forcing_storage = "deflate level 1 with shuffle"
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
@@ -570,14 +584,17 @@ def _source_wind(
     target_lat: np.ndarray,
     target_lon: np.ndarray,
     vector_operator: VectorRBFWeights | None,
+    rbf_backend: str = "numpy",
 ) -> tuple[np.ndarray, np.ndarray]:
     if "U" in dataset.variables and "V" in dataset.variables:
         return operator.apply(
             _level_cell(dataset, "U", ("level", "full_level"), ("m s-1", "m/s")),
             monotone=True,
+            backend=rbf_backend,
         ), operator.apply(
             _level_cell(dataset, "V", ("level", "full_level"), ("m s-1", "m/s")),
             monotone=True,
+            backend=rbf_backend,
         )
     edge_fields = {"VN", "edge_lat", "edge_lon", "edge_normal_east", "edge_normal_north"}
     if not edge_fields.issubset(dataset.variables):
@@ -614,6 +631,7 @@ def _remap_vertical_interfaces(
     weights: RBFWeights,
     *,
     minimum_layer_thickness_m: float = MINIMUM_REMAPPED_LAYER_THICKNESS_M,
+    rbf_backend: str = "numpy",
 ) -> tuple[np.ndarray, dict[str, float | int | str]]:
     """Remap bottom-to-top interfaces without allowing layer crossings.
 
@@ -636,10 +654,10 @@ def _remap_vertical_interfaces(
     if not np.isfinite(native).all() or not np.all(native_thickness > 0.0):
         raise ValueError("native ICON HHL must be finite and strictly bottom-to-top")
 
-    bottom = weights.apply(native[0], monotone=True)
-    top = weights.apply(native[-1], monotone=True)
+    bottom = weights.apply(native[0], monotone=True, backend=rbf_backend)
+    top = weights.apply(native[-1], monotone=True, backend=rbf_backend)
     endpoint_span = top - bottom
-    thickness = weights.apply(native_thickness, monotone=True)
+    thickness = weights.apply(native_thickness, monotone=True, backend=rbf_backend)
     thickness_sum = np.sum(thickness, axis=0)
     if (
         not np.isfinite(bottom).all()
@@ -741,7 +759,7 @@ def _column_chunk(work: _ColumnWork, bounds: tuple[int, int]) -> tuple[int, int,
         )
         for name in work.state:
             work.state[name][:, row, col] = column[name]
-        work.target_w[:, row, col] = interpolate_height_profile(
+        work.target_w[:, row, col] = _interpolate_ordered_height_profile(
             work.source_hhl[:, row, col],
             work.source_w[:, row, col],
             work.target_hhl[:, row, col],
@@ -856,6 +874,7 @@ def transform_icon_state(
     vector_weights: VectorRBFWeights | None = None,
     *,
     column_workers: int = 1,
+    rbf_backend: str = "numpy",
 ) -> tuple[dict[str, np.ndarray], dict[str, float | int | str]]:
     """Transform one canonical native ICON timestamp to final target columns."""
     _validate_column_workers(column_workers)
@@ -925,7 +944,11 @@ def transform_icon_state(
         if declared_aliases[declared_order] != source_order:
             raise ValueError("declared ICON vertical order contradicts native HHL")
         bottom_to_top_hhl = native_hhl if source_order == "bottom_to_top" else native_hhl[::-1]
-        source_hhl, geometry_diagnostics = _remap_vertical_interfaces(bottom_to_top_hhl, weights)
+        source_hhl, geometry_diagnostics = _remap_vertical_interfaces(
+            bottom_to_top_hhl,
+            weights,
+            rbf_backend=rbf_backend,
+        )
         unit_policy = {
             "T": ("k", "kelvin"),
             "P": ("pa", "pascal", "pascals"),
@@ -935,11 +958,17 @@ def transform_icon_state(
             name: weights.apply(
                 _level_cell(source, name, ("level", "full_level"), unit_policy[name]),
                 monotone=True,
+                backend=rbf_backend,
             )
             for name in REQUIRED_FULL_LEVEL_FIELDS
         }
         remapped["U"], remapped["V"] = _source_wind(
-            source, weights, target_lat, target_lon, vector_weights
+            source,
+            weights,
+            target_lat,
+            target_lon,
+            vector_weights,
+            rbf_backend=rbf_backend,
         )
         missing_hydrometeors = [
             name for name in REQUIRED_HYDROMETEORS if name not in source.variables
@@ -953,12 +982,14 @@ def transform_icon_state(
             name: weights.apply(
                 _level_cell(source, name, ("level", "full_level"), ("kg kg-1", "kg/kg", "1")),
                 monotone=True,
+                backend=rbf_backend,
             )
             for name in (*REQUIRED_HYDROMETEORS, *OPTIONAL_HYDROMETEORS)
             if name in source.variables
         }
         source_w = weights.apply(
-            _level_cell(source, "W", ("half_level", "interface"), ("m s-1", "m/s"))
+            _level_cell(source, "W", ("half_level", "interface"), ("m s-1", "m/s")),
+            backend=rbf_backend,
         )
         valid_time = str(getattr(source, "valid_time", "unknown"))
         source_uuid = str(getattr(source, "horizontal_grid_uuid", weights.source_fingerprint))
@@ -1051,7 +1082,10 @@ def transform_icon_state(
         "terrain_columns_higher": cases["higher"],
         "column_workers_requested": column_workers,
         "column_workers_effective": effective_column_workers,
-        "column_worker_start_method": ("serial" if effective_column_workers == 1 else "fork"),
+        "column_worker_start_method": (
+            "serial" if effective_column_workers == 1 else "fork"
+        ),
+        "rbf_apply_backend": rbf_backend,
         "timing_static_read_seconds": static_seconds,
         "timing_horizontal_remap_seconds": horizontal_seconds,
         "timing_column_reconstruction_seconds": column_seconds,
@@ -1165,14 +1199,30 @@ def write_initial_condition(
         temporary.unlink(missing_ok=True)
 
 
+def _boundary_support(
+    x: np.ndarray, y: np.ndarray, width_m: float
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    if width_m <= 0.0:
+        raise ValueError("boundary width must be positive")
+    x_values = np.asarray(x, dtype=np.float64)
+    y_values = np.asarray(y, dtype=np.float64)
+    if x_values.ndim != 1 or y_values.ndim != 1:
+        raise ValueError("boundary x/y coordinates must be one-dimensional")
+    x_distance = np.minimum(x_values - np.min(x_values), np.max(x_values) - x_values)
+    y_distance = np.minimum(y_values - np.min(y_values), np.max(y_values) - y_values)
+    rows, cols = np.nonzero(
+        (y_distance[:, np.newaxis] <= width_m + 1.0e-6)
+        | (x_distance[np.newaxis, :] <= width_m + 1.0e-6)
+    )
+    distance = np.minimum(y_distance[rows], x_distance[cols])
+    return rows, cols, distance
+
+
 def boundary_point_indices(
     x: np.ndarray, y: np.ndarray, width_m: float
 ) -> tuple[np.ndarray, np.ndarray]:
-    if width_m <= 0.0:
-        raise ValueError("boundary width must be positive")
-    xx, yy = np.meshgrid(np.asarray(x), np.asarray(y))
-    distance = np.minimum.reduce((xx - xx.min(), xx.max() - xx, yy - yy.min(), yy.max() - yy))
-    return np.nonzero(distance <= width_m + 1.0e-6)
+    rows, cols, _ = _boundary_support(x, y, width_m)
+    return rows, cols
 
 
 def boundary_relaxation_weights(
@@ -1185,12 +1235,10 @@ def boundary_relaxation_weights(
     each frame makes the preprocessor, rather than a model-grid cell count,
     authoritative for the lateral relaxation geometry.
     """
-    rows, cols = boundary_point_indices(x, y, width_m)
-    xx, yy = np.meshgrid(np.asarray(x, dtype=np.float64), np.asarray(y, dtype=np.float64))
-    distance = np.minimum.reduce((xx - xx.min(), xx.max() - xx, yy - yy.min(), yy.max() - yy))
-    phase = np.clip(distance[rows, cols] / float(width_m), 0.0, 1.0)
+    rows, cols, distance = _boundary_support(x, y, width_m)
+    phase = np.clip(distance / float(width_m), 0.0, 1.0)
     weights = np.cos(0.5 * np.pi * phase) ** 2
-    weights[distance[rows, cols] <= 1.0e-6] = 1.0
+    weights[distance <= 1.0e-6] = 1.0
     weights[phase >= 1.0] = 0.0
     return rows, cols, weights
 
@@ -1226,6 +1274,15 @@ def write_boundary_condition(
             raise ValueError(f"sparse LBC {name} must use the target mass grid")
     if np.asarray(state["HHL"]).shape != (levels + 1, ny, nx):
         raise ValueError("sparse LBC HHL must use target mass-grid interfaces")
+    initial_attributes: dict[str, object] = {}
+    with netCDF4.Dataset(initial_condition_path) as initial:
+        for attribute in ("static_sha256", "target_grid_fingerprint"):
+            value = getattr(initial, attribute, None)
+            if value is None:
+                raise ValueError(
+                    f"{initial_condition_path}: missing required {attribute} provenance"
+                )
+            initial_attributes[attribute] = value
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=f".{path.name}.", suffix=".partial", dir=path.parent
@@ -1233,67 +1290,87 @@ def write_boundary_condition(
     os.close(descriptor)
     temporary = Path(temporary_name)
     try:
-        with netCDF4.Dataset(temporary, "w") as dataset:
-            dataset.createDimension("boundary_point", rows.size)
-            dataset.createDimension("level", levels)
-            dataset.createDimension("half_level", state["HHL"].shape[0])
-            dataset.createVariable("row", "i4", ("boundary_point",))[:] = rows
-            dataset.createVariable("column", "i4", ("boundary_point",))[:] = cols
-            mass_weight = dataset.createVariable("relaxation_weight", "f8", ("boundary_point",))
-            mass_weight[:] = relaxation_weight
-            mass_weight.long_name = "lateral relaxation coefficient on the mass grid"
-            for name in (*sparse_fields, "HFL", "HHL"):
-                value = np.asarray(state[name], dtype=np.float64)
-                dimensions = (
-                    ("half_level", "boundary_point")
-                    if name == "HHL"
-                    else ("level", "boundary_point")
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            initial_digest = executor.submit(sha256, initial_condition_path)
+            with netCDF4.Dataset(temporary, "w") as dataset:
+                dataset.createDimension("boundary_point", rows.size)
+                dataset.createDimension("level", levels)
+                dataset.createDimension("half_level", state["HHL"].shape[0])
+                dataset.createVariable("row", "i4", ("boundary_point",))[:] = rows
+                dataset.createVariable("column", "i4", ("boundary_point",))[:] = cols
+                mass_weight = dataset.createVariable(
+                    "relaxation_weight", "f8", ("boundary_point",)
                 )
-                payload = value[:, rows, cols]
-                dataset.createVariable(name, "f8", dimensions, zlib=True)[:] = payload
-            dataset.product_type = "hicar_lateral_boundary_state"
-            dataset.hicarprep_product_version = PRODUCT_VERSION
-            dataset.valid_time = str(valid_time)
-            dataset.boundary_width_m = boundary_width_m
-            dataset.domain_nx = int(np.asarray(x).size)
-            dataset.domain_ny = int(np.asarray(y).size)
-            dataset.initial_condition_sha256 = sha256(initial_condition_path)
-            with netCDF4.Dataset(initial_condition_path) as initial:
-                for attribute in ("static_sha256", "target_grid_fingerprint"):
-                    value = getattr(initial, attribute, None)
-                    if value is None:
-                        raise ValueError(
-                            f"{initial_condition_path}: missing required {attribute} provenance"
-                        )
+                mass_weight[:] = relaxation_weight
+                mass_weight.long_name = "lateral relaxation coefficient on the mass grid"
+                for name in (*sparse_fields, "HFL", "HHL"):
+                    value = np.asarray(state[name])
+                    dimensions = (
+                        ("half_level", "boundary_point")
+                        if name == "HHL"
+                        else ("level", "boundary_point")
+                    )
+                    point_chunk = min(BOUNDARY_POINT_CHUNK_SIZE, rows.size)
+                    variable = dataset.createVariable(
+                        name,
+                        BOUNDARY_STORAGE_DTYPE,
+                        dimensions,
+                        zlib=True,
+                        complevel=BOUNDARY_COMPRESSION_LEVEL,
+                        shuffle=True,
+                        chunksizes=(value.shape[0], point_chunk),
+                    )
+                    for start in range(0, rows.size, point_chunk):
+                        stop = min(start + point_chunk, rows.size)
+                        variable[:, start:stop] = value[
+                            :, rows[start:stop], cols[start:stop]
+                        ]
+                dataset.product_type = "hicar_lateral_boundary_state"
+                dataset.hicarprep_product_version = PRODUCT_VERSION
+                dataset.valid_time = str(valid_time)
+                dataset.boundary_width_m = boundary_width_m
+                dataset.domain_nx = int(np.asarray(x).size)
+                dataset.domain_ny = int(np.asarray(y).size)
+                dataset.initial_condition_sha256 = initial_digest.result()
+                for attribute, value in initial_attributes.items():
                     dataset.setncattr(attribute, value)
-            dataset.frame_definition = "distance_to_nearest_domain_edge <= boundary_width_m"
-            dataset.relaxation_profile = (
-                "cosine_squared(distance_to_nearest_domain_edge / boundary_width_m); "
-                "one at the outer edge and zero at boundary_width_m"
-            )
-            dataset.relaxation_timescale_seconds = 3600.0
-            dataset.relaxation_update = (
-                "outer edge: exact target assignment; shoulder: "
-                "alpha=1-exp(-relaxation_weight*dt/relaxation_timescale_seconds)"
-            )
-            dataset.sparse_field_contract = "T,P,QV,QC,QI on mass-grid boundary points"
-            dataset.temporal_semantics = (
-                "instantaneous target-native state; runtime brackets consecutive valid times"
-            )
-            dataset.hicar_pressure_adjustment = "HICARPREP_HYDROSTATIC_RECONSTRUCTION"
-            dataset.wind_balance = (
-                "NO_SPARSE_WIND; regular forcing and HICAR wind solver authoritative"
-            )
-            dataset.water_representation = water_representation
-            dataset.hicar_water_conversion = (
-                "APPLIED_JOINT_ALL_WATER_SPECIES"
-                if water_representation == "dry-air mixing ratio"
-                else "NOT_APPLIED_RESEARCH_PRODUCT"
-            )
-            dataset.authoritative_temporal_basis = (
-                "T,P,QV,QC,QI; dependent diagnostics refreshed after interpolation"
-            )
-            dataset.lateral_w_policy = "regular_forcing_initial_guess_then_hicar_projection"
+                dataset.frame_definition = (
+                    "distance_to_nearest_domain_edge <= boundary_width_m"
+                )
+                dataset.relaxation_profile = (
+                    "cosine_squared(distance_to_nearest_domain_edge / boundary_width_m); "
+                    "one at the outer edge and zero at boundary_width_m"
+                )
+                dataset.relaxation_timescale_seconds = 3600.0
+                dataset.relaxation_update = (
+                    "outer edge: exact target assignment; shoulder: "
+                    "alpha=1-exp(-relaxation_weight*dt/relaxation_timescale_seconds)"
+                )
+                dataset.sparse_field_contract = (
+                    "T,P,QV,QC,QI on mass-grid boundary points"
+                )
+                dataset.sparse_field_storage = (
+                    "float32; deflate level 1; lossless relative to HICAR real-valued reads"
+                )
+                dataset.temporal_semantics = (
+                    "instantaneous target-native state; runtime brackets consecutive valid times"
+                )
+                dataset.hicar_pressure_adjustment = "HICARPREP_HYDROSTATIC_RECONSTRUCTION"
+                dataset.wind_balance = (
+                    "NO_SPARSE_WIND; regular forcing and HICAR wind solver authoritative"
+                )
+                dataset.water_representation = water_representation
+                dataset.hicar_water_conversion = (
+                    "APPLIED_JOINT_ALL_WATER_SPECIES"
+                    if water_representation == "dry-air mixing ratio"
+                    else "NOT_APPLIED_RESEARCH_PRODUCT"
+                )
+                dataset.authoritative_temporal_basis = (
+                    "T,P,QV,QC,QI; dependent diagnostics refreshed after interpolation"
+                )
+                dataset.lateral_w_policy = (
+                    "regular_forcing_initial_guess_then_hicar_projection"
+                )
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)

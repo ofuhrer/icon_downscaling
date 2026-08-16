@@ -35,10 +35,14 @@ policy.
 
 Conditioned RBF stencils require condition number <=`1e10` after the minimum
 nugget and normalized-weight L1 <=`10`. Clip remapped earth-relative U/V to
-local donor component bounds. Apply RBF in 32,768-target chunks without
-changing donor order or `np.sum` arithmetic; a whole-domain gather creates an
-18.88 GB temporary. Use one exclusive CPU node for each eight-worker national
-record and requalify any chunk/arithmetic change end to end.
+local donor component bounds. The NumPy backend applies RBF in 32,768-target
+chunks and retains `np.sum` arithmetic; a whole-domain gather creates an 18.88
+GB temporary. The qualified Numba backend accumulates the same fixed donor
+sequence without a gather/product array. Bit identity with NumPy is not a
+requirement: require deterministic repeats, constant preservation, donor-bound
+clipping, quantified field-level roundoff, production validation, and the
+two-hour HICAR pilot. Requalify any other stencil/arithmetic change end to end.
+Use one exclusive CPU node for each eight-worker national record.
 
 ## Validation and publication
 
@@ -50,6 +54,12 @@ record and requalify any chunk/arithmetic change end to end.
 
 Create NetCDF atomically. Add ready markers only for overlapping campaign
 readers and keep source/configuration provenance in one campaign manifest.
+Use lossless deflate level 1 for recurring regular forcing. Sparse scalar
+frames store atmospheric and geometry payloads as float32 in bounded
+point-major chunks; this is exactly the precision consumed by HICAR's default
+`real` sparse reader. Keep relaxation weights float64, require one storage
+dtype across a time sequence, and qualify storage changes against the decoded
+values seen by the reader rather than whole-file byte identity.
 Maintained entry points are `scripts/hicarprep.py`, Swiss decoder/target Slurm
 scripts, `case_studies/swiss_200m/validation/validate_forcing.py`, and
 `preprocessing/hicarprep/boundary.py`. Run a two-hour pilot after decoder,

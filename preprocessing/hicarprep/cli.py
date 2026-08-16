@@ -32,6 +32,7 @@ from .products import (
 )
 from .registry import FieldRegistry
 from .remap import (
+    RBF_APPLY_BACKENDS,
     RBFWeights,
     VectorRBFWeights,
     build_rbf_weights,
@@ -232,6 +233,7 @@ def _prepare_hicar_forcing(args: argparse.Namespace) -> int:
         weights,
         vector_weights=vector_weights,
         column_workers=args.column_workers,
+        rbf_backend=args.rbf_backend,
     )
     state = convert_water_to_hicar_mixing_ratios(state)
     lateral_relaxation_authority = (
@@ -501,6 +503,12 @@ def parser() -> argparse.ArgumentParser:
             "independent fork workers for vertical column reconstruction; "
             "one preserves the serial path"
         ),
+    )
+    forcing.add_argument(
+        "--rbf-backend",
+        choices=RBF_APPLY_BACKENDS,
+        default="numpy",
+        help="scalar horizontal-remapping implementation",
     )
     forcing.add_argument("--manifest", type=Path)
     forcing.set_defaults(func=_prepare_hicar_forcing)

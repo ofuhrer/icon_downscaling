@@ -19,6 +19,7 @@ from .registry import FieldLifetime, FieldRegistry
 
 
 PRODUCT_VERSION = "hicarprep-products-v1"
+_SHA256_CACHE: dict[tuple[Path, int, int, int, int], str] = {}
 
 
 def _normalized_units(value: object) -> str:
@@ -27,11 +28,36 @@ def _normalized_units(value: object) -> str:
 
 
 def sha256(path: Path) -> str:
+    path = Path(path)
+    resolved = path.resolve()
+    before = path.stat()
+    identity = (
+        resolved,
+        before.st_dev,
+        before.st_ino,
+        before.st_size,
+        before.st_mtime_ns,
+    )
+    cached = _SHA256_CACHE.get(identity)
+    if cached is not None:
+        return cached
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
-    return digest.hexdigest()
+    after = path.stat()
+    if (
+        after.st_dev,
+        after.st_ino,
+        after.st_size,
+        after.st_mtime_ns,
+    ) != identity[1:]:
+        raise RuntimeError(f"file changed while computing SHA-256: {path}")
+    value = digest.hexdigest()
+    for stale in [key for key in _SHA256_CACHE if key[0] == resolved and key != identity]:
+        del _SHA256_CACHE[stale]
+    _SHA256_CACHE[identity] = value
+    return value
 
 
 def _copy_attributes(source, target, *, omit: Iterable[str] = ()) -> None:

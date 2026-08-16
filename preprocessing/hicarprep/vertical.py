@@ -155,6 +155,26 @@ def interpolate_height_profile(
         raise ValueError("target profile must be finite and strictly ordered in height")
     if target_z[-1] > source_z[-1] + 1.0e-6:
         raise ValueError(f"target top {target_z[-1]:.3f} m exceeds source top {source_z[-1]:.3f} m")
+    return _interpolate_ordered_height_profile(
+        source_z,
+        source_value,
+        target_z,
+        lower_gradient_bounds=lower_gradient_bounds,
+        nonnegative=nonnegative,
+        monotone=monotone,
+    )
+
+
+def _interpolate_ordered_height_profile(
+    source_z: np.ndarray,
+    source_value: np.ndarray,
+    target_z: np.ndarray,
+    *,
+    lower_gradient_bounds: tuple[float, float] | None = None,
+    nonnegative: bool = False,
+    monotone: bool = True,
+) -> np.ndarray:
+    """Interpolate profiles already validated as finite and increasing."""
     result = np.interp(target_z, source_z, source_value)
     below = target_z < source_z[0]
     if np.any(below):
@@ -275,22 +295,23 @@ def reconstruct_column_state(
     else:
         usable = np.ones(source_z.shape, dtype=bool)
     profile_z = source_z[usable]
-    target_t = interpolate_height_profile(
+    target_t = _interpolate_ordered_height_profile(
         profile_z,
         np.asarray(temperature_k)[usable],
         target_z,
         lower_gradient_bounds=(-0.012, 0.003),
     )
-    target_u = interpolate_height_profile(
+    target_u = _interpolate_ordered_height_profile(
         profile_z, np.asarray(u_ms)[usable], target_z, lower_gradient_bounds=(-0.02, 0.02)
     )
-    target_v = interpolate_height_profile(
+    target_v = _interpolate_ordered_height_profile(
         profile_z, np.asarray(v_ms)[usable], target_z, lower_gradient_bounds=(-0.02, 0.02)
     )
 
+    log_pressure = np.log(np.asarray(pressure_pa))
     provisional_p = np.exp(
-        interpolate_height_profile(
-            profile_z, np.log(np.asarray(pressure_pa)[usable]), target_z, monotone=True
+        _interpolate_ordered_height_profile(
+            profile_z, log_pressure[usable], target_z, monotone=True
         )
     )
     source_hydrometeors: dict[str, np.ndarray] = {}
@@ -312,11 +333,11 @@ def reconstruct_column_state(
         1.0e-12,
     )
     source_rh = np.clip(source_rh, 0.0, float(np.max(source_rh)) if has_qc else 1.0)
-    target_rh = interpolate_height_profile(
+    target_rh = _interpolate_ordered_height_profile(
         profile_z, source_rh[usable], target_z, lower_gradient_bounds=(0.0, 0.0)
     )
     target_other_hydrometeors = {
-        name: interpolate_height_profile(
+        name: _interpolate_ordered_height_profile(
             profile_z,
             profile[usable],
             target_z,
@@ -340,7 +361,7 @@ def reconstruct_column_state(
         raise ValueError("source and target columns have no hydrostatic overlap anchor")
     target_anchor_index = int(candidates[0])
     anchor_z = float(target_z[target_anchor_index])
-    anchor_p = float(np.exp(np.interp(anchor_z, source_z, np.log(np.asarray(pressure_pa)))))
+    anchor_p = float(np.exp(np.interp(anchor_z, source_z, log_pressure)))
     target_p = provisional_p
     for _ in range(8):
         target_qsat = saturation_specific_humidity(target_t, target_p)

@@ -92,5 +92,6 @@ class ColumnWorkerTests(unittest.TestCase):
             np.testing.assert_array_equal(recovered[0][name], serial[0][name])
 
 
+
 if __name__ == "__main__":
     unittest.main()

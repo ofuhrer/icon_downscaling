@@ -29,8 +29,10 @@ python orchestration/rd_campaign.py campaign.json --watch
 The JSON configuration supplies `root`, `repo_root`, `forcing_dir`,
 `hicar_executable`, `hicar_support_dir`, `hicar_build_provenance`, `python`,
 RBF weights, and `seasons` with `name`, `start`, `end`, and the valid-time
-runtime-domain file. `use_sparse_lbc` defaults to true for old experiment
-configs; the selected regular-relaxation reference sets it false.
+runtime-domain file. `use_sparse_lbc` defaults to false because regular forcing
+owns production relaxation; sparse-LBC experiments must opt in explicitly.
+`input_rbf_backend` (`numpy` or `numba`) makes the qualified accelerated path
+explicit in campaign provenance.
 `radiation_scheme` selects `rrtmgp` or `rrtmg` and is passed through to both
 namelist rendering and restart validation. `defer_uploads` defaults to false;
 when enabled it opts the NVHPC OpenACC runtime into deferred data uploads with

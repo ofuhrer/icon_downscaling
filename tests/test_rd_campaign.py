@@ -161,6 +161,7 @@ def campaign(
     max_active_inputs=2,
     input_cpus=4,
     input_column_workers=1,
+    input_rbf_backend="numpy",
     input_exclusive=False,
     use_sparse_lbc=True,
     radiation_scheme="rrtmgp",
@@ -187,6 +188,7 @@ def campaign(
         "max_active_inputs": max_active_inputs,
         "input_cpus": input_cpus,
         "input_column_workers": input_column_workers,
+        "input_rbf_backend": input_rbf_backend,
         "input_exclusive": input_exclusive,
         "use_sparse_lbc": use_sparse_lbc,
         "radiation_update_interval": 600,
@@ -244,6 +246,15 @@ def test_default_input_plan_remains_segment_local(tmp_path) -> None:
     assert len(records) == 13
     assert forcing_list == segment_root / "forcing.txt"
     assert boundary_list == segment_root / "lbc.txt"
+
+
+def test_sparse_lbc_defaults_to_disabled(tmp_path) -> None:
+    configured = campaign(tmp_path, full_season_input_lists=False)
+    payload = json.loads(configured.config_path.read_text())
+    payload.pop("use_sparse_lbc")
+    configured.config_path.write_text(json.dumps(payload))
+    defaulted = Campaign(configured.config_path)
+    assert defaulted.use_sparse_lbc is False
 
 
 def test_bounded_input_horizon_shares_endpoints_and_applies_backpressure(
@@ -394,6 +405,7 @@ def test_regular_relaxation_publishes_and_requires_only_forcing(
     monkeypatch.setattr(rd_campaign, "submit", fake_submit)
     assert configured.prepare_inputs() == 1
     assert submitted[0]["HICARPREP_WRITE_LBC"] == "0"
+    assert submitted[0]["HICARPREP_RBF_BACKEND"] == "numpy"
 
     for when in hours(configured.seasons[0].start, configured.seasons[0].end):
         forcing, _ = configured.paths(configured.seasons[0], when)

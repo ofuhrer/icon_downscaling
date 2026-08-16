@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import multiprocessing as mp
 from pathlib import Path
 import tempfile
@@ -276,6 +277,24 @@ class RegistryAndStaticTests(unittest.TestCase):
                 )
 
 
+class ProductHashTests(unittest.TestCase):
+    def test_sha256_reuses_unchanged_file_and_invalidates_after_rewrite(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "payload.bin"
+            path.write_bytes(b"first payload")
+            with mock.patch(
+                "preprocessing.hicarprep.products.hashlib.sha256",
+                wraps=hashlib.sha256,
+            ) as factory:
+                first = sha256(path)
+                self.assertEqual(sha256(path), first)
+                self.assertEqual(factory.call_count, 1)
+                path.write_bytes(b"second payload")
+                second = sha256(path)
+                self.assertEqual(factory.call_count, 2)
+            self.assertNotEqual(second, first)
+
+
 class HorizontalRemapTests(unittest.TestCase):
     def setUp(self) -> None:
         lat, lon = np.meshgrid(np.linspace(46.0, 46.3, 4), np.linspace(7.8, 8.2, 5), indexing="ij")
@@ -299,6 +318,44 @@ class HorizontalRemapTests(unittest.TestCase):
             np.testing.assert_allclose(restored.weight, operator.weight)
             self.assertEqual(restored.method, "int2lm_gaussian_kernel_solve_nearest10_v2")
             self.assertGreater(restored.scale_radians, 0.0)
+
+    def test_numba_rbf_backend_preserves_contract_with_roundoff_tolerance(self) -> None:
+        operator = RBFWeights(
+            donor_index=np.array([[0, 1], [1, 2], [2, 3]], dtype=np.int64),
+            weight=np.array([[2.0, -1.0], [0.25, 0.75], [-0.5, 1.5]]),
+            target_shape=(3,),
+            source_fingerprint="source",
+            target_fingerprint="target",
+        )
+        source = np.array(
+            [
+                [[1.0, 4.0, -2.0, 8.0], [5.0, -3.0, 7.0, 2.0]],
+                [[-4.0, 6.0, 3.0, 9.0], [2.0, 8.0, -1.0, 4.0]],
+            ]
+        )
+        expected = operator.apply(source, monotone=True, backend="numpy")
+        actual = operator.apply(source, monotone=True, backend="numba")
+        self.assertEqual(actual.shape, (2, 2, 3))
+        np.testing.assert_allclose(actual, expected, rtol=0.0, atol=2.0e-15)
+        np.testing.assert_array_equal(
+            operator.apply(source, monotone=True, backend="numba"), actual
+        )
+
+        constant = operator.apply(
+            np.full((2, 4), 17.25), monotone=True, backend="numba"
+        )
+        np.testing.assert_allclose(constant, 17.25, rtol=0.0, atol=1.0e-14)
+
+    def test_rbf_rejects_unknown_apply_backend(self) -> None:
+        operator = RBFWeights(
+            donor_index=np.array([[0]], dtype=np.int64),
+            weight=np.array([[1.0]]),
+            target_shape=(1,),
+            source_fingerprint="source",
+            target_fingerprint="target",
+        )
+        with self.assertRaisesRegex(ValueError, "unsupported RBF apply backend"):
+            operator.apply(np.array([1.0]), backend="not-a-backend")
 
     def test_scalar_rbf_wind_remap_cannot_create_new_component_extrema(self) -> None:
         operator = RBFWeights(
@@ -879,6 +936,9 @@ class ProductPipelineTests(unittest.TestCase):
             with netCDF4.Dataset(output) as dataset:
                 self.assertEqual(dataset.product_type, "hicarprep_target_forcing_record")
                 self.assertEqual(dataset.water_representation, "dry-air mixing ratio")
+                self.assertEqual(dataset.forcing_storage, "deflate level 1 with shuffle")
+                for name in ("lat_1", "HHL", "HFL", "T", "P", "QV", "U", "V", "W"):
+                    self.assertEqual(dataset[name].filters()["complevel"], 1)
                 self.assertEqual(dataset["P"].dimensions, ("time", "z", "y_1", "x_1"))
                 self.assertEqual(dataset["HHL"].dimensions, ("z_hl", "y_1", "x_1"))
                 expected_hfl = hfl.astype(np.float32)
@@ -931,7 +991,7 @@ class ProductPipelineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
 
-            def write(path: Path, valid_time: str) -> None:
+            def write(path: Path, valid_time: str, field_dtype: str = "f8") -> None:
                 with netCDF4.Dataset(path, "w") as dataset:
                     dataset.createDimension("boundary_point", 2)
                     dataset.createDimension("level", 1)
@@ -943,8 +1003,12 @@ class ProductPipelineTests(unittest.TestCase):
                         0.5,
                     ]
                     for name in ("T", "P", "QV", "QC", "QI", "HFL"):
-                        dataset.createVariable(name, "f8", ("level", "boundary_point"))[:] = 1.0
-                    dataset.createVariable("HHL", "f8", ("half_level", "boundary_point"))[:] = 1.0
+                        dataset.createVariable(
+                            name, field_dtype, ("level", "boundary_point")
+                        )[:] = 1.0
+                    dataset.createVariable(
+                        "HHL", field_dtype, ("half_level", "boundary_point")
+                    )[:] = 1.0
                     dataset.product_type = "hicar_lateral_boundary_state"
                     dataset.valid_time = valid_time
                     dataset.domain_nx = 2
@@ -968,6 +1032,9 @@ class ProductPipelineTests(unittest.TestCase):
             self.assertEqual(sequence["maximum_interval_seconds"], 3600.0)
             with self.assertRaisesRegex(ValueError, "strictly increasing"):
                 validate_boundary_sequence([second, first])
+            write(second, "2020-01-01T01:00:00Z", field_dtype="f4")
+            with self.assertRaisesRegex(ValueError, "schema changed"):
+                validate_boundary_sequence([first, second])
 
     def test_boundary_relaxation_weights_use_physical_cosine_shoulder(self) -> None:
         x = np.arange(8, dtype=np.float64) * 200.0
@@ -980,6 +1047,25 @@ class ProductPipelineTests(unittest.TestCase):
         self.assertAlmostEqual(lookup[(1, 3)], 0.5)
         self.assertEqual(lookup[(2, 2)], 0.0)
         self.assertNotIn((3, 3), lookup)
+
+    def test_boundary_support_matches_dense_distance_reference(self) -> None:
+        x = np.array([-50.0, 0.0, 140.0, 410.0, 900.0])
+        y = np.array([10.0, 170.0, 380.0, 760.0])
+        width = 270.0
+        xx, yy = np.meshgrid(x, y)
+        distance = np.minimum.reduce(
+            (xx - xx.min(), xx.max() - xx, yy - yy.min(), yy.max() - yy)
+        )
+        expected_rows, expected_cols = np.nonzero(distance <= width + 1.0e-6)
+        phase = np.clip(distance[expected_rows, expected_cols] / width, 0.0, 1.0)
+        expected_weights = np.cos(0.5 * np.pi * phase) ** 2
+        expected_weights[distance[expected_rows, expected_cols] <= 1.0e-6] = 1.0
+        expected_weights[phase >= 1.0] = 0.0
+
+        rows, cols, weights = boundary_relaxation_weights(x, y, width)
+        np.testing.assert_array_equal(rows, expected_rows)
+        np.testing.assert_array_equal(cols, expected_cols)
+        np.testing.assert_array_equal(weights, expected_weights)
 
     def test_all_icon_water_species_are_jointly_converted_to_dry_air_basis(self) -> None:
         shape = (2, 1, 1)
@@ -1156,6 +1242,12 @@ class ProductPipelineTests(unittest.TestCase):
                 self.assertNotIn("U", boundary.variables)
                 self.assertNotIn("V", boundary.variables)
                 self.assertNotIn("W", boundary.variables)
+                for name in ("T", "P", "QV", "QC", "QI", "HFL", "HHL"):
+                    self.assertEqual(boundary[name].dtype, np.dtype("float32"))
+                    self.assertEqual(boundary[name].filters()["complevel"], 1)
+                    self.assertEqual(boundary[name].chunking()[0], boundary[name].shape[0])
+                    self.assertLessEqual(boundary[name].chunking()[1], 4_096)
+                self.assertIn("float32", boundary.sparse_field_storage)
                 self.assertEqual(boundary.valid_time, "2020-01-01T00:00:00Z")
                 self.assertEqual(initial.wind_balance, "SOURCE_NATIVE_REMAPPED")
                 self.assertEqual(

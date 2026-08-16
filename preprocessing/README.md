@@ -24,10 +24,16 @@ python scripts/hicarprep.py decode-icon-atmosphere \
 python scripts/hicarprep.py prepare-hicar-forcing \
   --icon-state native.nc --static runtime_domain.nc \
   --weights rbf.nc --vector-weights vector_rbf.nc --target-sst target_sst.nc \
-  --output forcing.nc
+  --output forcing.nc --column-workers 8 --rbf-backend numba
 ```
 
-Add `--boundary forcing.lbc.nc` only for a sparse-LBC experiment.
+The national Swiss-domain throughput path uses the pinned Numba dependency for
+scalar RBF application; `--rbf-backend numpy` remains the exact-arithmetic
+fallback. Add `--boundary forcing.lbc.nc` only for a sparse-LBC experiment.
+Recurring regular records use lossless deflate level 1; sparse frames store
+the atmospheric and geometry fields as float32 with level-1 deflate in bounded
+point chunks. This matches the precision seen by HICAR's single-precision
+readers while avoiding the former float64/level-4 encoding cost.
 
 `target_sst.nc` is produced for the same exact valid time from REA-L `SKT`.
 Target water with compact same-surface support uses that remap. Target water

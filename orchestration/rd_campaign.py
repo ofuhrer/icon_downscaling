@@ -302,6 +302,9 @@ class Campaign:
         self.input_column_workers = int(
             self.config.get("input_column_workers", 1)
         )
+        self.input_rbf_backend = str(self.config.get("input_rbf_backend", "numpy"))
+        if self.input_rbf_backend not in {"numpy", "numba"}:
+            raise ValueError("input_rbf_backend must be numpy or numba")
         self.input_memory = str(self.config.get("input_memory", "64G"))
         self.input_time = str(self.config.get("input_time", "01:00:00"))
         self.input_exclusive = bool(self.config.get("input_exclusive", False))
@@ -325,7 +328,7 @@ class Campaign:
         self.max_wind_speed_ms = (
             None if max_wind_speed is None else float(max_wind_speed)
         )
-        self.use_sparse_lbc = bool(self.config.get("use_sparse_lbc", True))
+        self.use_sparse_lbc = bool(self.config.get("use_sparse_lbc", False))
         self.full_season_input_lists = bool(
             self.config.get("full_season_input_lists", False)
         )
@@ -523,6 +526,7 @@ class Campaign:
                     "HICARPREP_RBF_WEIGHTS": self.config["rbf_weights"],
                     "HICARPREP_VECTOR_WEIGHTS": self.config.get("vector_weights", ""),
                     "HICARPREP_COLUMN_WORKERS": str(self.input_column_workers),
+                    "HICARPREP_RBF_BACKEND": self.input_rbf_backend,
                     "HICARPREP_WRITE_LBC": "1" if self.use_sparse_lbc else "0",
                     "HICAR_PYTHON": self.config["python"],
                 },

@@ -42,6 +42,57 @@ national record from about 80 to 16 minutes. Exact 32,768-target RBF chunks
 reduced a worst-case temporary from 18.88 GB to 210 MB; this is a latency/
 allocation fix, not a general throughput multiplier.
 
+A fresh 2061 x 1431 x 80 input profile at coordinator `551d8ed` separated the
+recurring record path from decoding. With eight column workers, target
+transformation plus regular and sparse writes took 797 s and peaked at
+241,376,432 KiB aggregate RSS. Column reconstruction was 361 s, horizontal
+remapping 266 s, regular NetCDF writing 107 s, and sparse-LBC writing only
+19 s. Sixteen workers produced byte-identical regular and sparse files and cut
+generation to 654 s (-18%), but aggregate RSS rose to 424,659,768 KiB (+76%)
+and process CPU rose 5%; retain eight workers as the efficient default. For
+regular-relaxation campaigns, sparse LBC now defaults off.
+
+The follow-up real-domain optimization retained eight forked column workers,
+removed repeated profile sorting/validation and log-pressure work, and added a
+serial Numba RBF kernel that accumulates fixed donor stencils without donor or
+weighted-product gathers. Horizontal remapping fell from 266.0 to 52.1 s
+(-80.4%), column reconstruction from 361.1 to 290.3 s (-19.6%), transform from
+647.5 to 432.8 s (-33.2%), and full profiled generation from 797.1 to 589.4 s
+(-26.1%) at essentially unchanged Slurm peak RSS. A compiled whole-column
+prototype was rejected: at national scale its per-column allocation and memory
+traffic regressed to 415.1 s at eight threads and did not scale efficiently.
+Process-local file-identity checksum caching removes about 10.5 s of duplicate
+hashing; omitting unselected sparse LBC saves another 19.2 s and 796 MB.
+
+The accelerated forcing passed production validation. Only 68 serialized
+float32 values differed from the NumPy baseline; maxima were 0.00390625 Pa,
+9.54e-7 m/s, and 4.66e-10 moisture. A 12-node/48-GPU two-hour HICAR pilot
+completed all 13 outputs and the exact terminal restart with bounded winds.
+The final trajectory is not bitwise equal to the baseline. Across all 13
+outputs, normalized RMS differences were `3.6e-5` for 2-m temperature,
+`5.2e-5`/`9.2e-5` for 10-m wind, and `5.5e-4` for 2-m humidity; threshold-
+sensitive PBL height and sensible-heat flux reached 1.5% and 1.2%. The backend
+is therefore a qualified scientific-equivalence path rather than a
+reproducibility path; retain `numpy` when exact historical trajectory identity
+is required. Evidence is in `hicarprep_swiss_input_performance_v1.json` and
+`hicarprep_swiss_input_optimization_v1.json` in the Swiss validation directory.
+
+The recurring NetCDF path was then qualified separately. Lossless deflate
+level 1 cut regular-record writing from 107.9 to 66.3 s (-38.5%) while keeping
+every decoded variable bitwise identical; the file grew from 4.49 to 5.04 GB
+(+12.1%). Sparse frames now store the precision actually consumed by HICAR
+(float32), use level-1 deflate, gather in 4,096-point chunks, compute edge
+support without duplicate domain meshgrids, and overlap the required regular-
+record checksum with compression. Sparse writing fell from 19.23 to 3.95 s
+(-79.5%) and size from 796 to 330 MB (-58.5%). Every sparse value is exactly
+the old float64 product cast to float32, so values delivered to HICAR are
+unchanged. The measured write-phase saving is 56.9 s per hourly record, or a
+conservative 9.6% additional end-to-end improvement at fixed transformation
+cost; the observed full profile was 457.2 s (-22.4%), with node variation in
+the transform. Evidence is in `hicarprep_swiss_boundary_optimization_v1.json`.
+Separating cycle-invariant geometry from standalone hourly regular records now
+requires a reader/schema change and is not a low-risk storage optimization.
+
 The completed campaign used host RRTMG inside an otherwise GPU model. Median
 radiation cost was 4301/5452 model seconds (75.7%): the wrapper transferred the
 whole domain and ran serial `ncol=1` SW/LW columns on one CPU core per compute

@@ -1,0 +1,110 @@
+{
+  "schema": "hicarprep-swiss-input-performance-assessment-v1",
+  "decision": "retain_eight_worker_default_and_optimize_the_transform_before_spending_more_memory",
+  "valid_time": "2020-10-01T09:00:00Z",
+  "source_commit": "551d8eddd72b8870975b03fa1638408bf1d6123d",
+  "domain": {
+    "nx": 2061,
+    "ny": 1431,
+    "horizontal_cells": 2949291,
+    "vertical_levels": 80,
+    "grid_spacing_m": 200,
+    "boundary_width_m": 10000
+  },
+  "inputs": {
+    "native_state_sha256": "d76498d82b63182de2b331f3351fe768738c3a9cbcbfb541384623aa5845b7b6",
+    "static_sha256": "53c61c51d485917a7f9e44739130f6efb66672aa5345cdc97a4509d24ebbd871",
+    "rbf_weights_sha256": "70171a9a869791ab188324d96e49cb50da5a50ed493d1e09629d994b5ceedfb0",
+    "target_sst_fixture_sha256": "5386f5d4769d4fa0cdcb1b72617448ca0690600c95a8a2fb11bd0a8433d33668",
+    "target_sst_fixture_note": "Exact target payload and provenance recovered from a retained validated forcing record; SST retrieval and remapping are outside the two profile jobs."
+  },
+  "atmospheric_decode_reference": {
+    "job_id": 5113564,
+    "elapsed_seconds": 95,
+    "output_sha256": "d76498d82b63182de2b331f3351fe768738c3a9cbcbfb541384623aa5845b7b6",
+    "note": "Same 2020-10-01T09:00:00Z native state used by both profile jobs; FDB reads themselves reported about two seconds total, so most decoder time is GRIB-to-NetCDF packaging."
+  },
+  "eight_workers": {
+    "job_id": 5114531,
+    "profile_wall_seconds": 797.144024961628,
+    "external_time_wall_seconds": 799.56,
+    "validation_wall_seconds": 46.18,
+    "slurm_elapsed_seconds_including_fixture_and_validation": 868,
+    "slurm_max_rss_kib": 241376432,
+    "process_user_seconds": 3139.0,
+    "process_system_seconds": 73.88,
+    "transform_seconds": 647.5223497571424,
+    "static_read_seconds": 5.089516477659345,
+    "horizontal_remap_seconds": 266.0221416018903,
+    "column_reconstruction_seconds": 361.08882324025035,
+    "vertical_velocity_seconds": 14.478727881796658,
+    "water_conversion_seconds": 8.175622519105673,
+    "regular_forcing_write_seconds": 107.06454979907721,
+    "sparse_boundary_write_seconds": 19.181959371082485,
+    "profile_report_sha256": "a5b008076201fd686efd7090732717ea09ebdeda25efa81474f31eb9e14a2204"
+  },
+  "sixteen_workers": {
+    "job_id": 5114588,
+    "profile_wall_seconds": 653.7611809978262,
+    "external_time_wall_seconds": 666.89,
+    "validation_wall_seconds": 43.75,
+    "slurm_elapsed_seconds_including_validation": 711,
+    "slurm_max_rss_kib": 424659768,
+    "process_user_seconds": 3296.68,
+    "process_system_seconds": 74.4,
+    "transform_seconds": 505.27736954018474,
+    "static_read_seconds": 12.628654826432467,
+    "horizontal_remap_seconds": 265.24164604302496,
+    "column_reconstruction_seconds": 211.28217564430088,
+    "vertical_velocity_seconds": 15.29518984630704,
+    "water_conversion_seconds": 6.033413216471672,
+    "regular_forcing_write_seconds": 107.81141754426062,
+    "sparse_boundary_write_seconds": 19.000097699463367,
+    "profile_report_sha256": "74a3b052e413f57f8c1a7641d896e368246b56b6465043db93db663a265dfe49"
+  },
+  "outputs": {
+    "regular_forcing_size_bytes": 4494674141,
+    "regular_forcing_sha256_both_runs": "c0260bc4b5e3a3469afbdeee5908e2178dabf3c545e34306599f1fc1e0b0209f",
+    "sparse_boundary_size_bytes": 796266971,
+    "sparse_boundary_sha256_both_runs": "8d399e87997e692f4301543ed5aad5402b13245e9b453a9e20688a12d81a448d"
+  },
+  "exact_comparison": {
+    "forcing_job_id": 5114618,
+    "forcing_report_sha256": "15cf597a7313e6ee192f51e050cad279f431ddda5607cc64de58d4a4cdc6615b",
+    "forcing_variables_compared": 18,
+    "forcing_bitwise_equal": true,
+    "boundary_job_id": 5114619,
+    "boundary_variables_compared": 10,
+    "boundary_bitwise_equal": true,
+    "both_production_validations_passed": true
+  },
+  "comparison": {
+    "generation_wall_reduction_percent": 17.987068769750092,
+    "transform_wall_reduction_percent": 21.96757845815014,
+    "column_wall_reduction_percent": 41.48747841366324,
+    "peak_rss_increase_percent": 75.93257323482187,
+    "process_cpu_increase_percent": 4.923931177012508,
+    "interpretation": "Sixteen workers reduce latency but are not more efficient: they consume about 405 GiB peak aggregate RSS on a 456 GB exclusive node and slightly more CPU."
+  },
+  "baseline_cost_shares_percent": {
+    "transform": 81.23028329646101,
+    "horizontal_remap": 33.371904357521316,
+    "column_reconstruction": 45.29781469009092,
+    "regular_forcing_write": 13.431017036630358,
+    "sparse_boundary_write": 2.406335463908902
+  },
+  "retained_remote_root": "/scratch/mch/olifu/icon_hicar/input_performance_20260816",
+  "assessment": {
+    "low_risk": [
+      "Keep use_sparse_lbc=false for regular-relaxation campaigns; this avoids 19.2 s and 796 MB per hourly record.",
+      "Compute each content digest once and pass it through writers, manifest creation, and validation; measured duplicate checksum work is about 10.5 s per sparse record, with a further roughly 7 s repeated by validation.",
+      "Make sparse LBC opt-in in defaults as well as explicit in production configuration."
+    ],
+    "next_controlled_experiments": [
+      "A/B NetCDF compression level 1 versus the current level 4, including HICAR read time and storage; the current regular writer is single-core CPU-bound for about 107 s.",
+      "Compile or batch-vectorize reconstruct_column_state while preserving per-column arithmetic; its Python loop is the largest measured phase.",
+      "Cache cycle-invariant ICON HHL and target/static geometry across hourly records in a multi-record worker; do not change the serialized forcing contract until HICAR reader behavior is separately qualified."
+    ],
+    "not_recommended_as_default": "Raising column workers from 8 to 16 solely for throughput. It saves about 143 s per record but nearly exhausts node memory and increases total CPU."
+  }
+}

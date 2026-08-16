@@ -30,13 +30,18 @@ weights=${HICARPREP_RBF_WEIGHTS:?}
 vector_weights=${HICARPREP_VECTOR_WEIGHTS:-}
 python=${HICAR_PYTHON:-python3}
 column_workers=${HICARPREP_COLUMN_WORKERS:-1}
-write_lbc=${HICARPREP_WRITE_LBC:-1}
+rbf_backend=${HICARPREP_RBF_BACKEND:-numpy}
+write_lbc=${HICARPREP_WRITE_LBC:-0}
 if ! [[ "$column_workers" =~ ^[1-9][0-9]*$ ]]; then
   echo "HICARPREP_COLUMN_WORKERS must be a positive integer" >&2
   exit 2
 fi
 if test -n "${SLURM_CPUS_PER_TASK:-}" && (( column_workers > SLURM_CPUS_PER_TASK )); then
   echo "HICARPREP_COLUMN_WORKERS exceeds SLURM_CPUS_PER_TASK" >&2
+  exit 2
+fi
+if [[ "$rbf_backend" != numpy && "$rbf_backend" != numba ]]; then
+  echo "HICARPREP_RBF_BACKEND must be numpy or numba" >&2
   exit 2
 fi
 if [[ "$write_lbc" != 0 && "$write_lbc" != 1 ]]; then
@@ -146,7 +151,8 @@ fi
   --icon-state "$native" --static "$static" --weights "$weights" \
   --target-sst "$target_sst" "${vector_args[@]}" \
   --output "$staged_output" "${boundary_args[@]}" \
-  --column-workers "$column_workers"
+  --column-workers "$column_workers" \
+  --rbf-backend "$rbf_backend"
 "$python" "$repo_root/case_studies/swiss_200m/validation/validate_forcing.py" \
   --forcing-file "$staged_output" "${validation_boundary_args[@]}" \
   --static-file "$static" --expected-valid-time "$valid"
