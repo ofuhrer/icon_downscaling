@@ -1,5 +1,5 @@
 {
-  "root": "/scratch/mch/olifu/icon_hicar/seasonal_8day_alpha1_sxon_rrtmgp_v1/campaign",
+  "root": "/scratch/mch/olifu/icon_hicar/seasonal_8day_alpha1_sxon_rrtmgp_v1/campaign_v2",
   "repo_root": "/scratch/mch/olifu/icon_hicar/seasonal_8day_alpha1_sxoff_rrtmgp_v1/source/coordinator-production",
   "forcing_dir": "/scratch/mch/olifu/icon_hicar/seasonal_8day_alpha1_sxon_rrtmgp_v1/input/forcing",
   "python": "/scratch/mch/olifu/icon_hicar/seasonal_8day_alpha1_sxoff_rrtmgp_v1/venv/bin/python",
@@ -70,8 +70,8 @@
       "end": "2020-10-09T00:00:00",
       "evaluation_start": "2020-10-02T00:00:00",
       "evaluation_end": "2020-10-09T00:00:00",
-      "static": "/scratch/mch/olifu/icon_hicar/seasonal_8day_alpha1_sxoff_rrtmgp_v1/input/runtime/domain_runtime_swiss_20201001_0000.nc",
-      "static_sha256": "a9d8576d6fdffee4647f73628a06eec59d42047391369f9c4abf72e6d47eca66"
+      "static": "/scratch/mch/olifu/icon_hicar/seasonal_8day_alpha1_sxoff_rrtmgp_v1/input/runtime/domain_runtime_swiss_20201001_0000_current.nc",
+      "static_sha256": "e7550c61e468e83028c3fb4b1a8f07610856ea8fd7527a7c5efb97f9a913dc0c"
     }
   ]
 }
