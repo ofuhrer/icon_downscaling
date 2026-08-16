@@ -1,0 +1,191 @@
+{
+  "schema": "hicar-gpu-node-scaling-v1",
+  "analysis_date": "2026-08-16",
+  "decision": "retain_12_nodes",
+  "candidate": {
+    "coordinator_commit": "899700c98bda20ea2e49f74a78ec4d3cb4a86bb0",
+    "hicar_commit": "0545a55d20d76441c9eff5e8a297babccc49f440",
+    "executable_sha256": "a07aa804aba9bd764e0a82c9efa9b332b5167337cd0fbd429cb27834b30a6026",
+    "runtime_setting": "NVCOMPILER_ACC_DEFER_UPLOADS=1 with threshold 1"
+  },
+  "case": {
+    "domain_cells_xyz": [2061, 1431, 80],
+    "start": "2020-10-01T09:00:00",
+    "end": "2020-10-01T11:00:00",
+    "output_interval_seconds": 600,
+    "radiation": "RRTMGP",
+    "rrtmgp_block_N": 256,
+    "radiation_batches_per_compute_rank": 1,
+    "compute_gpu_ranks_per_node": 4,
+    "io_ranks_per_node": 1
+  },
+  "radiation_batch_preflight": {
+    "formula": "min(local_ny, max(1, local_nx * local_ny / rrtmgp_block_N**2)) using integer floor division",
+    "second_batch_threshold_cells": 131072,
+    "topologies": [
+      {
+        "nodes": 12,
+        "compute_decomposition": [8, 6],
+        "maximum_local_tile": [258, 239],
+        "maximum_local_cells": 61662,
+        "batches": 1
+      },
+      {
+        "nodes": 11,
+        "compute_decomposition": [11, 4],
+        "maximum_local_tile": [188, 358],
+        "maximum_local_cells": 67304,
+        "batches": 1
+      },
+      {
+        "nodes": 8,
+        "compute_decomposition": [8, 4],
+        "maximum_local_tile": [258, 358],
+        "maximum_local_cells": 92364,
+        "batches": 1
+      },
+      {
+        "nodes": 6,
+        "compute_decomposition": [6, 4],
+        "maximum_local_tile": [344, 358],
+        "maximum_local_cells": 123152,
+        "batches": 1
+      }
+    ]
+  },
+  "results": {
+    "nodes_12": {
+      "qualified": true,
+      "jobs": [
+        {
+          "job_id": 5114589,
+          "state": "COMPLETED",
+          "elapsed_seconds": 361,
+          "model_step_seconds": 323,
+          "model_total_seconds": 261.1704
+        },
+        {
+          "job_id": 5114631,
+          "state": "COMPLETED",
+          "elapsed_seconds": 357,
+          "model_step_seconds": 321,
+          "model_total_seconds": 260.5255
+        }
+      ],
+      "mean_elapsed_seconds": 359.0,
+      "mean_model_total_seconds": 260.84795,
+      "mean_node_hours_per_two_hour_segment": 1.1966666667,
+      "valid_two_hour_segments_per_wall_hour_per_active_job": 10.0278551532,
+      "peak_gpu_memory_mib": 90640,
+      "gpu_memory_total_mib": 98304,
+      "minimum_sampled_gpu_headroom_mib": 7664,
+      "minimum_sampled_gpu_headroom_fraction": 0.0779622396,
+      "maximum_sampled_gpu_utilization_percent": 100,
+      "scientific_validation": "passed"
+    },
+    "nodes_11": {
+      "qualified": false,
+      "job_id": 5114617,
+      "model_step_state": "COMPLETED",
+      "wrapper_state": "FAILED",
+      "elapsed_seconds": 427,
+      "model_step_seconds": 399,
+      "model_total_seconds": 306.5381,
+      "peak_gpu_memory_mib": 97314,
+      "gpu_memory_total_mib": 98304,
+      "minimum_sampled_gpu_headroom_mib": 990,
+      "minimum_sampled_gpu_headroom_fraction": 0.0100708008,
+      "nonfinite_output_variable_count": 16,
+      "disqualification": [
+        "scientific validation found millions of non-finite core values",
+        "less than 1 GiB device-memory headroom on one sampled A100",
+        "higher node-hours than the valid 12-node configuration"
+      ]
+    },
+    "nodes_8": {
+      "qualified": false,
+      "job_id": 5114613,
+      "state": "FAILED",
+      "elapsed_seconds": 157,
+      "failure": "CUDA_ERROR_OUT_OF_MEMORY in RTE-RRTMGP",
+      "failed_allocation_bytes": 6703409664,
+      "maximum_sampled_gpu_memory_mib_before_failure": 96986,
+      "gpu_memory_total_mib": 98304
+    },
+    "nodes_6": {
+      "qualified": false,
+      "submitted": false,
+      "reason": "safely rejected after the one-batch 8-node topology exhausted device memory; the 6-node local tile is another 33.3% larger"
+    }
+  },
+  "reproducibility": {
+    "aa_model_jobs": [5114589, 5114631],
+    "aa_output_time_count": 13,
+    "aa_output_compared_variable_count": 30,
+    "aa_outputs_bitwise_exact": true,
+    "aa_restart_compared_variable_count": 198,
+    "aa_restart_state_bitwise_exact": true,
+    "restart_endpoint_output_compared_variable_count": 30,
+    "restart_endpoint_output_bitwise_exact": true,
+    "restart_endpoint_state_compared_variable_count": 198,
+    "restart_endpoint_state_bitwise_exact": true,
+    "differing_variable_count": 0,
+    "comparison_jobs": [
+      {
+        "job_id": 5114698,
+        "state": "FAILED",
+        "retained_results": "all 13 A/A output comparisons and A/A restart comparison passed before an out-of-range diagnostic endpoint index stopped the script"
+      },
+      {
+        "job_id": 5114750,
+        "state": "COMPLETED",
+        "elapsed_seconds": 250,
+        "results": "corrected endpoint output and restart-state comparisons passed"
+      }
+    ],
+    "evidence_root": "/scratch/mch/olifu/icon_hicar/gpu_perf_20260816/real_scale_validation/evidence/scaling_n12_repro"
+  },
+  "concurrency": {
+    "installed_gpu_nodes": 46,
+    "normal_uncoordinated_share_limit_nodes": 23,
+    "named_reservations_at_test_time": [
+      {
+        "name": "parallel_suite_gpu",
+        "nodes": 18
+      },
+      {
+        "name": "NIX",
+        "nodes": 3
+      }
+    ],
+    "attempted_jobs": [5114631, 5114632],
+    "result": "job 5114631 ran; job 5114632 remained resource-pending and was cancelled without allocating nodes",
+    "measured_two_job_interference": null,
+    "interpretation": "46 installed nodes are not equivalent to 46 nodes schedulable by this campaign; with the 23-node normal share cap, only one 12-node segment is permitted without coordination"
+  },
+  "recommendation": {
+    "model_nodes": 12,
+    "max_active_models_on_normal": 1,
+    "parallel_strategy": "retain one normal 12-node segment; use additional lowprio or preemptible segments only opportunistically, or coordinate an explicit reservation/share exception before running multiple normal segments",
+    "do_not_use": [
+      "11 nodes: non-finite output and less than 1 GiB GPU headroom",
+      "8 nodes: confirmed RRTMGP device OOM",
+      "6 nodes: larger one-batch tile than the failed 8-node case"
+    ],
+    "next_prerequisite_for_fewer_nodes": "reduce RRTMGP/device memory safely or separately requalify a corrected multi-batch implementation before changing production node count"
+  },
+  "balfrin_sources": [
+    "https://meteoswiss.atlassian.net/wiki/spaces/CSCS/pages/256278614/Balfrin+Tasna",
+    "https://meteoswiss.atlassian.net/wiki/spaces/CSCS/pages/380995167/SLURM+partitions+on+Balfrin+Rules+and+Guidelines"
+  ],
+  "local_verification": {
+    "pytest": "264 passed",
+    "bash_syntax": "passed",
+    "git_diff_check": "passed"
+  },
+  "notes": [
+    "GPU metrics were sampled once per second on all four GPUs of the batch node; the decomposition is balanced to at most one row or column difference.",
+    "All tested and rejected topologies retained exactly one RRTMGP batch per compute rank.",
+    "The 6-node job was intentionally not submitted after the less demanding 8-node one-batch case produced a deterministic device-memory failure."
+  ]
+}

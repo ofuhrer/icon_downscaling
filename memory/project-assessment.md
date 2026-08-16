@@ -112,6 +112,23 @@ production correctness; the measured speedups remain the controlled small-case
 results above, not a national-domain A/B claim. Exact run evidence is in
 `case_studies/swiss_200m/validation/gpu_theta_reduction_12node_qualification_v1.json`.
 
+A production-node scaling study on the same two-hour Swiss case retained one
+RRTMGP batch per compute rank. Two instrumented 12-node replicas completed in
+6:01 and 5:57 with mean model time 260.85 s; peak sampled A100 memory was
+90,640/98,304 MiB, leaving 7,664 MiB. All 13 output states and the terminal
+restart were bitwise exact between replicas, and the continuous/restarted
+endpoint was exact across 30 output and 198 physical restart variables. Eleven
+nodes was slower (306.54 s model time), left only 990 MiB on one sampled GPU,
+and failed scientific validation with non-finite core fields. Eight nodes
+failed an RRTMGP 6.70 GB allocation with CUDA out-of-memory; the still-larger
+six-node one-batch tile was therefore not submitted. Retain 12 nodes and one
+active `normal` model as the safe production setting. The 46-node installed
+count does not imply 46 campaign-available nodes: 21 nodes were in named
+reservations during the concurrency trial, and a second 12-node segment could
+not co-schedule. Extra segments should use `lowprio`/`preemptible`
+opportunistically or a coordinated share exception. Exact evidence is in
+`case_studies/swiss_200m/validation/hicar_gpu_node_scaling_20260816_v1.json`.
+
 ## Retained state
 
 Balfrin `$SCRATCH/icon_hicar/gpu_perf_20260816` retains the production and
