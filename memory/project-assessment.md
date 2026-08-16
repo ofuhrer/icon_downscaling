@@ -139,6 +139,18 @@ interpolation-only remains operational. The GPU-RRTMGP restart-reproducibility
 investigation is complete, merged, and its dedicated development data and
 branches are disposable after the synthesis above is retained.
 
+Repository and storage are intentionally minimal after project cleanup.
+Balfrin `$SCRATCH/icon_hicar` is empty: no builds, environments, forcing caches,
+runs, restarts, or diagnostics remain, so a new experiment must recreate its
+runtime and inputs. Durable storage retains only the checksum-published final
+Sx-off campaign evidence and `swiss_200m/hicar_surface_verification_v1`, whose
+self-contained report and compact analysis/source bundle are bound by
+`SHA256SUMS` digest
+`a26f6a524deb7f41f67302d4bf56103102a453a0d2ef51f276cfa2b0524ff644`.
+Legacy recovery bundles and qualification publications were removed; those
+deleted data are not recoverable from project storage. Git retains only the
+coordinator `main` line and HICAR `main` plus `feature/icon_downscaling`.
+
 Open only if a new scientific question warrants work: regime-conditioned
 damping, terrain-W conditioning, lake thermodynamics, and cold-cloud/
 precipitation spin-up. Do not tune individual parameters or resume a generic
