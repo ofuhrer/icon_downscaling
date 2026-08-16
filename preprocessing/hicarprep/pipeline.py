@@ -239,6 +239,7 @@ def write_hicar_forcing_record(
     source_path: Path,
     target_sst_path: Path,
     lateral_relaxation_authority: str = "hicarprep sparse_lbc_file_list",
+    static_digest: str | None = None,
 ) -> None:
     """Write one target-grid HICAR forcing/clock record from a hicarprep state.
 
@@ -324,7 +325,12 @@ def write_hicar_forcing_record(
         raise ValueError("forcing state must use the authoritative static HHL/HFL geometry")
     if terrain.shape != (ny, nx) or land_fraction.shape != (ny, nx):
         raise ValueError("static terrain/land fraction shape does not match forcing grid")
-    static_digest = sha256(static_path)
+    if static_digest is None:
+        static_digest = sha256(static_path)
+    elif len(static_digest) != 64 or any(
+        character not in "0123456789abcdef" for character in static_digest
+    ):
+        raise ValueError("trusted static digest must be a lowercase SHA-256 value")
     sst = load_target_sst(
         target_sst_path,
         static_path=static_path,

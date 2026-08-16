@@ -226,6 +226,11 @@ def _decode_icon_atmosphere(args: argparse.Namespace) -> int:
 
 
 def _prepare_hicar_forcing(args: argparse.Namespace) -> int:
+    if args.static_sha256 is not None and (
+        len(args.static_sha256) != 64
+        or any(character not in "0123456789abcdef" for character in args.static_sha256)
+    ):
+        raise ValueError("--static-sha256 must be a lowercase SHA-256 digest")
     weights = RBFWeights.read(args.weights)
     vector_weights = VectorRBFWeights.read(args.vector_weights) if args.vector_weights else None
     state, diagnostics = transform_icon_state(
@@ -250,6 +255,7 @@ def _prepare_hicar_forcing(args: argparse.Namespace) -> int:
         source_path=args.icon_state,
         target_sst_path=args.target_sst,
         lateral_relaxation_authority=lateral_relaxation_authority,
+        static_digest=args.static_sha256,
     )
     if args.boundary is not None:
         with netCDF4.Dataset(args.static) as static:
@@ -266,7 +272,7 @@ def _prepare_hicar_forcing(args: argparse.Namespace) -> int:
             water_representation="dry-air mixing ratio",
         )
     source_digest = sha256(args.icon_state)
-    static_digest = sha256(args.static)
+    static_digest = args.static_sha256 or sha256(args.static)
     target_sst_digest = sha256(args.target_sst)
     weights_digest = sha256(args.weights)
     output_digest = sha256(args.output)
@@ -418,9 +424,7 @@ def parser() -> argparse.ArgumentParser:
     surface.add_argument("--output", type=Path, required=True)
     surface.add_argument("--noahmp-table", type=Path, required=True)
     surface.add_argument("--soil-water-method", choices=SOIL_WATER_METHODS, default="smi")
-    surface.add_argument(
-        "--water-snow-policy", choices=WATER_SNOW_POLICIES, default="zero"
-    )
+    surface.add_argument("--water-snow-policy", choices=WATER_SNOW_POLICIES, default="zero")
     surface.add_argument(
         "--temperature-height-method",
         choices=TEMPERATURE_HEIGHT_METHODS,
@@ -492,7 +496,6 @@ def parser() -> argparse.ArgumentParser:
     boundary_sequence.add_argument("--maximum-interval-seconds", type=float)
     boundary_sequence.set_defaults(func=_validate_boundaries)
 
-
     forcing = commands.add_parser(
         "prepare-hicar-forcing",
         help="write one target-grid HICAR forcing/clock record from native ICON",
@@ -525,8 +528,11 @@ def parser() -> argparse.ArgumentParser:
         help="scalar horizontal-remapping implementation",
     )
     forcing.add_argument("--manifest", type=Path)
+    forcing.add_argument(
+        "--static-sha256",
+        help="preverified lowercase static-domain SHA-256 reused by the campaign",
+    )
     forcing.set_defaults(func=_prepare_hicar_forcing)
-
 
     return result
 

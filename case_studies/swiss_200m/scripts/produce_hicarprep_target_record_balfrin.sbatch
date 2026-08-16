@@ -178,10 +178,13 @@ if test "$write_lbc" = 1; then
 fi
 manifest_args=()
 test -z "$trusted_static_digest" || manifest_args=(--manifest "$manifest")
+static_digest_args=()
+test -z "$trusted_static_digest" || static_digest_args=(--static-sha256 "$trusted_static_digest")
 if ! "$python" "$repo_root/scripts/hicarprep.py" prepare-hicar-forcing \
   --icon-state "$native" --static "$static" --weights "$weights" \
   --target-sst "$target_sst" "${vector_args[@]}" \
   --output "$staged_output" "${boundary_args[@]}" "${manifest_args[@]}" \
+  "${static_digest_args[@]}" \
   --column-workers "$column_workers" \
   --rbf-backend "$rbf_backend"; then
   quarantine_record
