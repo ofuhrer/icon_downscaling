@@ -24,7 +24,7 @@ def test_loader_supplies_minimal_defaults() -> None:
     result = source()
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == [
-        "/mch-environment/v8", "fdb/5.18:v1", "5d5574959f5c62feb183d184ab6ef99d2adfce80"
+        "/mch-environment/v8", "fdb/5.18:v1", "0b9b0cb682c261e5fe8224500c64ccf16a2b83c7"
     ]
 
 

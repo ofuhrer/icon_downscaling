@@ -217,11 +217,11 @@ reference after the four-event comparison.
   `allow_missing_restart_domain_provenance=true` compatibility option: it
   accepts only that absent 20 m attribute, while wrong or non-finite values and
   every other mismatch remain fatal. The rendered namelist and validated
-  static geometry independently retain the exact 20 m configuration. Future
-  builds use HICAR `5bee3c92`, which serializes `auto_level`, lowest level,
-  model top and stretch factor directly and therefore does not need this
-  compatibility exception; the completed campaign remains immutable at its
-  original `4a425677` executable.
+  static geometry independently retain the exact 20 m configuration. New
+  builds use HICAR production merge `0b9b0cb6`, which serializes `auto_level`,
+  lowest level, model top and stretch factor directly and therefore does not
+  need this compatibility exception; the completed campaign remains immutable
+  at its original `4a425677` executable.
 - Each segment lists only the hourly regular-forcing records bracketing that
   segment. Ready records for the next segment can therefore be generated while
   the current segment runs; the shared endpoint is reused. A daylight 2 x 1 h
