@@ -1,7 +1,7 @@
 {
-  "root": "/scratch/mch/olifu/icon_hicar/seasonal_8day_alpha1_sxoff_rrtmgp_v1/campaign",
+  "root": "/scratch/mch/olifu/icon_hicar/seasonal_8day_alpha1_sxon_rrtmgp_v1/campaign",
   "repo_root": "/scratch/mch/olifu/icon_hicar/seasonal_8day_alpha1_sxoff_rrtmgp_v1/source/coordinator-production",
-  "forcing_dir": "/scratch/mch/olifu/icon_hicar/seasonal_8day_alpha1_sxoff_rrtmgp_v1/input/forcing",
+  "forcing_dir": "/scratch/mch/olifu/icon_hicar/seasonal_8day_alpha1_sxon_rrtmgp_v1/input/forcing",
   "python": "/scratch/mch/olifu/icon_hicar/seasonal_8day_alpha1_sxoff_rrtmgp_v1/venv/bin/python",
   "hicar_executable": "/scratch/mch/olifu/icon_hicar/gpu_perf_20260816/build/HICAR-0545a55d-gpu-nccl-release/HICAR_gpu",
   "hicar_support_dir": "/scratch/mch/olifu/icon_hicar/seasonal_8day_alpha1_sxoff_rrtmgp_v1/runtime_support",
@@ -34,7 +34,7 @@
   "radiation_scheme": "rrtmgp",
   "alpha_const": 1.0,
   "max_wind_speed_ms": 30.0,
-  "disable_sx": true,
+  "disable_sx": false,
   "allow_missing_restart_domain_provenance": false,
   "seasons": [
     {
