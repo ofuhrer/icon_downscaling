@@ -15,7 +15,7 @@
   "defer_uploads": true,
   "max_attempts": 4,
   "input_partitions": ["pp-long"],
-  "max_active_inputs": 12,
+  "max_active_inputs": 5,
   "input_cpus": 8,
   "input_column_workers": 8,
   "input_rbf_backend": "numba",
