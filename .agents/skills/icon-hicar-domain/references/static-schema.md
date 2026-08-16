@@ -10,7 +10,8 @@ The exact static schema depends on enabled HICAR physics, but Alpine NoahMP runs
 - soil type and initialized soil state for the configured layers;
 - any initial atmospheric/static variables required by the selected namelist.
 
-Use `scripts/prepare_static_inputs.py --help` and the frozen case file as the executable schema authority.
+Use `scripts/prepare_static_inputs.py --help` and the maintained Swiss namelist
+and validation scripts as the executable schema authority.
 
 ## Source policy
 
@@ -79,12 +80,3 @@ exact final target `topo` plus a 20.2 km REA-L terrain band, converts EGM2008
 orthometric height with the checksum-pinned PROJ grid, and copies HLM one
 azimuth slab at a time into the final static. Never enable a terrain-radiation
 profile against a static file lacking the generator's provenance attributes.
-
-## Frozen reference case
-
-```text
-Local:   case_studies/icon_ch1_eps_20260710T18_alps_250m
-Balfrin: $SCRATCH/icon_hicar/case_studies/icon_ch1_eps_20260710T18_alps_250m
-```
-
-Reference geometry: 20 km x 20 km, center 46.75 N / 8.15 E, 250 m spacing, 81 x 81 static grid. Use its `static/domain_static_relaxed.nc` and validation report to compare schema and boundary blending only.

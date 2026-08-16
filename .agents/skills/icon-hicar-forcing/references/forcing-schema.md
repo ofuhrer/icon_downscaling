@@ -26,19 +26,9 @@ HICAR minimally needs 3-D `U,V,P,T,QV`. Retain `W` and geometry for ICON-driven 
 - `lfff00000000c`: static geometry including `HHL` levels 1-81, `HSURF`, and `FR_LAND`.
 - Plain `i1eff..._000k` archive products may contain only a few low model levels. Inspect before use; do not assume full-column coverage.
 
-Verified fallback sample on Balfrin:
-
-```text
-$SCRATCH/icon_hicar/data/icon_ch1_eps_20260710T18_ctrl_oper_icon_000
-```
-
-## Frozen reference forcing
-
-```text
-$SCRATCH/icon_hicar/case_studies/icon_ch1_eps_20260710T18_alps_250m/forcing
-```
-
-It contains hourly files `hicar_forcing_f000.nc` through `f033` and matching `.ready` markers. Use it as a schema/regression reference, not as a production domain template.
+The former scratch sample and frozen forcing case were cleanup artifacts, not
+durable references, and have been removed. Recreate inputs from the archive and
+record their provenance in the case manifest.
 
 ## Ready-file behavior
 

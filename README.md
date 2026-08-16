@@ -1,33 +1,25 @@
 # ICON-to-HICAR Alpine downscaling
 
-Scientific R&D for dynamically downscaling MeteoSwiss ICON REA-L-CH1 from
-about 1 km to 200 m over Switzerland with HICAR.
+Scientific R&D on downscaling MeteoSwiss ICON REA-L-CH1 from roughly 1 km to
+200 m over Switzerland with HICAR. The tested configuration is **not** selected
+for the 20-year archive; see `memory/project-assessment.md` for the decision and
+admissible follow-up.
 
-The active workflow is deliberately small:
+Core components:
 
-1. decode native REA-L GRIB and transform it with `hicarprep`;
-2. initialize land/soil from the native REA-L state;
-3. run short restart-linked HICAR segments in Balfrin's `preemptible` queue;
-4. compare the output with SwissMetNet stations and REA-L-CH1.
+- `preprocessing/hicarprep/`: native REA-L atmospheric/land transformation
+- `case_studies/swiss_200m/`: reference configuration and validation
+- `orchestration/rd_campaign.py`: restart-linked campaign controller
+- `HICAR/`: production fork
+- `.agents/skills/`: Balfrin and scientific procedures
 
-`memory/project-assessment.md` contains the current scientific synthesis.
-`AGENTS.md` contains cluster and project working rules.
-
-Important paths:
-
-- `preprocessing/hicarprep/`: the only atmospheric/land preprocessor;
-- `case_studies/swiss_200m/`: selected namelist, Slurm jobs, and comparisons;
-- `orchestration/rd_campaign.py`: restartable campaign controller;
-- `HICAR/`: the HICAR fork;
-- `.agents/skills/`: Balfrin and HICAR procedures.
-
-Generated GRIB, NetCDF, restart, output, and log files live outside Git under
-`$SCRATCH/icon_hicar`. A useful experiment retains its source commit, concise
-configuration, interval, and key output or derived metrics. Git history is the
-archive for removed workflow code.
+Generated GRIB, NetCDF, restarts, outputs, builds, and logs stay outside Git in
+`$SCRATCH/icon_hicar`; the current scratch tree is intentionally empty. Useful
+results retain a source commit, concise configuration, case/interval, and key
+metrics or outputs.
 
 ```bash
 ./scripts/bootstrap_externals.sh
 python -m pip install -r requirements/dev.txt
-make test
+python -m pytest -q
 ```

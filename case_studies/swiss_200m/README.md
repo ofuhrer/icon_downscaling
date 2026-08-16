@@ -1,53 +1,20 @@
 # Switzerland 200 m R&D case
 
-The selected baseline is explicit in `config/hicar_swiss_200m.nml.in`:
+`REFERENCE_SETUP.md` is the scientific specification and
+`config/hicar_swiss_200m.nml.in` is the executable namelist template. The
+bounded research reference uses 80 levels to 15 km, native hourly hicarprep
+forcing on exact HHL/HFL, regular full-domain relaxation, fixed alpha 1,
+Sx/TPI off, Noah-MP, and terrain-corrected 600 s radiation.
 
-- 80 levels, nominal 20 m lowest layer, 15 km ASL top, SLEVE 2/6; the selected
-  terrain compresses the minimum interface spacing to 17.008 m and the builder
-  rejects anything below 12 m;
-- native hicarprep P/T/U/V/W/QV/QC/QI forcing in dry-air mixing ratios,
-  including terrain-adjusted W on the exact HFL mass levels;
-- hourly valid-time REA-L SKT as water-only `SST` in regular forcing;
-- literature-established regular full-domain forcing relaxation; sparse LBC is
-  retained only for controlled experiments;
-- adjoint variational wind, bundled Sx/TPI off, density advection, and
-  conservative fixed alpha 1. The diagnosed dynamic-alpha coupling produced
-  rejected localized high-terrain spikes in this fork/domain. The former
-  Sx/TPI setup materially over-damped speed in DJF/MAM/JJA, while disabling it
-  over-amplified the strong SON regime and lost the Sx-on autumn vector
-  advantage. The complete four-event Sx-off result is neutral against REA-L,
-  so this remains a bounded research baseline rather than a 20-year production
-  choice. The selected configs fail segment publication if physical-core 10 m
-  or 50 m wind exceeds the experiment-specific 30 m s-1 bound;
-- Noah-MP with SMI initialization and four depth-varying soil textures;
-- ICON SWE, snow depth/density, and bulk snow temperature on cold starts;
-- RRTMG every 600 s, with terrain shading and direct/diffuse shortwave
-  corrections on; reflected shortwave and terrain longwave are off.
+Two four-season campaigns found neither Sx setting robustly better than native
+REA-L/interpolation-only. Sx-off reduces common-regime over-damping but loses
+the Sx-on autumn vector advantage; it remains a research control, not a
+20-year production choice. The completed campaign used CPU RRTMG and was only
+numerically restart-reproducible; production `0b9b0cb6` also qualifies GPU
+RTE-RRTMGP v1.9.3 with bitwise one-node and 12-node restart gates for new work.
 
-Independent one-hour daylight RRTMG replicas were bit-identical in every
-output and terminal-restart variable and completed in under 19 minutes. The
-final corrected-SST setup is numerically, not bitwise, restart reproducible;
-the small land/PBL perturbation decays over the following hour and is accepted
-for the wind-focused seasonal R&D campaign.
-
-The regular atmospheric forcing file keeps mass-grid U/V and W for HICAR's
-normal initialization, hourly relaxation and wind-projection path. Each record
-is validated before its ready marker is created.
-
-The maintained scripts build HICAR, prepare atmospheric and land input, render
-the namelist, run one restartable segment, retrieve SwissMetNet data, and
-compare HICAR with stations and REA-L. Experimental alternatives should be
-small explicit diffs from this baseline, not additional workflow profiles.
-For operational long-period wind extraction, retain native REA-L or the
-identically sampled interpolation-only path: neither tested fixed Sx setting
-demonstrated robust four-event HICAR added value.
-
-The renderer automatically wires optional `VEGFRA`, `LAI`, `ALBEDO`, and
-maximum vegetation-fraction fields found in the runtime domain. Use
-`--require-land-climatology` when those inputs are intended to be mandatory.
-See `docs/land-surface-initialization-packet.md` for the integration order and
-the staged A/B pilot for these cold-start changes.
-
-The two `alpine_bridge_2h_*.json` files are the minimal continuous and 1 h +
-1 h restart pilot for Storm Sabine (10 February 2020). They intentionally use
-the 701x701 Alpine bridge before any national-domain resource commitment.
+Maintained scripts build HICAR, prepare atmospheric/land input, render the
+namelist, run restartable segments, retrieve SwissMetNet data, and compare
+HICAR with stations and REA-L. New experiments should be small one-factor diffs
+from the reference and must recreate their runtime/inputs because Balfrin
+scratch is intentionally empty.

@@ -2,340 +2,88 @@
 
 ## Build invariants
 
-- Compile on `pp-short` (or `pp-long` if a clean build cannot fit); compiling
-  does not require a GPU allocation.
-- Use a new build directory for every source worktree and for every
-  CPU/GPU/transport variant. Never point an existing CMake cache at another
-  source tree, and never toggle `OPENACC` or `NCCL` in place.
-- Never run two builds concurrently against the same source clone, even when
-  their build directories differ. The `HICAR-tester` dependency fetch writes
-  `tests/Test_Cases` inside the source tree; concurrent CPU/GPU builds can
-  remove that directory underneath one another. Use one clean source clone
-  per simultaneous build variant. The canonical builder takes an atomic
-  shared-filesystem directory lock beside the source root and rejects this
-  unsafe topology. If a job is killed without running its shell trap, verify
-  the recorded owner job is no longer active before removing the stale lock
-  directory.
-- Resolve NetCDF, FFTW, MPI, CUDA, and NCCL paths from the loaded module stack
-  and pass them explicitly. HICAR's custom CMake discovery is not reliable
-  enough to infer a mixed module environment.
-- For the GCC CPU build, load OpenBLAS and pass its shared library as both
-  `BLAS_LIBRARIES` and `LAPACK_LIBRARIES`. Without this, configure can fail at
-  `Could NOT find BLAS` even though the rest of the stack is valid. NVHPC GPU
-  builds use the compiler suite's bundled BLAS/LAPACK libraries; do not replace
-  them with OpenBLAS merely to mirror the CPU recipe.
-- `FC=mpifort` is HICAR's CMake option. Do not export `CC=mpicc` or
-  `CXX=mpicxx` for the NVHPC GPU build: the validated GPU configuration uses
-  `nvc` and `nvc++` for C/C++ and Cray `mpifort` for Fortran/MPI.
-- Treat a completed compile as insufficient. Check the executable's dynamic
-  linkage, require no `not found` entries, record its SHA-256, and run a small
-  topology-matched smoke case before scientific work.
-- RTE-RRTMGP v1.9.3 renamed its kernel selector to `RTE_KERNEL_MODE`. For a
-  compatible GPU build, set both `KERNEL_MODE=accel` and
-  `RTE_KERNEL_MODE=accel`, then verify both cache entries and confirm that the
-  build compiles the `kernels/accel` sources. Setting only the old name silently
-  selects v1.9.3's default CPU kernels. The v1.9.3 cloud-ice bounds API also
-  uses `get_min_diameter_ice()`/`get_max_diameter_ice()`; HICAR already supplies
-  ice and snow diameters to this interface.
+- Compile on `pp-short` or `pp-long`; GPU allocation is unnecessary.
+- Use a fresh build directory per source commit and CPU/GPU/transport variant.
+  Never retarget a CMake cache or toggle OpenACC/NCCL in place.
+- Never run two builds concurrently against the same source clone. The tester
+  mutates `tests/Test_Cases`; the canonical builder locks beside the source.
+- Pass NetCDF, FFTW, MPI, CUDA, NCCL, and BLAS/LAPACK paths explicitly from the
+  loaded module stack. CPU uses GCC/OpenBLAS; GPU uses NVHPC's libraries.
+- GPU C/C++ compilers are `nvc`/`nvc++`; Fortran/MPI uses Cray `mpifort`.
+- A compile is insufficient: require clean source identity, correct CMake
+  cache, complete `ldd`, executable/tester SHA-256, and a topology-matched
+  smoke.
+- RTE-RRTMGP v1.9.3 requires both `KERNEL_MODE=accel` and
+  `RTE_KERNEL_MODE=accel`; verify accelerated sources compiled. Its ice API is
+  `get_min_diameter_ice()`/`get_max_diameter_ice()`.
 
-If reusing an incremental build, first require:
+## Canonical builder
 
-```bash
-test "$(grep '^CMAKE_HOME_DIRECTORY:INTERNAL=' "$BUILD/CMakeCache.txt" |
-  cut -d= -f2-)" = "$SRC"
-git -C "$SRC" diff --quiet
-git -C "$SRC" diff --cached --quiet
-```
-
-For release or qualification evidence, prefer a fresh build directory and
-record the clean source commit, configure command, module list, executable
-SHA-256, and `ldd` output.
-
-## Canonical Balfrin entry point
-
-Use
-`case_studies/swiss_200m/scripts/build_hicar_balfrin.sbatch` for new builds.
-It implements the three recipes below, refuses a dirty or wrongly pinned
-source, refuses an existing build directory or a concurrent build using the
-same source clone, checks dynamic linkage, and writes
-`hicar_build_provenance.txt` beside the executable.
-
-Submit it on the CPU build partition with exact paths and source identity:
+Use `case_studies/swiss_200m/scripts/build_hicar_balfrin.sbatch`. It rejects a
+dirty/wrongly pinned source, existing build directory, or concurrent build;
+checks linkage; and writes `hicar_build_provenance.txt` plus its ready marker.
 
 ```bash
 sbatch --export=ALL,\
 HICAR_COORDINATOR_ROOT="$PWD",\
 HICAR_SOURCE_ROOT="$PWD/HICAR",\
-HICAR_BUILD_ROOT="$SCRATCH/icon_hicar/build/HICAR-qualified-cpu-release",\
-HICAR_EXPECTED_COMMIT=<full-40-character-commit>,\
+HICAR_BUILD_ROOT="$SCRATCH/icon_hicar/build/HICAR-<commit>-<variant>",\
+HICAR_EXPECTED_COMMIT=<full-commit>,\
 HICAR_BUILD_VARIANT=cpu \
 case_studies/swiss_200m/scripts/build_hicar_balfrin.sbatch
 ```
 
-Choose exactly one of:
+Choose exactly one:
 
-- `HICAR_BUILD_VARIANT=cpu` for the GCC/Cray-MPICH release executable.
-- `HICAR_BUILD_VARIANT=gpu-mpi` for a single-node A100 executable using
-  GPU-aware Cray MPICH (`NCCL=OFF`).
-- `HICAR_BUILD_VARIANT=gpu-nccl` for the national multi-node topology
-  (`NCCL=ON`, CPU-only I/O ranks, MPICH GPU support disabled).
+| Variant | Compiler/transport | Required runtime |
+| --- | --- | --- |
+| `HICAR_BUILD_VARIANT=cpu` | GCC, Cray MPICH, OpenBLAS, no OpenACC/NCCL | CPU reference/debug |
+| `HICAR_BUILD_VARIANT=gpu-mpi` | NVHPC OpenACC, GPU-aware MPI, NCCL off | Four compute ranks, `MPICH_GPU_SUPPORT_ENABLED=1` |
+| `HICAR_BUILD_VARIANT=gpu-nccl` | NVHPC OpenACC + NCCL | Four GPU ranks plus CPU I/O rank/node, `MPICH_GPU_SUPPORT_ENABLED=0` |
 
-Set a distinct `HICAR_BUILD_ROOT` for every source commit and variant. The
-templates below are the expanded commands implemented by the builder and are
-retained for audit/debugging; do not copy an older case-study build script as
-a new production recipe.
+The script is the authoritative expanded CMake recipe; inspect it rather than
+copying historical commands. For qualification record source commit/diff hash,
+module list, configure command, executable/tester hashes, and `ldd`.
 
-## CPU release build
+## Launch and topology
 
-```bash
-[ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
-module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
-module purge || true
-module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
-module load gcc/12.3.0 cray-mpich-gcc/8.1.30 \
-  cmake/3.24.4-gcc gmake/4.4.1-gcc \
-  netcdf-c/4.8.1-gcc netcdf-fortran/4.5.4-gcc fftw/3.3.10-gcc \
-  openblas/0.3.26-gcc
+For multi-node NCCL, use five ranks/node: local ranks 0--3 each see one GPU;
+local rank 4 is CPU-only I/O and sees no GPU. Keep MPICH GPU support disabled
+uniformly. The maintained PCI-derived wrapper binds GPU ordinals 0/1/2/3 to
+Balfrin NUMA domains 3/2/1/0; bind the I/O rank to a spare core on NUMA 0.
 
-SRC=${HICAR_SOURCE_ROOT:?}
-BUILD=${HICAR_BUILD_ROOT:?use a new CPU build directory}
-test ! -e "$BUILD"
-nc_prefix=$(nc-config --prefix)
-nf_prefix=$(nf-config --prefix)
-fftw_prefix=$(pkg-config --variable=prefix fftw3)
-mpi_prefix=$(dirname "$(dirname "$(command -v mpifort)")")
-openblas_root=${OPENBLAS_ROOT:?}
-test -f "$nc_prefix/lib/libnetcdf.so"
-test -f "$nf_prefix/lib/libnetcdff.so"
-test -f "$openblas_root/lib/libopenblas.so"
+Before acceptance, run the exact node/rank/I/O/GPU-visibility layout. Check
+every compute rank initializes OpenACC, I/O does not, NCCL initializes across
+nodes, output closes successfully, and no device pointer reaches an MPI window.
 
-cmake -S "$SRC" -B "$BUILD" \
-  -DFC=mpifort -DMODE=release -DOPENACC=OFF -DNCCL=OFF \
-  -DNETCDF_DIR="$nc_prefix" \
-  -DNETCDF_INCLUDES="$nc_prefix/include;$nf_prefix/include" \
-  -DNETCDF_INCLUDES_F90="$nf_prefix/include" \
-  -DNETCDF_LIBRARIES_C="$nc_prefix/lib/libnetcdf.so" \
-  -DNETCDF_LIBRARIES_F90="$nf_prefix/lib/libnetcdff.so" \
-  -DFFTW_DIR="$fftw_prefix" \
-  -DMPI_DIR="$mpi_prefix" \
-  -DBLAS_LIBRARIES="$openblas_root/lib/libopenblas.so" \
-  -DLAPACK_LIBRARIES="$openblas_root/lib/libopenblas.so" \
-  -DCMAKE_BUILD_RPATH="$nf_prefix/lib;$nc_prefix/lib;$openblas_root/lib"
-cmake --build "$BUILD" --target HICAR HICAR-tester \
-  --parallel "${SLURM_CPUS_PER_TASK:-8}"
+## Performance and radiation
 
-test -x "$BUILD/HICAR"
-! ldd "$BUILD/HICAR" | grep -q 'not found'
-sha256sum "$BUILD/HICAR"
-```
-
-Use the same recipe with `MODE=debug` and a distinct directory for diagnosis.
-Do not use a debug executable for throughput estimates.
-
-## A100 OpenACC build: single-node GPU-aware MPI
-
-This variant is for four compute ranks without a CPU-only I/O server. It uses
-GPU-aware Cray MPICH and therefore has `NCCL=OFF`.
-
-```bash
-[ -f /etc/profile.d/modules.sh ] && . /etc/profile.d/modules.sh
-module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
-module purge || true
-module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
-module load nvhpc/24.5 cray-mpich-nvhpc/8.1.30 cuda/12.3.0-gcc \
-  cmake/3.24.4-gcc gmake/4.4.1-gcc \
-  netcdf-c/4.9.2-nvhpc netcdf-fortran/4.6.1-nvhpc \
-  hdf5/1.14.3-nvhpc fftw/3.3.10-gcc
-
-SRC=${HICAR_SOURCE_ROOT:?}
-BUILD=${HICAR_BUILD_ROOT:?use a new GPU-MPI build directory}
-test ! -e "$BUILD"
-nc_prefix=$(nc-config --prefix)
-nf_prefix=$(nf-config --prefix)
-fftw_prefix=$(pkg-config --variable=prefix fftw3)
-mpi_prefix=$(dirname "$(dirname "$(command -v mpifort)")")
-cuda_target="$CUDA_HOME/targets/x86_64-linux"
-
-cmake -S "$SRC" -B "$BUILD" \
-  -DFC=mpifort -DMODE=release -DOPENACC=ON -DNCCL=OFF \
-  -DGPU_ARCH=cc80 \
-  -DCMAKE_C_COMPILER=nvc -DCMAKE_CXX_COMPILER=nvc++ \
-  -DMPI_Fortran_COMPILER="$(command -v mpifort)" \
-  -DNETCDF_DIR="$nc_prefix" \
-  -DNETCDF_INCLUDES="$nc_prefix/include;$nf_prefix/include" \
-  -DNETCDF_INCLUDES_F90="$nf_prefix/include" \
-  -DNETCDF_LIBRARIES_C="$nc_prefix/lib/libnetcdf.so" \
-  -DNETCDF_LIBRARIES_F90="$nf_prefix/lib/libnetcdff.so" \
-  -DFFTW_DIR="$fftw_prefix" \
-  -DFFTW_INCLUDES="$fftw_prefix/include" \
-  -DFFTW_LIBRARIES="$fftw_prefix/lib/libfftw3.so" \
-  -DMPI_DIR="$mpi_prefix" \
-  -DCUDAToolkit_ROOT="$CUDA_HOME" \
-  -DCUFFT_LIBRARY="$cuda_target/lib/libcufft.so" \
-  -DCMAKE_BUILD_RPATH="$nf_prefix/lib;$nc_prefix/lib"
-cmake --build "$BUILD" --target HICAR HICAR-tester \
-  --parallel "${SLURM_CPUS_PER_TASK:-8}"
-
-test -x "$BUILD/HICAR_gpu"
-ldd "$BUILD/HICAR_gpu" | grep -q libcufft
-! ldd "$BUILD/HICAR_gpu" | grep -q libnccl
-! ldd "$BUILD/HICAR_gpu" | grep -q 'not found'
-sha256sum "$BUILD/HICAR_gpu"
-```
-
-At runtime set `MPICH_GPU_SUPPORT_ENABLED=1` uniformly on all four ranks.
-
-## A100 OpenACC build: multi-node NCCL production topology
-
-Switzerland-wide multi-node runs use four compute ranks plus one CPU-only I/O
-rank per node. They require an `NCCL=ON` executable and a launcher that sets
-`MPICH_GPU_SUPPORT_ENABLED=0` on every rank. Do not use the preceding
-`NCCL=OFF` executable with that launcher: device-backed MPI windows can fail
-during initialization.
-
-Use the same NVHPC module stack as above, then:
-
-```bash
-SRC=${HICAR_SOURCE_ROOT:?}
-BUILD=${HICAR_BUILD_ROOT:?use a new GPU-NCCL build directory}
-test ! -e "$BUILD"
-nc_prefix=$(nc-config --prefix)
-nf_prefix=$(nf-config --prefix)
-fftw_prefix=$(pkg-config --variable=prefix fftw3)
-mpi_prefix=$(dirname "$(dirname "$(command -v mpifort)")")
-cuda_target="$CUDA_HOME/targets/x86_64-linux"
-nvhpc_sdk_root=$(dirname "$(dirname "$(dirname "$(command -v nvc)")")")
-nccl_prefix="$nvhpc_sdk_root/comm_libs/12.4/nccl"
-test -f "$nccl_prefix/include/nccl.h"
-test -f "$nccl_prefix/lib/libnccl.so"
-
-cmake -S "$SRC" -B "$BUILD" \
-  -DFC=mpifort -DMODE=release -DOPENACC=ON -DNCCL=ON \
-  -DGPU_ARCH=cc80 \
-  -DCMAKE_C_COMPILER=nvc -DCMAKE_CXX_COMPILER=nvc++ \
-  -DMPI_Fortran_COMPILER="$(command -v mpifort)" \
-  -DNETCDF_DIR="$nc_prefix" \
-  -DNETCDF_INCLUDES="$nc_prefix/include;$nf_prefix/include" \
-  -DNETCDF_INCLUDES_F90="$nf_prefix/include" \
-  -DNETCDF_LIBRARIES_C="$nc_prefix/lib/libnetcdf.so" \
-  -DNETCDF_LIBRARIES_F90="$nf_prefix/lib/libnetcdff.so" \
-  -DFFTW_DIR="$fftw_prefix" \
-  -DFFTW_INCLUDES="$fftw_prefix/include" \
-  -DFFTW_LIBRARIES="$fftw_prefix/lib/libfftw3.so" \
-  -DMPI_DIR="$mpi_prefix" \
-  -DCUDAToolkit_ROOT="$CUDA_HOME" \
-  -DCUFFT_LIBRARY="$cuda_target/lib/libcufft.so" \
-  -DNCCL_INCLUDE_DIR="$nccl_prefix/include" \
-  -DNCCL_LIBRARY="$nccl_prefix/lib/libnccl.so" \
-  -DCMAKE_BUILD_RPATH="$nf_prefix/lib;$nc_prefix/lib;$nccl_prefix/lib" \
-  -DCMAKE_INSTALL_RPATH="$nf_prefix/lib;$nc_prefix/lib;$nccl_prefix/lib"
-cmake --build "$BUILD" --target HICAR HICAR-tester \
-  --parallel "${SLURM_CPUS_PER_TASK:-8}"
-
-test -x "$BUILD/HICAR_gpu"
-ldd "$BUILD/HICAR_gpu" | grep -q libcufft
-ldd "$BUILD/HICAR_gpu" | grep -q libnccl
-! ldd "$BUILD/HICAR_gpu" | grep -q 'not found'
-test "$(grep '^NCCL:BOOL=' "$BUILD/CMakeCache.txt")" = "NCCL:BOOL=ON"
-sha256sum "$BUILD/HICAR_gpu"
-```
-
-Before accepting any GPU build, run a small case using the same number of
-nodes, rank/GPU visibility, I/O-rank layout, and MPICH GPU-support setting as
-production. A successful `--help` call does not exercise device transport.
-
-## Four-GPU compute plus CPU-only I/O topology
-
-Job `4833066` validated a full five-rank, five-minute NCCL smoke case on one
-four-A100 node. Ranks 0-3 each had one visible GPU; rank 4 was HICAR's I/O
-server with `CUDA_VISIBLE_DEVICES` empty. The job completed in 13 s, reported
-4.55 s HICAR initialization, formed a 2x2 compute decomposition, and wrote a
-NetCDF output file.
-
-Use `MPICH_GPU_SUPPORT_ENABLED=0` and
-`MPICH_GPU_MANAGED_MEMORY_SUPPORT_ENABLED=0` on **every** rank in this NCCL
-configuration. A minimal probe (job `4833062`) established that enabling these
-settings only on the four compute ranks while disabling them on the hidden-GPU
-I/O rank stalls all ranks inside `MPI_Init`. This happens before model
-initialization and creates no usable CUDA context. NCCL provides the device
-halo transport in this topology.
-
-## Transport correctness
-
-Balfrin job `4832692` passed all four-rank/four-A100 halo cases for both transports: batch, 3-D variable, 2-D variable, staggered U/V, corners, and `dqdt`.
-
-## Single-node performance
-
-Balfrin job `4832736` used five alternating-order trials and 500 steady-state exchanges per case. Medians:
-
-| Case | GPU-aware MPI | NCCL |
-|---|---:|---:|
-| 3-D batch | 130.74 us | 228.87 us |
-| 2-D batch | 41.56 us | 168.92 us |
-| primary 3-D + 2-D pair | 171.12 us | 397.46 us |
-| equal-weight sum of 17 cases | 5.04 ms | 7.12 ms |
-
-Use `NCCL=OFF` for the single-node four-A100 GPU-aware-MPI workflow. Use
-`NCCL=ON` for the validated Switzerland-wide multi-node topology with four
-compute ranks and one CPU-only I/O rank per node, uniform
-`MPICH_GPU_SUPPORT_ENABLED=0`, and rank-local GPU visibility. The canonical
-builder publishes `hicar_build_provenance.txt.ready`; do not launch a campaign
-from an unreported build directory.
-
-## NUMA placement and multi-node smoke
-
-Jobs `4833089`/`4833093` measured two Balfrin A100 nodes (`nid001037` and
-`nid001040`). Both have one 128-logical-CPU EPYC socket with four NUMA domains,
-not two CPU sockets. GPU locality is reversed relative to the CUDA ordinal:
-GPU 0→NUMA 3, GPU 1→NUMA 2, GPU 2→NUMA 1, GPU 3→NUMA 0. All GPU pairs expose
-NV4 links.
-
-Job `4833093` used a PCI-derived rank wrapper to bind the four local compute
-ranks to CPU/NUMA pairs `(48,3)`, `(32,2)`, `(16,1)`, and `(0,0)` respectively;
-the I/O rank used `(1,0)`. Every compute rank saw exactly one GPU and
-initialized OpenACC; the I/O rank saw none and skipped OpenACC.
-
-Job `4833095` used the same wrapper for a two-node full HICAR smoke. It ran 10
-ranks (five per node), created eight compute ranks in a 2x4 decomposition plus
-two I/O servers, initialized multi-node NCCL, wrote output, and completed in
-13 s. It validates topology and correctness only; it is not a multi-node
-performance measurement.
-
-## National 200 m runtime profile
+Use release builds for timing. A small 250 m CPU case measured about 18 s in
+release versus 99 s debug; compare physics only within a build mode.
 
 The completed 12-node CPU-RRTMG campaign spent a median 75.7% of HICAR time in
-radiation. The legacy wrapper transfers the whole domain and runs serial
-`ncol=1` SW/LW columns on one CPU core per compute rank; Nsight CPU samples put
-longwave transport and McICA ahead of repeated initialization. Treat its timer
-as transfers plus radiation, not kernel-only time. Exact campaign figures and
-the scientific interpretation are in `memory/project-assessment.md`.
+radiation. The legacy wrapper transferred the full domain and ran serial
+`ncol=1` SW/LW columns; Nsight samples put longwave/McICA ahead of repeated
+initialization. Exact campaign interpretation lives in
+`memory/project-assessment.md`.
 
-For implementation work use the validated 495 x 495 x 80 one-node crop. Its
-61,256 cells/GPU match the full-Swiss 61,450 and its RRTMGP radiation time was
-within 5% of the 12-node case. It is not a whole-model scaling proxy because
-the national timestep and communication costs differ. The older 701 x 701
-profile has twice the cells/GPU and its failed instrumented run is suitable
-only for hotspot attribution.
+For radiation implementation work use the validated 495 x 495 x 80 one-node
+crop: 61,256 cells/GPU versus 61,450 nationally, with RRTMGP radiation time
+within 5%. It is not a whole-model proxy because timestep and communication
+costs differ.
 
-The qualified acceleration path is RTE-RRTMGP v1.9.3 on HICAR production merge
-`0b9b0cb6`. Build and acceptance invariants are:
+Qualified GPU RTE-RRTMGP v1.9.3 on production `0b9b0cb6` requires:
 
-- set both `KERNEL_MODE=accel` and `RTE_KERNEL_MODE=accel`;
-- retain the fail-closed v1.9.3 API/source patches;
-- reset Noah-MP's persistent energy workspace before each input transfer;
-- for NVHPC OpenACC, select RRTMGP's sequential tropopause `minmaxloc` helper
-  with explicit argument intents;
-- require compiler feedback to retain the outer vector(128) column loop while
-  removing device `MINLOC`/`MAXLOC` inner loops and scalar-live-out warnings;
-- pass the one-node continuous/restart gate before two cold full-Swiss replicas
-  and the 12-node continuous/restarted comparison.
+- both accelerated-kernel CMake selectors;
+- Noah-MP persistent energy-workspace reset before transfer;
+- NVHPC OpenACC selection of the sequential tropopause `minmaxloc` helper with
+  explicit intents;
+- compiler feedback retaining the outer vector(128) column loop while removing
+  device `MINLOC`/`MAXLOC` inner loops and scalar-live-out warnings;
+- one-node continuous/restart, two cold full-Swiss replicas, and full-Swiss
+  continuous/restarted gates.
 
-The qualified runs were bitwise identical at all 13 outputs and across all 199
-join/endpoint variables. Full-domain radiation was 4.875--4.881 s per two
-hours; replacing the original 12-hour RRTMG share estimates 4.06x model and
-3.56x wall speedup, not a measured 12-hour result. Keep the 600 s cadence fixed
-for implementation comparisons; cadence is a separate scientific sensitivity.
-
-## CPU reference
-
-The frozen 250 m one-hour CPU release run completed in about 18 seconds versus about 99 seconds for debug on the tested setup. Release differed slightly from debug because of aggressive optimization but remained finite and physically comparable. Use debug for diagnosis, not throughput estimates.
+Those gates were bitwise identical at 13 outputs and 199 join/endpoint
+variables. Full-domain radiation was 4.875--4.881 s per two hours. The 4.06x
+model/3.56x wall estimate holds non-radiation work and 600 s cadence fixed; it
+is not a measured 12-hour run. Cadence changes are separate sensitivities.
