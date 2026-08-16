@@ -104,11 +104,11 @@ a serial-RBF control produced the same prototype hashes.  The fused kernel's
 only numerical change was 43 W values by at most one float32 ULP (1.49e-8 m/s;
 normalized RMS 3.29e-12), but the required two-hour GPU HICAR pilot amplified
 it into non-finite surface diagnostics.  Fused W is therefore rejected for
-production; the exact reference W path remains selected.  Joined fixed-order RBF threads remain useful for
-smaller arrays (up to 3.2x in isolated tests) but were neutral at national
-scale, so national production defaults to one RBF thread.  Retaining one
-Python remap object per 2.95 million columns and persisting a second SST RBF
-operator were rejected as memory/I/O regressions.
+production; the exact reference W path remains selected.  Joined fixed-order
+RBF threads remain useful for smaller arrays (up to 3.2x in isolated tests)
+but were neutral at national scale, so national production defaults to one
+RBF thread.  Retaining one Python remap object per 2.95 million columns and
+persisting a second SST RBF operator were rejected as memory/I/O regressions.
 
 The native adapter now defaults to lossless deflate level 1: decoded arrays
 are bitwise identical to levels 0 and 4, decoding took 40 s instead of 63 s at
@@ -116,10 +116,18 @@ level 4, and the 1.40 GB file remains 79% smaller than the 6.67 GB uncompressed
 record.  Publication reuses the campaign's trusted static digest and validates
 a checksum-bound receipt plus metadata after atomic rename; the full science-
 array validator remains the qualification/default diagnostic.  The receipt
-check took 12.45 s versus 53.5--53.9 s for the paired full checks.  A complete
-decode-to-ready production record took 431 s, at least 31% below the previous
-628 s known stages even though the earlier total excluded SST preparation.
-Evidence is in `hicarprep_swiss_bc_acceleration_v1.json`.
+check took 12.45 s versus 53.5--53.9 s for the paired full checks.  The selected
+reference-W sequence took a median 471 s from decode through ready publication,
+at least 25% below the previous 628 s known stages even though the earlier total
+excluded SST preparation.  The rejected fused-W prototype took 431 s.
+The selected path passed the 12-node/48-GPU two-hour HICAR gate with all 13
+outputs, a valid terminal restart, finite diagnostics, and 10/50 m maximum
+winds of 16.76/17.56 m/s.  The trajectory is not bitwise identical to the
+accepted pilot but stays inside the previously qualified equivalence envelope:
+normalized RMS is 3.50e-5 for 2-m temperature, 5.42e-5/8.28e-5 for 10-m wind,
+5.36e-4 for 2-m humidity, 1.42% for threshold-sensitive PBL height, and 1.21%
+for sensible-heat flux.  Evidence is in
+`hicarprep_swiss_bc_acceleration_v1.json`.
 
 The completed campaign used host RRTMG inside an otherwise GPU model. Median
 radiation cost was 4301/5452 model seconds (75.7%): the wrapper transferred the

@@ -36,8 +36,8 @@ Without it, input generation retains the full validator. `use_sparse_lbc`
 defaults to false because regular forcing
 owns production relaxation; sparse-LBC experiments must opt in explicitly.
 `input_rbf_backend` (`numpy` or `numba`) makes the qualified accelerated path
-explicit in campaign provenance. Compiled RBF and vertical-W kernels reuse the
-campaign-local `input_numba_cache` across hourly worker processes; campaigns
+explicit in campaign provenance. Compiled RBF kernels reuse the campaign-local
+`input_numba_cache` across hourly worker processes; campaigns
 may override it with `input_numba_cache_dir`. `input_rbf_threads` defaults to
 one because the full Swiss domain is memory-bandwidth limited; smaller-domain
 campaigns may opt into measured threaded RBF scaling.

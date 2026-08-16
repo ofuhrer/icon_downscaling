@@ -28,10 +28,12 @@ python scripts/hicarprep.py prepare-hicar-forcing \
 ```
 
 The national Swiss-domain throughput path uses the pinned Numba dependency for
-fixed-donor-order threaded RBF application, short-lived column remap plans, and
-fused terrain-W/HFL construction; `--rbf-backend numpy` remains the reference
-fallback. Operationally absent QI bypasses remapping and is synthesized as an
-explicit zero target tracer with its source policy retained. Add `--boundary
+fixed-donor-order RBF application and short-lived column remap plans;
+`--rbf-backend numpy` remains the reference fallback.  Terrain-W/HFL retains
+the reference operation order: the standalone fused kernel is faster but
+failed the two-hour HICAR trajectory gate after one-ULP forcing differences.
+Operationally absent QI bypasses remapping and is synthesized as an explicit
+zero target tracer with its source policy retained. Add `--boundary
 forcing.lbc.nc` only for a sparse-LBC experiment.
 Recurring regular records use lossless deflate level 1; sparse frames store
 the atmospheric and geometry fields as float32 with level-1 deflate in bounded

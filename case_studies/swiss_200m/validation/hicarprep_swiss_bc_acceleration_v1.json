@@ -32,7 +32,7 @@
     "boundary_sha256": "4c57c8bffa799aba0a8266c0edaba2ddacbee51bb9f6fa57de3795a1525f30cc",
     "repeat_bitwise_identical": true
   },
-  "median_change_from_accepted_baseline_percent": {
+  "fused_w_prototype_median_change_from_accepted_baseline_percent": {
     "profile_wall_reduction": 13.953422832927517,
     "transform_reduction": 16.035141029774593,
     "horizontal_remap_reduction": -9.321823186231178,
@@ -114,5 +114,74 @@
     "ready_records": 3,
     "publication_validation": "PASS",
     "hicar_qualification": "FAIL"
+  },
+  "selected_production_input_sequence": {
+    "source_commit": "b27f8502b41aa3fd623559591a33441afce5b6eb",
+    "jobs": [5115774, 5115775, 5115776],
+    "elapsed_seconds": [471, 454, 472],
+    "median_decode_to_ready_seconds": 471,
+    "median_conservative_reduction_from_previous_known_stages_percent": 25.02196808578378,
+    "median_transform_seconds": 308.094168134965,
+    "median_transform_reduction_from_accepted_baseline_percent": 17.82184076684932,
+    "median_column_reconstruction_seconds": 229.54355234187096,
+    "median_column_reconstruction_reduction_from_accepted_baseline_percent": 20.386776674431918,
+    "ready_records": 3,
+    "publication_validation": "PASS",
+    "vertical_w_backend": "reference",
+    "transform_seconds": [314.1943318787962, 308.094168134965, 308.07543973159045],
+    "column_reconstruction_seconds": [231.52934093866497, 229.54355234187096, 225.9121612077579],
+    "vertical_velocity_seconds": [18.233267485164106, 14.149896028451622, 17.599773528054357],
+    "numerical_comparison_to_accepted_pilot_inputs": {
+      "hour_09_all_variables_bitwise_equal": true,
+      "hour_10_different_values": {
+        "P": 1,
+        "QC": 38,
+        "QV": 5,
+        "U": 4,
+        "V": 3,
+        "W": 20
+      },
+      "hour_11_different_values": {
+        "QC": 56,
+        "QV": 6,
+        "U": 2,
+        "V": 3,
+        "W": 20
+      },
+      "maximum_absolute_differences": {
+        "P_Pa": 0.0078125,
+        "moisture": 4.656612873077393e-10,
+        "horizontal_wind_ms": 9.5367431640625e-07,
+        "vertical_wind_ms": 1.862645149230957e-09
+      }
+    }
+  },
+  "selected_hicar_pilot": {
+    "job_id": 5115797,
+    "hicar_commit": "0545a55d20d76441c9eff5e8a297babccc49f440",
+    "nodes": 12,
+    "gpus": 48,
+    "start": "2020-10-01T09:00:00Z",
+    "end": "2020-10-01T11:00:00Z",
+    "elapsed_seconds": 363,
+    "model_total_seconds": 273.026,
+    "output_times": 13,
+    "restart_time": "2020-10-01T11:00:00Z",
+    "wind10m_max_ms": 16.756565404417135,
+    "wind50m_max_ms": 17.55695964019182,
+    "validation": "PASS",
+    "trajectory_bitwise_equal_to_accepted_pilot": false,
+    "terminal_output_differing_variable_count": 25,
+    "terminal_restart_differing_variable_count": 122,
+    "normalized_rms_differences": {
+      "taix": 3.5047341354126347e-05,
+      "hus2m": 0.0005356022023336005,
+      "u10m": 5.415839622449244e-05,
+      "v10m": 8.283216988897978e-05,
+      "hpbl": 0.014244493085924615,
+      "hfss": 0.012125067121543657,
+      "hfls": 0.002163313596205554,
+      "precipitation": 0.00012295245776148568
+    }
   }
 }
