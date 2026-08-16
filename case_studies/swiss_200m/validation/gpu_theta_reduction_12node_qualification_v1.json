@@ -1,0 +1,110 @@
+{
+  "schema": "hicar-gpu-optimization-qualification-v1",
+  "qualification_date": "2026-08-16",
+  "decision": "qualified_for_production",
+  "candidate": {
+    "coordinator_validation_commit": "d0e707faab58c1ebdf5329e32bdc51497d7333b3",
+    "hicar_commit": "0545a55d20d76441c9eff5e8a297babccc49f440",
+    "hicar_parent": "0b9b0cb6",
+    "change": "Fuse per-level GPU theta extrema reductions into one OpenACC kernel",
+    "runtime_setting": "NVCOMPILER_ACC_DEFER_UPLOADS=1 with threshold 1",
+    "runtime_setting_default": "off"
+  },
+  "build": {
+    "job_id": 5113563,
+    "variant": "gpu-nccl",
+    "mode": "release",
+    "nvhpc": "24.5",
+    "cuda": "12.3.0",
+    "cray_mpich": "8.1.30",
+    "executable_sha256": "a07aa804aba9bd764e0a82c9efa9b332b5167337cd0fbd429cb27834b30a6026",
+    "source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "case": {
+    "domain_cells_xyz": [2061, 1431, 80],
+    "nodes": 12,
+    "compute_gpu_ranks": 48,
+    "io_ranks": 12,
+    "partition": "normal",
+    "radiation": "rrtmgp",
+    "start": "2020-10-01T09:00:00",
+    "end": "2020-10-01T11:00:00",
+    "output_interval_seconds": 600,
+    "terrain_static_sha256": "a9b30a240f2c241a8a0d183d2c70f57b3a82b1e44b0756510b6b1fe74a3764e3",
+    "forcing_sha256": {
+      "2020-10-01T09:00:00": "18c8433d8a74f5f06aaa49e5e71ec782eab5d97e37512317804cc8d6f841de81",
+      "2020-10-01T10:00:00": "9d969c6d78c06d352271a143320a69150e3f8b222fb980665c3e2e0d199eff7d",
+      "2020-10-01T11:00:00": "b0cd93c8f15f9e62a6e4685d4cea128afef98b22d58d3f41a6745d10c8b89e54"
+    }
+  },
+  "aa": {
+    "model_jobs": [
+      {"job_id": 5114306, "state": "COMPLETED", "exit_code": "0:0", "elapsed": "00:06:01"},
+      {"job_id": 5114309, "state": "COMPLETED", "exit_code": "0:0", "elapsed": "00:06:05"}
+    ],
+    "comparison_job": {"job_id": 5114333, "state": "COMPLETED", "exit_code": "0:0"},
+    "outputs": {
+      "time_count": 13,
+      "compared_variable_count": 30,
+      "encoded_values_exact": true,
+      "differing_variable_count": 0,
+      "file_sha256": [
+        "2d11e11342fc3dbecf044b8e4b46f9a2052cba027e347642235e426e68715ca6",
+        "b0b86eabddee65705ca64ad7b3c959f8d77ddcd34997a6325ca1b85d42890d0f"
+      ]
+    },
+    "terminal_restart": {
+      "compared_variable_count": 199,
+      "coordinate_variables_included": true,
+      "encoded_model_core_exact": true,
+      "differing_variable_count": 0,
+      "file_sha256": [
+        "edc3f8a31e22e85a4c1489086be2c04f982fa9bf63706c39a2f8c7d6b8df4fe4",
+        "4a4b87f3c8345a8e8d44d07308444ebc5b64f75fa74abdf00bca62763f8f52e8"
+      ]
+    },
+    "container_difference_audit": {
+      "job_id": 5114439,
+      "difference_count_per_file_kind": 3,
+      "differences": [
+        "global history creation timestamp",
+        "global output.output_folder path",
+        "global restart.restart_folder path"
+      ],
+      "all_other_metadata_and_layout_equal": true
+    }
+  },
+  "restart": {
+    "strict_restart_consistency": true,
+    "override_check": false,
+    "model_jobs": [
+      {"job_id": 5114334, "segment": "09:00-10:00", "state": "COMPLETED", "exit_code": "0:0", "elapsed": "00:04:31"},
+      {"job_id": 5114379, "segment": "10:00-11:00", "state": "COMPLETED", "exit_code": "0:0", "elapsed": "00:04:56"}
+    ],
+    "comparison_job": {"job_id": 5114436, "state": "COMPLETED", "exit_code": "0:0"},
+    "trajectory": {
+      "time_count": 13,
+      "compared_variable_count": 30,
+      "encoded_values_exact": true,
+      "differing_variable_count": 0
+    },
+    "terminal_restart": {
+      "compared_variable_count": 199,
+      "coordinate_variables_included": true,
+      "encoded_model_core_exact": true,
+      "differing_variable_count": 0,
+      "continuous_sha256": "edc3f8a31e22e85a4c1489086be2c04f982fa9bf63706c39a2f8c7d6b8df4fe4",
+      "segmented_sha256": "b90a6c576d4cd83c2f2891840ac2a0609b329bec13c15d9ec32f8e9abd11e6fe"
+    }
+  },
+  "local_verification": {
+    "pytest": "262 passed",
+    "bash_syntax": "passed",
+    "git_diff_check": "passed"
+  },
+  "notes": [
+    "Whole NetCDF hashes are expected to differ when history timestamps and run-directory attributes differ.",
+    "The acceptance contract compares stored encoded values with strict schemas; restart comparisons include coordinates and exclude three MPI guard cells per horizontal edge.",
+    "Performance improvement is established by repeated controlled small-case A/B tests; this qualification establishes real-scale correctness, not a real-scale control/candidate speedup."
+  ]
+}
