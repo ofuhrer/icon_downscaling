@@ -56,6 +56,32 @@ class ColumnWorkerTests(unittest.TestCase):
         self.assertEqual(_column_ranges(7, 3), [(0, 3), (3, 5), (5, 7)])
         self.assertEqual(_column_ranges(2, 8), [(0, 1), (1, 2)])
 
+    def test_ephemeral_plan_matches_reference_after_bulk_validation(self) -> None:
+        inputs = _column_inputs()
+        reference = _reconstruct_target_columns(**inputs, column_workers=1, fast_columns=False)
+        accelerated = _reconstruct_target_columns(**inputs, column_workers=1, fast_columns=True)
+        self.assertEqual(set(reference[0]), set(accelerated[0]))
+        for name in reference[0]:
+            np.testing.assert_allclose(
+                accelerated[0][name], reference[0][name], rtol=2.0e-14, atol=2.0e-10
+            )
+        np.testing.assert_array_equal(accelerated[1], reference[1])
+        np.testing.assert_array_equal(accelerated[2], reference[2])
+        self.assertEqual(accelerated[3:], reference[3:])
+
+    def test_ephemeral_plan_bulk_validation_rejects_invalid_state(self) -> None:
+        inputs = _column_inputs()
+        bad_remapped = {
+            name: np.asarray(values).copy() for name, values in inputs["remapped"].items()
+        }
+        bad_remapped["QV"][0, 0, 0] = np.nan
+        with self.assertRaisesRegex(ValueError, "non-finite atmospheric"):
+            _reconstruct_target_columns(
+                **{**inputs, "remapped": bad_remapped},
+                column_workers=1,
+                fast_columns=True,
+            )
+
     @unittest.skipUnless("fork" in mp.get_all_start_methods(), "requires fork")
     def test_fork_workers_are_bitwise_equal_to_serial_for_every_output(self) -> None:
         inputs = _column_inputs()
@@ -90,7 +116,6 @@ class ColumnWorkerTests(unittest.TestCase):
         recovered = _reconstruct_target_columns(**inputs, column_workers=2)
         for name in serial[0]:
             np.testing.assert_array_equal(recovered[0][name], serial[0][name])
-
 
 
 if __name__ == "__main__":

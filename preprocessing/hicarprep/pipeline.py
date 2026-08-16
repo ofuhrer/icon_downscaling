@@ -31,6 +31,7 @@ from .vertical import (
     interpolate_interface_w_to_hfl,
     interpolate_height_profile,
     reconstruct_column_state,
+    reconstruct_column_state_fast,
 )
 
 
@@ -83,6 +84,7 @@ class _ColumnWork:
     state: dict[str, np.ndarray]
     target_w: np.ndarray
     terrain_differences: np.ndarray
+    fast_columns: bool
 
 
 _FORK_COLUMN_WORK: _ColumnWork | None = None
@@ -445,9 +447,13 @@ def write_hicar_forcing_record(
             dataset.createVariable("HHL", "f4", ("z_hl", "y_1", "x_1"), **compression)[:] = (
                 serialized_hhl
             )
-            dataset.createVariable("HFL", "f4", ("z", "y_1", "x_1"), **compression)[:] = serialized_hfl
+            dataset.createVariable("HFL", "f4", ("z", "y_1", "x_1"), **compression)[:] = (
+                serialized_hfl
+            )
             dataset.createVariable("HSURF", "f4", ("y_1", "x_1"), **compression)[:] = terrain
-            dataset.createVariable("FR_LAND", "f4", ("y_1", "x_1"), **compression)[:] = land_fraction
+            dataset.createVariable("FR_LAND", "f4", ("y_1", "x_1"), **compression)[:] = (
+                land_fraction
+            )
             sst_variable = dataset.createVariable(
                 "SST", "f4", ("time", "y_1", "x_1"), **compression
             )
@@ -795,7 +801,10 @@ def _column_chunk(work: _ColumnWork, bounds: tuple[int, int]) -> tuple[int, int,
     cases = {"lower": 0, "matched": 0, "higher": 0}
     for linear_index in range(start, stop):
         row, col = divmod(linear_index, nx)
-        column, diagnostics = reconstruct_column_state(
+        reconstruct = (
+            reconstruct_column_state_fast if work.fast_columns else reconstruct_column_state
+        )
+        column, diagnostics = reconstruct(
             source_hhl_m=work.source_hhl[:, row, col],
             target_hhl_m=work.target_hhl[:, row, col],
             temperature_k=work.remapped["T"][:, row, col],
@@ -804,6 +813,7 @@ def _column_chunk(work: _ColumnWork, bounds: tuple[int, int]) -> tuple[int, int,
             u_ms=work.remapped["U"][:, row, col],
             v_ms=work.remapped["V"][:, row, col],
             hydrometeors={name: value[:, row, col] for name, value in work.hydro.items()},
+            **({"validate_fields": False} if work.fast_columns else {}),
         )
         for name in work.state:
             work.state[name][:, row, col] = column[name]
@@ -841,6 +851,7 @@ def _reconstruct_target_columns(
     hydro: dict[str, np.ndarray],
     source_w: np.ndarray,
     column_workers: int,
+    fast_columns: bool = False,
 ) -> tuple[
     dict[str, np.ndarray],
     np.ndarray,
@@ -857,6 +868,24 @@ def _reconstruct_target_columns(
     nz = target_hhl.shape[0] - 1
     names = ("T", "P", "QV", "U", "V", "THETA", "RHO", *hydro)
 
+    if fast_columns:
+        atmospheric = (remapped["T"], remapped["P"], remapped["QV"], remapped["U"], remapped["V"])
+        expected_shape = (source_hhl.shape[0] - 1, ny, nx)
+        if any(np.asarray(field).shape != expected_shape for field in atmospheric):
+            raise ValueError("source full-level fields must match remapped HHL")
+        if not all(np.isfinite(np.asarray(field)).all() for field in atmospheric):
+            raise ValueError("source state contains non-finite atmospheric values")
+        if np.any(remapped["T"] <= 100.0) or np.any(remapped["P"] <= 0.0):
+            raise ValueError("source temperature or pressure is outside its physical domain")
+        if np.any(remapped["QV"] < 0.0):
+            raise ValueError("source water-vapor mixing ratio is negative")
+        for name, field in hydro.items():
+            values = np.asarray(field)
+            if values.shape != expected_shape or not np.isfinite(values).all():
+                raise ValueError(f"{name}: source hydrometeor field is invalid")
+            if np.any(values < 0.0):
+                raise ValueError(f"{name}: source hydrometeor field is negative")
+
     if effective_workers == 1:
         state = {name: np.empty((nz, ny, nx), dtype=np.float64) for name in names}
         target_w = np.empty_like(target_hhl)
@@ -870,6 +899,7 @@ def _reconstruct_target_columns(
             state=state,
             target_w=target_w,
             terrain_differences=terrain_differences,
+            fast_columns=fast_columns,
         )
         summaries = [_column_chunk(work, ranges[0])]
     else:
@@ -890,6 +920,7 @@ def _reconstruct_target_columns(
             state=state,
             target_w=target_w,
             terrain_differences=terrain_differences,
+            fast_columns=fast_columns,
         )
         global _FORK_COLUMN_WORK
         _FORK_COLUMN_WORK = work
@@ -1018,9 +1049,7 @@ def transform_icon_state(
             vector_weights,
             rbf_backend=rbf_backend,
         )
-        hydro, qi_source_absent_zero = _remap_hydrometeors(
-            source, weights, rbf_backend=rbf_backend
-        )
+        hydro, qi_source_absent_zero = _remap_hydrometeors(source, weights, rbf_backend=rbf_backend)
         source_w = weights.apply(
             _level_cell(source, "W", ("half_level", "interface"), ("m s-1", "m/s")),
             backend=rbf_backend,
@@ -1052,6 +1081,7 @@ def transform_icon_state(
         hydro=hydro,
         source_w=source_w,
         column_workers=column_workers,
+        fast_columns=rbf_backend == "numba",
     )
     if qi_source_absent_zero:
         # Keep the operational absence visible in diagnostics while avoiding
@@ -1071,21 +1101,36 @@ def transform_icon_state(
             "HICAR target x/y spacing must be uniform and equal for grid-wind rotation"
         )
     grid_sintheta, grid_costheta = hicar_grid_rotation(target_lat, target_lon, dx_m=dx_m)
-    target_w = adjust_vertical_velocity(
-        target_hhl_m=target_hhl,
-        interpolated_w_ms=target_w,
-        u_ms=state["U"],
-        v_ms=state["V"],
-        grid_sintheta=grid_sintheta,
-        grid_costheta=grid_costheta,
-        x_m=x,
-        y_m=y,
-    )
-    target_w_mass = interpolate_interface_w_to_hfl(
-        target_hhl_m=target_hhl,
-        target_hfl_m=target_hfl,
-        interface_w_ms=target_w,
-    )
+    if rbf_backend == "numba":
+        from .vertical_accelerated import adjust_vertical_velocity_to_hfl
+
+        target_w_mass = adjust_vertical_velocity_to_hfl(
+            target_hhl_m=target_hhl,
+            target_hfl_m=target_hfl,
+            interpolated_w_ms=target_w,
+            u_ms=state["U"],
+            v_ms=state["V"],
+            grid_sintheta=grid_sintheta,
+            grid_costheta=grid_costheta,
+            x_m=x,
+            y_m=y,
+        )
+    else:
+        target_w = adjust_vertical_velocity(
+            target_hhl_m=target_hhl,
+            interpolated_w_ms=target_w,
+            u_ms=state["U"],
+            v_ms=state["V"],
+            grid_sintheta=grid_sintheta,
+            grid_costheta=grid_costheta,
+            x_m=x,
+            y_m=y,
+        )
+        target_w_mass = interpolate_interface_w_to_hfl(
+            target_hhl_m=target_hhl,
+            target_hfl_m=target_hfl,
+            interface_w_ms=target_w,
+        )
     vertical_velocity_seconds = time.perf_counter() - vertical_velocity_started
     state.update(
         {
@@ -1125,10 +1170,12 @@ def transform_icon_state(
         "terrain_columns_higher": cases["higher"],
         "column_workers_requested": column_workers,
         "column_workers_effective": effective_column_workers,
-        "column_worker_start_method": (
-            "serial" if effective_column_workers == 1 else "fork"
-        ),
+        "column_worker_start_method": ("serial" if effective_column_workers == 1 else "fork"),
         "rbf_apply_backend": rbf_backend,
+        "column_reconstruction_backend": (
+            "ephemeral_geometry_plan" if rbf_backend == "numba" else "reference"
+        ),
+        "vertical_w_backend": "fused_numba_to_hfl" if rbf_backend == "numba" else "reference",
         "timing_static_read_seconds": static_seconds,
         "timing_horizontal_remap_seconds": horizontal_seconds,
         "timing_column_reconstruction_seconds": column_seconds,
@@ -1341,9 +1388,7 @@ def write_boundary_condition(
                 dataset.createDimension("half_level", state["HHL"].shape[0])
                 dataset.createVariable("row", "i4", ("boundary_point",))[:] = rows
                 dataset.createVariable("column", "i4", ("boundary_point",))[:] = cols
-                mass_weight = dataset.createVariable(
-                    "relaxation_weight", "f8", ("boundary_point",)
-                )
+                mass_weight = dataset.createVariable("relaxation_weight", "f8", ("boundary_point",))
                 mass_weight[:] = relaxation_weight
                 mass_weight.long_name = "lateral relaxation coefficient on the mass grid"
                 for name in (*sparse_fields, "HFL", "HHL"):
@@ -1365,9 +1410,7 @@ def write_boundary_condition(
                     )
                     for start in range(0, rows.size, point_chunk):
                         stop = min(start + point_chunk, rows.size)
-                        variable[:, start:stop] = value[
-                            :, rows[start:stop], cols[start:stop]
-                        ]
+                        variable[:, start:stop] = value[:, rows[start:stop], cols[start:stop]]
                 dataset.product_type = "hicar_lateral_boundary_state"
                 dataset.hicarprep_product_version = PRODUCT_VERSION
                 dataset.valid_time = str(valid_time)
@@ -1377,9 +1420,7 @@ def write_boundary_condition(
                 dataset.initial_condition_sha256 = initial_digest.result()
                 for attribute, value in initial_attributes.items():
                     dataset.setncattr(attribute, value)
-                dataset.frame_definition = (
-                    "distance_to_nearest_domain_edge <= boundary_width_m"
-                )
+                dataset.frame_definition = "distance_to_nearest_domain_edge <= boundary_width_m"
                 dataset.relaxation_profile = (
                     "cosine_squared(distance_to_nearest_domain_edge / boundary_width_m); "
                     "one at the outer edge and zero at boundary_width_m"
@@ -1389,9 +1430,7 @@ def write_boundary_condition(
                     "outer edge: exact target assignment; shoulder: "
                     "alpha=1-exp(-relaxation_weight*dt/relaxation_timescale_seconds)"
                 )
-                dataset.sparse_field_contract = (
-                    "T,P,QV,QC,QI on mass-grid boundary points"
-                )
+                dataset.sparse_field_contract = "T,P,QV,QC,QI on mass-grid boundary points"
                 dataset.sparse_field_storage = (
                     "float32; deflate level 1; lossless relative to HICAR real-valued reads"
                 )
@@ -1411,9 +1450,7 @@ def write_boundary_condition(
                 dataset.authoritative_temporal_basis = (
                     "T,P,QV,QC,QI; dependent diagnostics refreshed after interpolation"
                 )
-                dataset.lateral_w_policy = (
-                    "regular_forcing_initial_guess_then_hicar_projection"
-                )
+                dataset.lateral_w_policy = "regular_forcing_initial_guess_then_hicar_projection"
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
