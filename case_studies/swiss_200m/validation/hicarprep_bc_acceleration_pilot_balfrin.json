@@ -1,8 +1,8 @@
 {
-  "root": "/scratch/mch/olifu/icon_hicar/bc_acceleration_goal_20260816/hicar_pilot_final",
+  "root": "/scratch/mch/olifu/icon_hicar/bc_acceleration_goal_20260816/hicar_pilot_exact",
   "repo_root": "/scratch/mch/olifu/icon_hicar/gpu_perf_20260816/coordinator-d0e707f-validation",
-  "forcing_dir": "/scratch/mch/olifu/icon_hicar/bc_acceleration_goal_20260816/pilot_input_final",
-  "forcing_source_commit": "13c7cd8f4e577d008d11330b84affe2c951fd346",
+  "forcing_dir": "/scratch/mch/olifu/icon_hicar/bc_acceleration_goal_20260816/pilot_input_exact",
+  "forcing_source_commit": "b27f8502b41aa3fd623559591a33441afce5b6eb",
   "python": "/scratch/mch/olifu/icon_hicar/gpu_perf_20260816/real_scale_validation/venv/bin/python",
   "hicar_executable": "/scratch/mch/olifu/icon_hicar/gpu_perf_20260816/build/HICAR-0545a55d-gpu-nccl-release/HICAR_gpu",
   "hicar_support_dir": "/scratch/mch/olifu/icon_hicar/gpu_perf_20260816/source/HICAR-0545a55d-validation/run",

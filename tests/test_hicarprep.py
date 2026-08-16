@@ -1174,6 +1174,15 @@ class ProductPipelineTests(unittest.TestCase):
             state, diagnostics = transform_icon_state(source_path, static_path, weights)
             self.assertEqual(diagnostics["column_workers_effective"], 1)
             self.assertEqual(diagnostics["column_worker_start_method"], "serial")
+            self.assertEqual(diagnostics["vertical_w_backend"], "reference")
+            numba_state, numba_diagnostics = transform_icon_state(
+                source_path,
+                static_path,
+                weights,
+                rbf_backend="numba",
+            )
+            self.assertEqual(numba_diagnostics["vertical_w_backend"], "reference")
+            np.testing.assert_array_equal(numba_state["W"], state["W"])
             for name in (
                 "timing_static_read_seconds",
                 "timing_horizontal_remap_seconds",
