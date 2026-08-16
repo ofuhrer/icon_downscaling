@@ -57,9 +57,11 @@ unsuitable for capacity planning. Exact evidence is in
 representative production-segment compression and throughput measurement
 remains required before enabling automatic compaction or reserving storage.
 
-HICAR production is `feature/icon_downscaling` at `5503dacd`; it advances the
-qualified RRTMGP and theta-reduction state with the restart-safe hourly wind-
-climatology output described below. Static/forcing validation preserves exact
+HICAR production is pinned at `0b9b0cb6`, the qualified GPU RRTMGP restart-
+reproducibility merge. The later `0545a55d` fused theta-reduction optimization
+and its `5503dacd` hourly-wind-output descendant are research-only: fresh exact
+national reruns exposed nondeterministic invalid state as described below.
+Static/forcing validation preserves exact
 HHL/HFL geometry, chronology, finite/range contracts, and runtime-domain
 identity. Deterministic eight-worker preparation reduced a representative
 national record from about 80 to 16 minutes. Exact 32,768-target RBF chunks
@@ -205,7 +207,7 @@ both the unchanged and candidate builds hit the same existing OpenACC
 present-table failure in the advection sequence, while the production-topology
 whole-model controls and candidates completed.
 
-Real-scale qualification then used the 2061 x 1431 x 80 terrain-radiation
+Initial real-scale qualification used the 2061 x 1431 x 80 terrain-radiation
 Swiss domain, NVHPC 24.5 release executable
 `a07aa804aba9bd764e0a82c9efa9b332b5167337cd0fbd429cb27834b30a6026`,
 RRTMGP, deferred uploads, 12 nodes, 48 compute GPUs, 12 I/O ranks, and a
@@ -217,10 +219,19 @@ SHA-256 values differ only because the creation timestamp and replica-specific
 output/restart paths are global attributes; all other metadata and layout
 properties are identical. Strict segmented jobs `5114334` and `5114379`
 completed in 4:31 and 4:56. Their complete 13-time trajectory and final 199-
-variable restart state were bitwise identical to the continuous run. This
-qualifies the scheduling change and deferred-upload runtime setting for
-production correctness; the measured speedups remain the controlled small-case
-results above, not a national-domain A/B claim. Exact run evidence is in
+variable restart state were bitwise identical to the continuous run. However,
+fresh exact reruns on 2026-08-17 with the same executable, static, forcing list,
+rendered namelist and 12-node topology failed validation after successful model
+integration: most interior thermodynamic and surface diagnostics were non-finite.
+The same failure occurred for both Sx-off and Sx-on configurations, while an
+otherwise identical fresh run with the parent production executable at
+`0b9b0cb6` completed all 13 records, passed finite-core validation, produced a
+valid terminal restart, and bounded 10/50 m winds at 16.76/17.56 m/s (job
+`5118144`). The five-line fused nested OpenACC reduction is therefore not
+production-qualified despite its earlier repeated passes; its behavior is
+consistent with a scheduling-dependent GPU reduction defect. Retain the
+performance measurements only as rejected optimization evidence and use
+`0b9b0cb6` for campaigns. Exact earlier-pass evidence is in
 `case_studies/swiss_200m/validation/gpu_theta_reduction_12node_qualification_v1.json`.
 
 A production-node scaling study on the same two-hour Swiss case retained one
