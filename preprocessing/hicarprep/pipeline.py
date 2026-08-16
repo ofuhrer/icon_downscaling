@@ -1107,36 +1107,25 @@ def transform_icon_state(
             "HICAR target x/y spacing must be uniform and equal for grid-wind rotation"
         )
     grid_sintheta, grid_costheta = hicar_grid_rotation(target_lat, target_lon, dx_m=dx_m)
-    if rbf_backend == "numba":
-        from .vertical_accelerated import adjust_vertical_velocity_to_hfl
-
-        target_w_mass = adjust_vertical_velocity_to_hfl(
-            target_hhl_m=target_hhl,
-            target_hfl_m=target_hfl,
-            interpolated_w_ms=target_w,
-            u_ms=state["U"],
-            v_ms=state["V"],
-            grid_sintheta=grid_sintheta,
-            grid_costheta=grid_costheta,
-            x_m=x,
-            y_m=y,
-        )
-    else:
-        target_w = adjust_vertical_velocity(
-            target_hhl_m=target_hhl,
-            interpolated_w_ms=target_w,
-            u_ms=state["U"],
-            v_ms=state["V"],
-            grid_sintheta=grid_sintheta,
-            grid_costheta=grid_costheta,
-            x_m=x,
-            y_m=y,
-        )
-        target_w_mass = interpolate_interface_w_to_hfl(
-            target_hhl_m=target_hhl,
-            target_hfl_m=target_hfl,
-            interface_w_ms=target_w,
-        )
+    # Keep the reference operation order here.  The fused Numba kernel is a
+    # useful experimental API, but its one-ULP float32 W differences amplified
+    # into non-finite surface diagnostics in the required two-hour Swiss HICAR
+    # qualification run.
+    target_w = adjust_vertical_velocity(
+        target_hhl_m=target_hhl,
+        interpolated_w_ms=target_w,
+        u_ms=state["U"],
+        v_ms=state["V"],
+        grid_sintheta=grid_sintheta,
+        grid_costheta=grid_costheta,
+        x_m=x,
+        y_m=y,
+    )
+    target_w_mass = interpolate_interface_w_to_hfl(
+        target_hhl_m=target_hhl,
+        target_hfl_m=target_hfl,
+        interface_w_ms=target_w,
+    )
     vertical_velocity_seconds = time.perf_counter() - vertical_velocity_started
     state.update(
         {
@@ -1181,7 +1170,7 @@ def transform_icon_state(
         "column_reconstruction_backend": (
             "ephemeral_geometry_plan" if rbf_backend == "numba" else "reference"
         ),
-        "vertical_w_backend": "fused_numba_to_hfl" if rbf_backend == "numba" else "reference",
+        "vertical_w_backend": "reference",
         "timing_static_read_seconds": static_seconds,
         "timing_horizontal_remap_seconds": horizontal_seconds,
         "timing_column_reconstruction_seconds": column_seconds,

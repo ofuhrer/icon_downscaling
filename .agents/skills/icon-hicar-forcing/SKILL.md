@@ -60,6 +60,24 @@ point-major chunks; this is exactly the precision consumed by HICAR's default
 `real` sparse reader. Keep relaxation weights float64, require one storage
 dtype across a time sequence, and qualify storage changes against the decoded
 values seen by the reader rather than whole-file byte identity.
+
+For the national Swiss domain, use the Numba backend with eight forked column
+workers and one horizontal-RBF thread.  The column path may reuse a short-lived
+geometry plan after one bulk field validation, but never retain a Python plan
+per domain column.  Provenance-bound source-absent-zero QI is qualified; preserve
+the decoder's explicit `source_absent_zero` provenance.  Keep the reference
+terrain-W-to-HFL operation order: a fused Numba kernel changed only 43 national-
+domain float32 W values by one ULP but produced non-finite surface diagnostics
+in the two-hour GPU HICAR gate.  Joined fixed-order RBF threads are an opt-in
+small-array optimization because they were neutral on the full national grid.
+
+Campaign producers may use the fast publication receipt only with a trusted
+preflight static SHA-256.  Bind the receipt to the closed forcing/boundary
+digests, exact time, schema, policies, and final paths, then create the ready
+marker.  Keep full science-array validation for qualification, diagnosis, or
+when no trusted static digest is available.  Reuse campaign-local compiled
+Numba caches, but do not persist a separate normalized SST RBF operator unless
+a persistent multi-hour process first demonstrates a net I/O benefit.
 Maintained entry points are `scripts/hicarprep.py`, Swiss decoder/target Slurm
 scripts, `case_studies/swiss_200m/validation/validate_forcing.py`, and
 `preprocessing/hicarprep/boundary.py`. Run a two-hour pilot after decoder,
