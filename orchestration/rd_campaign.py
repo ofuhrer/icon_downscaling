@@ -74,8 +74,7 @@ class WatchControllerLock(AbstractContextManager["WatchControllerLock"]):
             except (json.JSONDecodeError, TypeError):
                 detail = "owner metadata is not yet available"
             raise ControllerLockError(
-                f"campaign watch controller already active ({detail}); "
-                f"lock: {self.path}"
+                f"campaign watch controller already active ({detail}); lock: {self.path}"
             ) from None
 
         self._stream = stream
@@ -154,9 +153,7 @@ def segments(start: datetime, end: datetime, length_hours: float):
 
 
 def run(command: list[str]) -> str:
-    return subprocess.run(
-        command, check=True, text=True, stdout=subprocess.PIPE
-    ).stdout.strip()
+    return subprocess.run(command, check=True, text=True, stdout=subprocess.PIPE).stdout.strip()
 
 
 def source_identity(path: Path) -> dict[str, object]:
@@ -194,7 +191,8 @@ def slurm_state(job_file: Path) -> str:
         return active.splitlines()[0]
     result = subprocess.run(
         ["sacct", "-n", "-X", "-j", job, "-o", "State", "--starttime", "now-7days"],
-        text=True, stdout=subprocess.PIPE,
+        text=True,
+        stdout=subprocess.PIPE,
     ).stdout.strip()
     return result.split()[0].split("+")[0] if result else "UNKNOWN"
 
@@ -208,7 +206,8 @@ def slurm_partition(job_file: Path) -> str:
         return active.splitlines()[0]
     result = subprocess.run(
         ["sacct", "-n", "-X", "-j", job, "-o", "Partition", "--starttime", "now-7days"],
-        text=True, stdout=subprocess.PIPE,
+        text=True,
+        stdout=subprocess.PIPE,
     ).stdout.strip()
     return result.split()[0] if result else "unknown"
 
@@ -223,14 +222,10 @@ def submitted_attempt(directory: Path, maximum: int) -> tuple[int, str] | None:
 
 def validate_partition(partition: str) -> dict[str, str]:
     description = run(["scontrol", "show", "partition", partition, "-o"])
-    fields = dict(
-        item.split("=", 1) for item in description.split() if "=" in item
-    )
+    fields = dict(item.split("=", 1) for item in description.split() if "=" in item)
     allowed = set(fields.get("AllowGroups", "").split(","))
     if not ({"ALL", "s83"} & allowed):
-        raise RuntimeError(
-            f"partition {partition} is not currently allowed for exact group s83"
-        )
+        raise RuntimeError(f"partition {partition} is not currently allowed for exact group s83")
     return fields
 
 
@@ -272,9 +267,15 @@ def submit(
     exports = ["ALL", *(f"{key}={value}" for key, value in environment.items())]
     return run(
         [
-            "sbatch", "--parsable", "--partition", partition,
-            "--job-name", job_name, *sbatch_options,
-            "--export=" + ",".join(exports), str(script),
+            "sbatch",
+            "--parsable",
+            "--partition",
+            partition,
+            "--job-name",
+            job_name,
+            *sbatch_options,
+            "--export=" + ",".join(exports),
+            str(script),
         ]
     ).split(";")[0]
 
@@ -285,6 +286,7 @@ class Season:
     start: datetime
     end: datetime
     static: Path
+    static_sha256: str | None = None
 
 
 class Campaign:
@@ -299,9 +301,7 @@ class Campaign:
         self.input_partitions = self.config.get("input_partitions", ["pp-short"])
         self.max_active_inputs = int(self.config.get("max_active_inputs", 2))
         self.input_cpus = int(self.config.get("input_cpus", 4))
-        self.input_column_workers = int(
-            self.config.get("input_column_workers", 1)
-        )
+        self.input_column_workers = int(self.config.get("input_column_workers", 1))
         self.input_rbf_backend = str(self.config.get("input_rbf_backend", "numpy"))
         if self.input_rbf_backend not in {"numpy", "numba"}:
             raise ValueError("input_rbf_backend must be numpy or numba")
@@ -310,41 +310,41 @@ class Campaign:
         self.input_exclusive = bool(self.config.get("input_exclusive", False))
         self.model_nodes = int(self.config.get("model_nodes", 2))
         self.model_time = str(self.config.get("model_time", "06:00:00"))
-        self.model_partition = str(
-            self.config.get("model_partition", "preemptible")
-        )
-        self.radiation_update_interval = float(
-            self.config.get("radiation_update_interval", 600.0)
-        )
-        self.radiation_scheme = str(
-            self.config.get("radiation_scheme", "rrtmgp")
-        ).lower()
+        self.model_partition = str(self.config.get("model_partition", "preemptible"))
+        self.radiation_update_interval = float(self.config.get("radiation_update_interval", 600.0))
+        self.radiation_scheme = str(self.config.get("radiation_scheme", "rrtmgp")).lower()
         self.acc_synchronous = bool(self.config.get("acc_synchronous", False))
         self.defer_uploads = bool(self.config.get("defer_uploads", False))
-        self.gpu_metrics_interval_seconds = int(
-            self.config.get("gpu_metrics_interval_seconds", 0)
-        )
+        self.gpu_metrics_interval_seconds = int(self.config.get("gpu_metrics_interval_seconds", 0))
         max_wind_speed = self.config.get("max_wind_speed_ms")
-        self.max_wind_speed_ms = (
-            None if max_wind_speed is None else float(max_wind_speed)
-        )
+        self.max_wind_speed_ms = None if max_wind_speed is None else float(max_wind_speed)
         self.use_sparse_lbc = bool(self.config.get("use_sparse_lbc", False))
-        self.full_season_input_lists = bool(
-            self.config.get("full_season_input_lists", False)
-        )
+        self.full_season_input_lists = bool(self.config.get("full_season_input_lists", False))
         lookahead = self.config.get("input_lookahead_segments")
         if lookahead is not None and (
             isinstance(lookahead, bool) or not isinstance(lookahead, int)
         ):
             raise ValueError("input_lookahead_segments must be a non-negative integer")
         self.input_lookahead_segments = lookahead
-        self.seasons = [
-            Season(item["name"], parse_time(item["start"]), parse_time(item["end"]), Path(item["static"]))
-            for item in self.config["seasons"]
-        ]
-        self.max_active_models = int(
-            self.config.get("max_active_models", len(self.seasons))
-        )
+        self.seasons = []
+        for item in self.config["seasons"]:
+            static_digest = item.get("static_sha256")
+            if static_digest is not None and (
+                not isinstance(static_digest, str)
+                or len(static_digest) != 64
+                or any(character not in "0123456789abcdef" for character in static_digest)
+            ):
+                raise ValueError("season static_sha256 must be a lowercase SHA-256 digest")
+            self.seasons.append(
+                Season(
+                    item["name"],
+                    parse_time(item["start"]),
+                    parse_time(item["end"]),
+                    Path(item["static"]),
+                    static_digest,
+                )
+            )
+        self.max_active_models = int(self.config.get("max_active_models", len(self.seasons)))
         model_fraction = self.config.get("model_max_partition_fraction")
         self.model_max_partition_fraction = (
             None if model_fraction is None else float(model_fraction)
@@ -361,33 +361,24 @@ class Campaign:
             or self.gpu_metrics_interval_seconds < 0
         ):
             raise ValueError(
-                "segment length, attempts, resource counts, and radiation cadence "
-                "must be positive"
+                "segment length, attempts, resource counts, and radiation cadence must be positive"
             )
         if not self.input_partitions:
             raise ValueError("input_partitions must not be empty")
         if self.radiation_scheme not in {"rrtmgp", "rrtmg"}:
             raise ValueError("radiation_scheme must be rrtmgp or rrtmg")
         if self.acc_synchronous and self.defer_uploads:
-            raise ValueError(
-                "acc_synchronous and defer_uploads cannot both be enabled"
-            )
+            raise ValueError("acc_synchronous and defer_uploads cannot both be enabled")
         if self.max_wind_speed_ms is not None and (
-            not math.isfinite(self.max_wind_speed_ms)
-            or self.max_wind_speed_ms <= 0.0
+            not math.isfinite(self.max_wind_speed_ms) or self.max_wind_speed_ms <= 0.0
         ):
             raise ValueError("max_wind_speed_ms must be finite and positive")
         if self.input_column_workers > self.input_cpus:
             raise ValueError("input_column_workers must not exceed input_cpus")
-        if (
-            self.input_lookahead_segments is not None
-            and self.input_lookahead_segments < 0
-        ):
+        if self.input_lookahead_segments is not None and self.input_lookahead_segments < 0:
             raise ValueError("input_lookahead_segments must be a non-negative integer")
         if self.input_lookahead_segments is not None and self.full_season_input_lists:
-            raise ValueError(
-                "bounded input look-ahead requires segment-local input lists"
-            )
+            raise ValueError("bounded input look-ahead requires segment-local input lists")
         if (
             self.model_max_partition_fraction is not None
             and not 0 < self.model_max_partition_fraction <= 1
@@ -406,7 +397,8 @@ class Campaign:
         if not provenance.is_file() or not Path(f"{provenance}.ready").is_file():
             raise RuntimeError(f"missing complete HICAR build provenance: {provenance}")
         build = dict(
-            line.split("=", 1) for line in provenance.read_text().splitlines()
+            line.split("=", 1)
+            for line in provenance.read_text().splitlines()
             if "=" in line and not line.startswith("---")
         )
         if build.get("source_commit") != hicar_source["commit"]:
@@ -431,9 +423,7 @@ class Campaign:
         forcing = self.forcing / season.name / f"rea_l_hicar_{stamp(when)}.nc"
         return forcing, forcing.with_suffix(".lbc.nc")
 
-    def input_candidates(
-        self, *, bounded: bool = True
-    ) -> Iterator[tuple[Season, datetime, Path]]:
+    def input_candidates(self, *, bounded: bool = True) -> Iterator[tuple[Season, datetime, Path]]:
         """Yield unbounded or segment-bounded input work in deterministic order."""
         if self.input_lookahead_segments is None or not bounded:
             unique: dict[tuple[str, datetime], tuple[Season, Path]] = {}
@@ -457,9 +447,7 @@ class Campaign:
                     index
                     for index, (start, end) in enumerate(windows)
                     if self.completed_attempt(
-                        self.root
-                        / season.name
-                        / f"{index:03d}_{stamp(start)}_{stamp(end)}"
+                        self.root / season.name / f"{index:03d}_{stamp(start)}_{stamp(end)}"
                     )
                     is None
                 ),
@@ -511,18 +499,24 @@ class Campaign:
             if sum(active_by_partition.values()) >= self.max_active_inputs:
                 continue
             partition = next(
-                (item for item in self.input_partitions if active_by_partition[item] < per_partition),
+                (
+                    item
+                    for item in self.input_partitions
+                    if active_by_partition[item] < per_partition
+                ),
                 None,
             )
             if partition is None:
                 continue
             job = submit(
-                self.repo / "case_studies/swiss_200m/scripts/produce_hicarprep_target_record_balfrin.sbatch",
+                self.repo
+                / "case_studies/swiss_200m/scripts/produce_hicarprep_target_record_balfrin.sbatch",
                 {
                     "REPO_ROOT": str(self.repo),
                     "VALID_TIME": when.strftime(TIME),
                     "HICAR_FORCING_OUTPUT": str(forcing),
                     "HICAR_STATIC_DOMAIN": str(static),
+                    "HICAR_STATIC_SHA256": season.static_sha256 or "",
                     "HICARPREP_RBF_WEIGHTS": self.config["rbf_weights"],
                     "HICARPREP_VECTOR_WEIGHTS": self.config.get("vector_weights", ""),
                     "HICARPREP_COLUMN_WORKERS": str(self.input_column_workers),
@@ -570,9 +564,7 @@ class Campaign:
         return records, list_root / "forcing.txt", list_root / "lbc.txt"
 
     def active_model_attempts(self) -> int:
-        active_states = {
-            "PENDING", "RUNNING", "CONFIGURING", "COMPLETING", "SUSPENDED"
-        }
+        active_states = {"PENDING", "RUNNING", "CONFIGURING", "COMPLETING", "SUSPENDED"}
         return sum(
             slurm_state(job_file) in active_states
             for job_file in self.root.glob("*/*/attempt-*.job")
@@ -605,7 +597,9 @@ class Campaign:
         self.validate_model_partition_capacity()
         for season in self.seasons:
             previous_restart: Path | None = None
-            for index, (start, end) in enumerate(segments(season.start, season.end, self.segment_hours)):
+            for index, (start, end) in enumerate(
+                segments(season.start, season.end, self.segment_hours)
+            ):
                 segment_root = self.root / season.name / f"{index:03d}_{stamp(start)}_{stamp(end)}"
                 segment_root.mkdir(parents=True, exist_ok=True)
                 completed = self.completed_attempt(segment_root)
@@ -621,10 +615,7 @@ class Campaign:
                 )
                 if not all(
                     Path(f"{forcing}.ready").is_file()
-                    and (
-                        not self.use_sparse_lbc
-                        or Path(f"{boundary}.ready").is_file()
-                    )
+                    and (not self.use_sparse_lbc or Path(f"{boundary}.ready").is_file())
                     for forcing, boundary in records
                 ):
                     break
@@ -638,62 +629,48 @@ class Campaign:
                     break
                 attempt = 1 if previous is None else previous[0] + 1
                 if attempt > self.max_attempts:
-                    raise RuntimeError(f"segment {season.name}/{index} failed {self.max_attempts} times")
+                    raise RuntimeError(
+                        f"segment {season.name}/{index} failed {self.max_attempts} times"
+                    )
                 run_dir = segment_root / f"attempt-{attempt}"
                 run_dir.mkdir(exist_ok=True)
                 environment = {
                     "REPO_ROOT": str(self.repo),
                     "HICAR_EXE": self.config["hicar_executable"],
                     "HICAR_SUPPORT_DIR": self.config["hicar_support_dir"],
-                    "HICAR_BUILD_PROVENANCE": self.config[
-                        "hicar_build_provenance"
-                    ],
+                    "HICAR_BUILD_PROVENANCE": self.config["hicar_build_provenance"],
                     "HICAR_STATIC_FILE": str(season.static),
                     "HICAR_PYTHON": self.config["python"],
                     "FORCING_FILE_LIST": str(forcing_list),
-                    "SPARSE_LBC_FILE_LIST": (
-                        str(boundary_list) if self.use_sparse_lbc else ""
-                    ),
+                    "SPARSE_LBC_FILE_LIST": (str(boundary_list) if self.use_sparse_lbc else ""),
                     "SEGMENT_START": start.strftime(TIME),
                     "SEGMENT_END": end.strftime(TIME),
                     "SEGMENT_RUN_DIR": str(run_dir),
                     "RESTART_INPUT": str(previous_restart or ""),
                     "OUTPUT_PROFILE": self.config.get("output_profile", "evaluation"),
                     "OUTPUT_INTERVAL": str(self.config.get("output_interval", 600)),
-                    "HICAR_RADIATION_UPDATE_INTERVAL": str(
-                        self.radiation_update_interval
-                    ),
+                    "HICAR_RADIATION_UPDATE_INTERVAL": str(self.radiation_update_interval),
                     "HICAR_RADIATION_SCHEME": self.radiation_scheme,
                     "HICAR_DISABLE_SX": "1" if self.config.get("disable_sx", False) else "0",
                     "HICAR_ALPHA_CONST": str(self.config.get("alpha_const", 1.0)),
                     "HICAR_MAX_WIND_SPEED_MS": (
-                        ""
-                        if self.max_wind_speed_ms is None
-                        else str(self.max_wind_speed_ms)
+                        "" if self.max_wind_speed_ms is None else str(self.max_wind_speed_ms)
                     ),
                     "HICAR_ALLOW_MISSING_RESTART_DOMAIN_PROVENANCE": (
                         "1"
-                        if self.config.get(
-                            "allow_missing_restart_domain_provenance", False
-                        )
+                        if self.config.get("allow_missing_restart_domain_provenance", False)
                         else "0"
                     ),
-                    "HICAR_ALLOW_INPUT_SUPERSET": (
-                        "1" if self.full_season_input_lists else "0"
-                    ),
-                    "HICAR_ACC_SYNCHRONOUS": (
-                        "1" if self.acc_synchronous else "0"
-                    ),
-                    "HICAR_DEFER_UPLOADS": (
-                        "1" if self.defer_uploads else "0"
-                    ),
-                    "HICAR_GPU_METRICS_INTERVAL_SECONDS": str(
-                        self.gpu_metrics_interval_seconds
-                    ),
+                    "HICAR_ALLOW_INPUT_SUPERSET": ("1" if self.full_season_input_lists else "0"),
+                    "HICAR_ACC_SYNCHRONOUS": ("1" if self.acc_synchronous else "0"),
+                    "HICAR_DEFER_UPLOADS": ("1" if self.defer_uploads else "0"),
+                    "HICAR_GPU_METRICS_INTERVAL_SECONDS": str(self.gpu_metrics_interval_seconds),
                 }
                 job = submit(
-                    self.repo / "case_studies/swiss_200m/scripts/run_rea_l_stream_chunk_balfrin.sbatch",
-                    environment, f"hc-{season.name[:3]}-{index:03d}-a{attempt}",
+                    self.repo
+                    / "case_studies/swiss_200m/scripts/run_rea_l_stream_chunk_balfrin.sbatch",
+                    environment,
+                    f"hc-{season.name[:3]}-{index:03d}-a{attempt}",
                     partition=self.model_partition,
                     sbatch_options=(
                         f"--nodes={self.model_nodes}",
@@ -713,7 +690,9 @@ class Campaign:
         result = {}
         for season in self.seasons:
             total = complete = 0
-            for index, (start, end) in enumerate(segments(season.start, season.end, self.segment_hours)):
+            for index, (start, end) in enumerate(
+                segments(season.start, season.end, self.segment_hours)
+            ):
                 total += 1
                 root = self.root / season.name / f"{index:03d}_{stamp(start)}_{stamp(end)}"
                 complete += self.completed_attempt(root) is not None
@@ -721,13 +700,17 @@ class Campaign:
         return result
 
     def complete(self) -> bool:
-        return all(item["complete_segments"] == item["total_segments"] for item in self.status().values())
+        return all(
+            item["complete_segments"] == item["total_segments"] for item in self.status().values()
+        )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("config", type=Path)
-    parser.add_argument("--watch", action="store_true", help="poll and retry until all chains finish")
+    parser.add_argument(
+        "--watch", action="store_true", help="poll and retry until all chains finish"
+    )
     parser.add_argument(
         "--inputs-only",
         action="store_true",

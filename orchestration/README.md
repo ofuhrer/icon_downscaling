@@ -29,7 +29,11 @@ python orchestration/rd_campaign.py campaign.json --watch
 The JSON configuration supplies `root`, `repo_root`, `forcing_dir`,
 `hicar_executable`, `hicar_support_dir`, `hicar_build_provenance`, `python`,
 RBF weights, and `seasons` with `name`, `start`, `end`, and the valid-time
-runtime-domain file. `use_sparse_lbc` defaults to false because regular forcing
+runtime-domain file. A season may also carry a preverified lowercase
+`static_sha256`; when present it enables receipt-bound publication validation
+without rehashing and rereading the static/science arrays for every hour.
+Without it, input generation retains the full validator. `use_sparse_lbc`
+defaults to false because regular forcing
 owns production relaxation; sparse-LBC experiments must opt in explicitly.
 `input_rbf_backend` (`numpy` or `numba`) makes the qualified accelerated path
 explicit in campaign provenance.

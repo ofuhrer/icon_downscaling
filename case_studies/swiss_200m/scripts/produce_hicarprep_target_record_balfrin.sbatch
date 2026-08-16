@@ -56,19 +56,22 @@ icon_extpar=${ICON_EXTPAR:-/oprusers/osm/opr.inn/data/ICON_INPUT/ICON-CH1-EPS/ex
 image=${REA_FDB_IMAGE_OVERRIDE:-${REA_FDB_IMAGE:?REA_FDB_IMAGE is required}}
 uenv_bin=${UENV_BIN:-/usr/bin/uenv}
 
-publication_args=(--mode publication --manifest "$manifest")
+publication_args=()
 if test -n "$trusted_static_digest"; then
   [[ "$trusted_static_digest" =~ ^[0-9a-f]{64}$ ]] || {
     echo "HICAR_STATIC_SHA256 must be a lowercase SHA-256 digest" >&2
     exit 2
   }
-  publication_args+=(--expected-static-sha256 "$trusted_static_digest")
+  publication_args=(
+    --mode publication --manifest "$manifest"
+    --expected-static-sha256 "$trusted_static_digest"
+  )
 fi
 
 validate_record() {
   local boundary_args=()
   test "$write_lbc" = 0 || boundary_args=(--boundary-file "$boundary")
-  if test -f "$manifest"; then
+  if test -f "$manifest" && test -n "$trusted_static_digest"; then
     "$python" "$repo_root/case_studies/swiss_200m/validation/validate_forcing.py" \
       --forcing-file "$output" "${boundary_args[@]}" --static-file "$static" \
       --expected-valid-time "$valid" "${publication_args[@]}"
@@ -173,23 +176,29 @@ if test "$write_lbc" = 1; then
   validation_boundary_args=(--boundary-file "$staged_boundary")
   published_boundary_args=(--published-boundary-path "$boundary")
 fi
-test -n "$trusted_static_digest" || {
-  echo "HICAR_STATIC_SHA256 is required to publish a newly generated record" >&2
-  exit 2
-}
+manifest_args=()
+test -z "$trusted_static_digest" || manifest_args=(--manifest "$manifest")
 if ! "$python" "$repo_root/scripts/hicarprep.py" prepare-hicar-forcing \
   --icon-state "$native" --static "$static" --weights "$weights" \
   --target-sst "$target_sst" "${vector_args[@]}" \
-  --output "$staged_output" "${boundary_args[@]}" --manifest "$manifest" \
+  --output "$staged_output" "${boundary_args[@]}" "${manifest_args[@]}" \
   --column-workers "$column_workers" \
   --rbf-backend "$rbf_backend"; then
   quarantine_record
   exit 1
 fi
+validation_mode_args=()
+if test -n "$trusted_static_digest"; then
+  validation_mode_args=(
+    "${publication_args[@]}"
+    --published-forcing-path "$output"
+    "${published_boundary_args[@]}"
+  )
+fi
 if ! "$python" "$repo_root/case_studies/swiss_200m/validation/validate_forcing.py" \
   --forcing-file "$staged_output" "${validation_boundary_args[@]}" \
-  --static-file "$static" --expected-valid-time "$valid" "${publication_args[@]}" \
-  --published-forcing-path "$output" "${published_boundary_args[@]}"; then
+  --static-file "$static" --expected-valid-time "$valid" \
+  "${validation_mode_args[@]}"; then
   quarantine_record
   exit 1
 fi

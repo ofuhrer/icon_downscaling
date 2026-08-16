@@ -28,8 +28,11 @@ python scripts/hicarprep.py prepare-hicar-forcing \
 ```
 
 The national Swiss-domain throughput path uses the pinned Numba dependency for
-scalar RBF application; `--rbf-backend numpy` remains the exact-arithmetic
-fallback. Add `--boundary forcing.lbc.nc` only for a sparse-LBC experiment.
+fixed-donor-order threaded RBF application, short-lived column remap plans, and
+fused terrain-W/HFL construction; `--rbf-backend numpy` remains the reference
+fallback. Operationally absent QI bypasses remapping and is synthesized as an
+explicit zero target tracer with its source policy retained. Add `--boundary
+forcing.lbc.nc` only for a sparse-LBC experiment.
 Recurring regular records use lossless deflate level 1; sparse frames store
 the atmospheric and geometry fields as float32 with level-1 deflate in bounded
 point chunks. This matches the precision seen by HICAR's single-precision
