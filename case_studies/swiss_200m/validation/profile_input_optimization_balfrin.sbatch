@@ -22,7 +22,7 @@ module use "${USER_ENV_ROOT:-/mch-environment/v8}/modules"
 : "${REFERENCE_BOUNDARY:?set REFERENCE_BOUNDARY}"
 : "${SOURCE_ID:?set SOURCE_ID}"
 
-source_root="$OPTIMIZATION_ROOT/source"
+source_root=${SOURCE_ROOT:-$OPTIMIZATION_ROOT/source}
 output_root="$OPTIMIZATION_ROOT/output"
 mkdir -p "$output_root" "$OPTIMIZATION_ROOT/numba_cache"
 export PYTHONPATH="$source_root:$OPTIMIZATION_ROOT/vendor_core"
@@ -36,7 +36,7 @@ boundary="$output_root/forcing_20201001_0900_${variant}.lbc.nc"
 profile="$output_root/profile_${variant}.json"
 
 /usr/bin/time -v "$HICARPREP_PYTHON" \
-    "$source_root/profile_input_generation.py" profile-record \
+    "$source_root/case_studies/swiss_200m/validation/profile_input_generation.py" profile-record \
     --icon-state "$ICON_STATE" \
     --static "$STATIC_FILE" \
     --weights "$WEIGHTS_FILE" \
@@ -48,17 +48,20 @@ profile="$output_root/profile_${variant}.json"
     --column-workers "$column_workers" \
     --rbf-backend numba
 
-/usr/bin/time -v "$HICARPREP_PYTHON" "$source_root/validate_forcing.py" \
+/usr/bin/time -v "$HICARPREP_PYTHON" \
+    "$source_root/case_studies/swiss_200m/validation/validate_forcing.py" \
     --forcing-file "$forcing" \
     --boundary-file "$boundary" \
     --static-file "$STATIC_FILE" \
     --expected-valid-time 2020-10-01T09:00:00
 
-"$HICARPREP_PYTHON" "$source_root/compare_forcing_numerical.py" \
+"$HICARPREP_PYTHON" \
+    "$source_root/case_studies/swiss_200m/validation/compare_forcing_numerical.py" \
     --reference "$REFERENCE_FORCING" \
     --candidate "$forcing" \
     --report "$output_root/forcing_numerical_comparison_${variant}.json"
-"$HICARPREP_PYTHON" "$source_root/compare_forcing_numerical.py" \
+"$HICARPREP_PYTHON" \
+    "$source_root/case_studies/swiss_200m/validation/compare_forcing_numerical.py" \
     --reference "$REFERENCE_BOUNDARY" \
     --candidate "$boundary" \
     --report "$output_root/boundary_numerical_comparison_${variant}.json"
