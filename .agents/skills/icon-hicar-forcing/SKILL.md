@@ -35,10 +35,14 @@ policy.
 
 Conditioned RBF stencils require condition number <=`1e10` after the minimum
 nugget and normalized-weight L1 <=`10`. Clip remapped earth-relative U/V to
-local donor component bounds. Apply RBF in 32,768-target chunks without
-changing donor order or `np.sum` arithmetic; a whole-domain gather creates an
-18.88 GB temporary. Use one exclusive CPU node for each eight-worker national
-record and requalify any chunk/arithmetic change end to end.
+local donor component bounds. The NumPy backend applies RBF in 32,768-target
+chunks and retains `np.sum` arithmetic; a whole-domain gather creates an 18.88
+GB temporary. The qualified Numba backend accumulates the same fixed donor
+sequence without a gather/product array. Bit identity with NumPy is not a
+requirement: require deterministic repeats, constant preservation, donor-bound
+clipping, quantified field-level roundoff, production validation, and the
+two-hour HICAR pilot. Requalify any other stencil/arithmetic change end to end.
+Use one exclusive CPU node for each eight-worker national record.
 
 ## Validation and publication
 
@@ -50,6 +54,30 @@ record and requalify any chunk/arithmetic change end to end.
 
 Create NetCDF atomically. Add ready markers only for overlapping campaign
 readers and keep source/configuration provenance in one campaign manifest.
+Use lossless deflate level 1 for recurring regular forcing. Sparse scalar
+frames store atmospheric and geometry payloads as float32 in bounded
+point-major chunks; this is exactly the precision consumed by HICAR's default
+`real` sparse reader. Keep relaxation weights float64, require one storage
+dtype across a time sequence, and qualify storage changes against the decoded
+values seen by the reader rather than whole-file byte identity.
+
+For the national Swiss domain, use the Numba backend with eight forked column
+workers and one horizontal-RBF thread.  The column path may reuse a short-lived
+geometry plan after one bulk field validation, but never retain a Python plan
+per domain column.  Provenance-bound source-absent-zero QI is qualified; preserve
+the decoder's explicit `source_absent_zero` provenance.  Keep the reference
+terrain-W-to-HFL operation order: a fused Numba kernel changed only 43 national-
+domain float32 W values by one ULP but produced non-finite surface diagnostics
+in the two-hour GPU HICAR gate.  Joined fixed-order RBF threads are an opt-in
+small-array optimization because they were neutral on the full national grid.
+
+Campaign producers may use the fast publication receipt only with a trusted
+preflight static SHA-256.  Bind the receipt to the closed forcing/boundary
+digests, exact time, schema, policies, and final paths, then create the ready
+marker.  Keep full science-array validation for qualification, diagnosis, or
+when no trusted static digest is available.  Reuse campaign-local compiled
+Numba caches, but do not persist a separate normalized SST RBF operator unless
+a persistent multi-hour process first demonstrates a net I/O benefit.
 Maintained entry points are `scripts/hicarprep.py`, Swiss decoder/target Slurm
 scripts, `case_studies/swiss_200m/validation/validate_forcing.py`, and
 `preprocessing/hicarprep/boundary.py`. Run a two-hour pilot after decoder,

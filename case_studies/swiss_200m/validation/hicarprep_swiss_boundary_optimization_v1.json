@@ -1,0 +1,96 @@
+{
+  "schema": "hicarprep-swiss-boundary-optimization-v1",
+  "decision": "use_lossless_level1_regular_forcing_and_float32_chunked_sparse_frames",
+  "domain": {
+    "nx": 2061,
+    "ny": 1431,
+    "horizontal_cells": 2949291,
+    "vertical_levels": 80,
+    "boundary_points": 345780,
+    "boundary_width_m": 10000,
+    "valid_time": "2020-10-01T09:00:00Z"
+  },
+  "accepted_input_baseline": {
+    "job_id": 5114859,
+    "profile_wall_seconds": 589.446114230901,
+    "regular_write_seconds": 107.92676467075944,
+    "sparse_write_seconds": 19.23223459906876,
+    "regular_bytes": 4494674136,
+    "sparse_bytes": 796266781,
+    "slurm_max_rss_kib": 242357592
+  },
+  "encoding_benchmark": {
+    "job_ids": [5115256, 5115301],
+    "reference_float64_deflate4_seconds": 15.20689853001386,
+    "reference_float64_deflate4_bytes": 796266941,
+    "selected_float32_deflate1_point4096_seconds": 3.484070386737585,
+    "selected_float32_deflate1_point4096_bytes": 330332320,
+    "selected_write_reduction_percent": 77.08888252353972
+  },
+  "isolated_sparse_candidate": {
+    "job_id": 5115304,
+    "profile_wall_seconds": 514.0517489006743,
+    "transform_seconds": 370.84079128783196,
+    "regular_write_seconds": 115.7154685612768,
+    "sparse_write_seconds": 7.957906988449395,
+    "sparse_bytes": 330333460,
+    "production_validation": "PASS"
+  },
+  "accepted_candidate": {
+    "job_id": 5115353,
+    "source_id": "899700c98bda+bc-final-f368bbcca6ea",
+    "profile_wall_seconds": 457.1695688357577,
+    "transform_seconds": 374.9100381536409,
+    "regular_write_seconds": 66.34503361023962,
+    "sparse_write_seconds": 3.945052462629974,
+    "regular_bytes": 5036721253,
+    "sparse_bytes": 330333460,
+    "slurm_max_rss_kib": 243331668,
+    "forcing_sha256": "3e814f3f3b0014cc9a9ea7d56a4ec1cdd6410390278a6bdecd36679636d7e57e",
+    "boundary_sha256": "4b6711721e13536652eceb8b8cd02643d3454a4ecdd1d5332708872fc96718e7",
+    "profile_sha256": "24b4cbea8c00fea1867e23340bebd693e797668f526473ebb0986b3ed89351da"
+  },
+  "performance_change_from_accepted_baseline_percent": {
+    "regular_write_reduction": 38.52772867542979,
+    "sparse_write_reduction": 79.48729024540395,
+    "profile_wall_reduction_observed": 22.440820662247553,
+    "profile_wall_reduction_from_write_phases_only": 9.647856152408462,
+    "regular_size_increase": 12.059764525719112,
+    "sparse_size_reduction": 58.51472548118267,
+    "slurm_peak_rss_increase": 0.40191685020537754
+  },
+  "matched_candidate_interpretation": {
+    "transform_time_difference_percent": 1.0973029292914476,
+    "regular_write_reduction_percent": 42.66537185120864,
+    "sparse_hash_overlap_reduction_percent": 50.426004370796605,
+    "profile_wall_reduction_percent": 11.065457940093003
+  },
+  "numerical_validation": {
+    "job_id": 5115360,
+    "production_validation": "PASS",
+    "regular_structure_equal": true,
+    "regular_storage_dtype_equal": true,
+    "regular_all_variable_values_bitwise_equal": true,
+    "sparse_structure_equal": true,
+    "sparse_storage_dtype_equal": false,
+    "sparse_every_field_equal_to_reference_cast_to_float32": true,
+    "sparse_maximum_rounding_differences": {
+      "P_Pa": 0.003906249752617441,
+      "T_K": 0.000015258788835126325,
+      "QV": 4.656612404702054e-10,
+      "QC": 5.8148404060570646e-11,
+      "HFL_m": 0.00048828125,
+      "HHL_m": 0.0004882810953859007
+    },
+    "forcing_report_sha256": "c667a89a42a46357505e9ea31cfaec33e72ce9d4b52c2ff36bb1e896f305df33",
+    "boundary_report_sha256": "4d1d856b50752ca2d6ac204633325d4e21beeb8ee62cd08c25e70d8b42a03afc"
+  },
+  "implementation": {
+    "regular_forcing": "float32 scientific payload unchanged; shuffle plus lossless deflate level 1",
+    "sparse_boundary": "float32 payload, shuffle plus lossless deflate level 1, full-level by 4096-point chunks",
+    "boundary_geometry": "one-dimensional edge distances replace duplicate full-domain meshgrids",
+    "boundary_payload": "4096-point gathers replace one whole-frame fancy-index temporary per field",
+    "checksum": "forcing SHA-256 overlaps sparse compression and remains cached for publication"
+  },
+  "retained_remote_root": "/scratch/mch/olifu/icon_hicar/boundary_optimization_20260816"
+}

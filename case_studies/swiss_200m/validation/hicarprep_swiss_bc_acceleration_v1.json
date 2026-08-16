@@ -1,0 +1,187 @@
+{
+  "schema": "hicarprep-swiss-bc-acceleration-v1",
+  "decision": "enable_exact_vertical_io_and_publication_accelerators_reject_fused_w",
+  "domain": {
+    "nx": 2061,
+    "ny": 1431,
+    "horizontal_cells": 2949291,
+    "vertical_levels": 80,
+    "valid_time": "2020-10-01T09:00:00Z"
+  },
+  "accepted_baseline": {
+    "job_id": 5115353,
+    "profile_wall_seconds": 457.1695688357577,
+    "transform_seconds": 374.9100381536409,
+    "horizontal_remap_seconds": 57.180754,
+    "column_reconstruction_seconds": 288.3234,
+    "vertical_velocity_seconds": 15.9262,
+    "water_conversion_seconds": 6.14034,
+    "slurm_max_rss_kib": 243331668
+  },
+  "repeated_full_domain_candidates": {
+    "job_ids": [5115589, 5115590],
+    "source_commit": "fce370de98dfea3885f6b994c87032c55dc10593",
+    "profile_wall_seconds": [395.349513027817, 391.40801863744855],
+    "transform_seconds": [316.2768603358418, 313.30850926600397],
+    "horizontal_remap_seconds": [62.55623493064195, 62.465850638225675],
+    "column_reconstruction_seconds": [233.618276537396, 229.5341053418815],
+    "vertical_velocity_seconds": [5.012464923784137, 6.214096490293741],
+    "water_conversion_seconds": [3.6696046628057957, 3.639967093244195],
+    "slurm_max_rss_kib": [220572144, 217694436],
+    "forcing_sha256": "70e0d2613f2049ed706c8e4e4305999e67441ece11467cb897ba01c58a8ef407",
+    "boundary_sha256": "4c57c8bffa799aba0a8266c0edaba2ddacbee51bb9f6fa57de3795a1525f30cc",
+    "repeat_bitwise_identical": true
+  },
+  "fused_w_prototype_median_change_from_accepted_baseline_percent": {
+    "profile_wall_reduction": 13.953422832927517,
+    "transform_reduction": 16.035141029774593,
+    "horizontal_remap_reduction": -9.321823186231178,
+    "column_reconstruction_reduction": 19.681791023677313,
+    "vertical_velocity_reduction": 64.75442536801661,
+    "water_conversion_reduction": 40.47909597799153,
+    "slurm_peak_rss_reduction": 9.944606963364915
+  },
+  "numerical_validation": {
+    "regular_structure_equal": true,
+    "sparse_all_variable_values_bitwise_equal": true,
+    "regular_all_except_w_bitwise_equal": true,
+    "w_different_value_count": 43,
+    "w_elements": 235943280,
+    "w_maximum_absolute_difference_ms": 1.4901161193847656e-08,
+    "w_normalized_rms_difference": 3.288629989779395e-12
+  },
+  "opportunities": {
+    "1_column_remap": {
+      "decision": "accepted_short_lived_geometry_plan_after_bulk_validation",
+      "constraint": "never retain one Python plan per 2.95 million columns"
+    },
+    "2_native_packaging": {
+      "decision": "accepted_lossless_deflate_level_1_default",
+      "jobs_level_0_1_4": [5115564, 5115565, 5115566],
+      "elapsed_seconds_level_0_1_4": [32, 40, 63],
+      "bytes_level_0_1_4": [6667558893, 1395091471, 1066222070],
+      "decoded_arrays_bitwise_identical": true
+    },
+    "3_tiered_validator": {
+      "decision": "accepted_checksum_bound_fail_closed_publication_receipt",
+      "fast_job_id": 5115614,
+      "fast_wall_seconds": 12.45,
+      "paired_full_wall_seconds_range": [53.5, 53.9],
+      "trusted_static_sha256_required": true,
+      "full_validator_retained": true
+    },
+    "4_parallel_fixed_order_rbf": {
+      "decision": "retain_opt_in_threads_but_default_national_domain_to_one",
+      "serial_control_job_id": 5115611,
+      "serial_total_wall_seconds": 392.560057,
+      "threaded_and_serial_outputs_bitwise_identical": true,
+      "isolated_maximum_speedup": 3.2,
+      "national_domain_effect": "neutral"
+    },
+    "5_absent_qi": {
+      "decision": "accepted_provenance_bound_target_zero_synthesis",
+      "policy": "source_absent_zero_synthesized_on_target"
+    },
+    "6_copy_free_water": {
+      "decision": "accepted_shallow_state_mapping_and_in_place_sums",
+      "decoded_output_bitwise_identical": true
+    },
+    "7_fused_vertical_w": {
+      "decision": "rejected_for_production_retained_as_experimental_api",
+      "full_domain_float32_difference": "43 values at at most one ULP",
+      "hicar_pilot_job_id": 5115712,
+      "hicar_model_completed": true,
+      "hicar_validation": "FAIL_non_finite_surface_diagnostics"
+    },
+    "8_static_and_sst_reuse": {
+      "decision": "accepted_campaign_static_digest_and_numba_cache_reuse_rejected_persisted_sst_operator",
+      "reason_persisted_sst_rejected": "would add normalized donors and weights beside the existing 471 MB operator without a persistent multi-hour consumer"
+    }
+  },
+  "experimental_fused_w_path": {
+    "job_id": 5115591,
+    "decode_to_ready_elapsed_seconds": 431,
+    "slurm_max_rss_kib": 218849976,
+    "previous_known_stage_seconds_excluding_sst": 628.184,
+    "conservative_end_to_end_reduction_percent": 31.389529182532506,
+    "atomic_publication_and_fast_validation": "PASS",
+    "hicar_qualification": "FAIL"
+  },
+  "rejected_fused_w_input_sequence": {
+    "source_commit": "13c7cd8f4e577d008d11330b84affe2c951fd346",
+    "jobs": [5115636, 5115637, 5115638],
+    "elapsed_seconds": [453, 453, 454],
+    "ready_records": 3,
+    "publication_validation": "PASS",
+    "hicar_qualification": "FAIL"
+  },
+  "selected_production_input_sequence": {
+    "source_commit": "b27f8502b41aa3fd623559591a33441afce5b6eb",
+    "jobs": [5115774, 5115775, 5115776],
+    "elapsed_seconds": [471, 454, 472],
+    "median_decode_to_ready_seconds": 471,
+    "median_conservative_reduction_from_previous_known_stages_percent": 25.02196808578378,
+    "median_transform_seconds": 308.094168134965,
+    "median_transform_reduction_from_accepted_baseline_percent": 17.82184076684932,
+    "median_column_reconstruction_seconds": 229.54355234187096,
+    "median_column_reconstruction_reduction_from_accepted_baseline_percent": 20.386776674431918,
+    "ready_records": 3,
+    "publication_validation": "PASS",
+    "vertical_w_backend": "reference",
+    "transform_seconds": [314.1943318787962, 308.094168134965, 308.07543973159045],
+    "column_reconstruction_seconds": [231.52934093866497, 229.54355234187096, 225.9121612077579],
+    "vertical_velocity_seconds": [18.233267485164106, 14.149896028451622, 17.599773528054357],
+    "numerical_comparison_to_accepted_pilot_inputs": {
+      "hour_09_all_variables_bitwise_equal": true,
+      "hour_10_different_values": {
+        "P": 1,
+        "QC": 38,
+        "QV": 5,
+        "U": 4,
+        "V": 3,
+        "W": 20
+      },
+      "hour_11_different_values": {
+        "QC": 56,
+        "QV": 6,
+        "U": 2,
+        "V": 3,
+        "W": 20
+      },
+      "maximum_absolute_differences": {
+        "P_Pa": 0.0078125,
+        "moisture": 4.656612873077393e-10,
+        "horizontal_wind_ms": 9.5367431640625e-07,
+        "vertical_wind_ms": 1.862645149230957e-09
+      }
+    }
+  },
+  "selected_hicar_pilot": {
+    "job_id": 5115797,
+    "hicar_commit": "0545a55d20d76441c9eff5e8a297babccc49f440",
+    "nodes": 12,
+    "gpus": 48,
+    "start": "2020-10-01T09:00:00Z",
+    "end": "2020-10-01T11:00:00Z",
+    "elapsed_seconds": 363,
+    "model_total_seconds": 273.026,
+    "output_times": 13,
+    "restart_time": "2020-10-01T11:00:00Z",
+    "wind10m_max_ms": 16.756565404417135,
+    "wind50m_max_ms": 17.55695964019182,
+    "validation": "PASS",
+    "trajectory_bitwise_equal_to_accepted_pilot": false,
+    "terminal_output_differing_variable_count": 25,
+    "terminal_restart_differing_variable_count": 122,
+    "normalized_rms_differences": {
+      "taix": 3.5047341354126347e-05,
+      "hus2m": 0.0005356022023336005,
+      "u10m": 5.415839622449244e-05,
+      "v10m": 8.283216988897978e-05,
+      "hpbl": 0.014244493085924615,
+      "hfss": 0.012125067121543657,
+      "hfls": 0.002163313596205554,
+      "precipitation": 0.00012295245776148568
+    }
+  }
+}

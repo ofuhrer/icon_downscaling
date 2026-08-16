@@ -13,6 +13,7 @@
 # Optional:
 #   ICON_EXTPAR                   native-grid EXTPAR file
 #   ICON_MISSING_QI_POLICY        error or source-absent-zero
+#   ICON_NATIVE_COMPRESSION_LEVEL lossless deflate 0..9 (default 1)
 #   REA_FDB_IMAGE_OVERRIDE        FDB uenv image
 #SBATCH --job-name=rea-l-atmosphere
 #SBATCH --partition=pp-short
@@ -41,6 +42,7 @@ step=${ICON_ATMOSPHERE_STEP_HOURS:?Set ICON_ATMOSPHERE_STEP_HOURS}
 valid_time=${ICON_ATMOSPHERE_VALID_TIME:?Set ICON_ATMOSPHERE_VALID_TIME}
 icon_extpar=${ICON_EXTPAR:-/oprusers/osm/opr.inn/data/ICON_INPUT/ICON-CH1-EPS/external_parameter_icon_grid_0001_R19B08_mch_tuned.nc}
 missing_qi_policy=${ICON_MISSING_QI_POLICY:-source-absent-zero}
+compression_level=${ICON_NATIVE_COMPRESSION_LEVEL:-1}
 image=${REA_FDB_IMAGE_OVERRIDE:-${REA_FDB_IMAGE:?REA_FDB_IMAGE is required}}
 uenv_bin=${UENV_BIN:-/usr/bin/uenv}
 hicarprep=$repo_root/scripts/hicarprep.py
@@ -49,6 +51,7 @@ hicarprep=$repo_root/scripts/hicarprep.py
 [[ "$cycle_time" =~ ^[0-9]{4}$ ]] || { echo "cycle time must be HHMM" >&2; exit 2; }
 [[ "$step" =~ ^[0-9]+$ ]] || { echo "step must be a non-negative integer" >&2; exit 2; }
 case "$missing_qi_policy" in error|source-absent-zero) ;; *) echo "unsupported QI policy" >&2; exit 2 ;; esac
+[[ "$compression_level" =~ ^[0-9]$ ]] || { echo "native compression level must be 0..9" >&2; exit 2; }
 for path in "$repo_root" "$icon_extpar" "$uenv_bin" "$hicarprep"; do
   test -e "$path" || { echo "missing required path: $path" >&2; exit 2; }
 done
@@ -132,9 +135,10 @@ test "$geometry_count" = 83
   --icon-extpar "$icon_extpar" \
   --valid-time "$valid_time" \
   --missing-qi-policy "$missing_qi_policy" \
+  --compression-level "$compression_level" \
   --output "$output"
 test -s "$output"
 touch "$output.ready"
 
-printf 'PASS output=%s valid_time=%s dynamic_messages=%s geometry_messages=%s qi_policy=%s\n' \
-  "$output" "$valid_time" "$dynamic_count" "$geometry_count" "$missing_qi_policy"
+printf 'PASS output=%s valid_time=%s dynamic_messages=%s geometry_messages=%s qi_policy=%s compression_level=%s\n' \
+  "$output" "$valid_time" "$dynamic_count" "$geometry_count" "$missing_qi_policy" "$compression_level"

@@ -1,0 +1,42 @@
+{
+  "root": "/scratch/mch/olifu/icon_hicar/input_optimization_20260816/hicar_pilot",
+  "repo_root": "/scratch/mch/olifu/icon_hicar/gpu_perf_20260816/coordinator-d0e707f-validation",
+  "forcing_dir": "/scratch/mch/olifu/icon_hicar/input_optimization_20260816/pilot_input/forcing",
+  "python": "/scratch/mch/olifu/icon_hicar/gpu_perf_20260816/real_scale_validation/venv/bin/python",
+  "hicar_executable": "/scratch/mch/olifu/icon_hicar/gpu_perf_20260816/build/HICAR-0545a55d-gpu-nccl-release/HICAR_gpu",
+  "hicar_support_dir": "/scratch/mch/olifu/icon_hicar/gpu_perf_20260816/source/HICAR-0545a55d-validation/run",
+  "hicar_build_provenance": "/scratch/mch/olifu/icon_hicar/gpu_perf_20260816/build/HICAR-0545a55d-gpu-nccl-release/hicar_build_provenance.txt",
+  "rbf_weights": "/scratch/mch/olifu/icon_hicar/gpu_perf_20260816/real_scale_validation/input/weights/rea_l_to_swiss_200m.nc",
+  "segment_hours": 2,
+  "use_sparse_lbc": false,
+  "full_season_input_lists": true,
+  "acc_synchronous": false,
+  "max_attempts": 1,
+  "input_partitions": ["pp-long"],
+  "max_active_inputs": 1,
+  "input_cpus": 8,
+  "input_column_workers": 8,
+  "input_exclusive": true,
+  "input_memory": "256G",
+  "input_time": "01:00:00",
+  "model_nodes": 12,
+  "model_time": "01:00:00",
+  "output_profile": "evaluation",
+  "output_interval": 600,
+  "radiation_update_interval": 600,
+  "radiation_scheme": "rrtmgp",
+  "alpha_const": 1,
+  "max_wind_speed_ms": 30,
+  "seasons": [
+    {
+      "name": "autumn",
+      "start": "2020-10-01T09:00:00",
+      "end": "2020-10-01T11:00:00",
+      "static": "/scratch/mch/olifu/icon_hicar/gpu_perf_20260816/real_scale_validation/input/runtime/domain_runtime_swiss_20201001_0000.nc"
+    }
+  ],
+  "model_partition": "normal",
+  "model_max_partition_fraction": 0.5,
+  "max_active_models": 1,
+  "defer_uploads": true
+}

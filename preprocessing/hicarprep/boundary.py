@@ -40,7 +40,7 @@ def validate_boundary_sequence(
             f"lateral-boundary validation requires at least {minimum_states} state(s)"
         )
     records: list[dict[str, object]] = []
-    reference: dict[str, tuple[tuple[str, ...], tuple[int, ...]]] | None = None
+    reference: dict[str, tuple[tuple[str, ...], tuple[int, ...], str]] | None = None
     reference_points: dict[str, np.ndarray] | None = None
     reference_contract: tuple[str, ...] | None = None
     reference_geometry: dict[str, str] | None = None
@@ -65,7 +65,11 @@ def validate_boundary_sequence(
                 intervals.append(interval)
             previous = when
             schema = {
-                name: (tuple(variable.dimensions), tuple(variable.shape))
+                name: (
+                    tuple(variable.dimensions),
+                    tuple(variable.shape),
+                    str(variable.dtype),
+                )
                 for name, variable in dataset.variables.items()
             }
             exact_variables = {

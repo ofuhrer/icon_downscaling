@@ -23,6 +23,128 @@ class ColumnDiagnostics:
     buried_source_level_count: int
 
 
+@dataclass(frozen=True)
+class ColumnRemapPlan:
+    """Geometry-only decisions reused when reconstructing one target column.
+
+    ICON and HICAR vertical geometry are invariant across forcing records.  A
+    plan therefore removes repeated height construction, terrain pruning,
+    interpolation searches, and hydrostatic-anchor searches from the hourly
+    reconstruction path.  Callers must keep one plan bound to the column from
+    which it was built.  Do not retain one Python object for every national-
+    domain column; use it ephemerally or only within a bounded tile.
+    """
+
+    source_z_m: np.ndarray
+    target_z_m: np.ndarray
+    usable_start: int
+    lower_index: np.ndarray
+    upper_index: np.ndarray
+    fraction: np.ndarray
+    below_usable_source: np.ndarray
+    anchor_target_index: int
+    anchor_source_lower: int
+    anchor_source_upper: int
+    anchor_source_fraction: float
+    source_surface_m: float
+    target_surface_m: float
+    terrain_case: str
+    below_source_level_count: int
+    buried_source_level_count: int
+
+
+def _readonly_float64(values: np.ndarray) -> np.ndarray:
+    result = np.asarray(values, dtype=np.float64)
+    result.setflags(write=False)
+    return result
+
+
+def _readonly_int64(values: np.ndarray) -> np.ndarray:
+    result = np.asarray(values, dtype=np.int64)
+    result.setflags(write=False)
+    return result
+
+
+def _readonly_bool(values: np.ndarray) -> np.ndarray:
+    result = np.asarray(values, dtype=bool)
+    result.setflags(write=False)
+    return result
+
+
+def build_column_remap_plan(
+    *, source_hhl_m: np.ndarray, target_hhl_m: np.ndarray
+) -> ColumnRemapPlan:
+    """Precompute invariant interpolation and pressure-anchor geometry."""
+    source_hhl = np.asarray(source_hhl_m, dtype=np.float64)
+    target_hhl = np.asarray(target_hhl_m, dtype=np.float64)
+    if source_hhl.ndim != 1 or target_hhl.ndim != 1:
+        raise ValueError("source and target HHL columns must be one-dimensional")
+    if source_hhl.size < 3 or target_hhl.size < 2:
+        raise ValueError("source and target HHL columns contain too few levels")
+    if not np.isfinite(source_hhl).all() or not np.isfinite(target_hhl).all():
+        raise ValueError("source and target HHL columns must be finite")
+    if np.any(np.diff(source_hhl) <= 0.0) or np.any(np.diff(target_hhl) <= 0.0):
+        raise ValueError("source and target HHL must be bottom-to-top and strictly increasing")
+
+    source_z = 0.5 * (source_hhl[:-1] + source_hhl[1:])
+    target_z = 0.5 * (target_hhl[:-1] + target_hhl[1:])
+    if target_z[-1] > source_z[-1] + 1.0e-6:
+        raise ValueError("target model top is above the usable source model top")
+
+    source_surface = float(source_hhl[0])
+    target_surface = float(target_hhl[0])
+    delta = target_surface - source_surface
+    terrain_case = "higher" if delta > 1.0 else "lower" if delta < -1.0 else "matched"
+    usable_start = (
+        int(np.searchsorted(source_z, target_surface, side="right"))
+        if terrain_case == "higher"
+        else 0
+    )
+    if source_z.size - usable_start < 2:
+        raise ValueError("fewer than two source levels survive above target terrain")
+    profile_z = source_z[usable_start:]
+
+    upper = np.searchsorted(profile_z, target_z, side="right")
+    upper = np.clip(upper, 1, profile_z.size - 1)
+    lower = upper - 1
+    fraction = (target_z - profile_z[lower]) / (profile_z[upper] - profile_z[lower])
+    below = target_z < profile_z[0]
+
+    common_bottom = max(source_surface, target_surface)
+    candidates = np.flatnonzero(
+        (target_z >= common_bottom) & (target_z >= source_z[0]) & (target_z <= source_z[-1])
+    )
+    if candidates.size == 0:
+        raise ValueError("source and target columns have no hydrostatic overlap anchor")
+    anchor_target_index = int(candidates[0])
+    anchor_z = target_z[anchor_target_index]
+    anchor_upper = int(np.searchsorted(source_z, anchor_z, side="right"))
+    anchor_upper = min(max(anchor_upper, 1), source_z.size - 1)
+    anchor_lower = anchor_upper - 1
+    anchor_fraction = float(
+        (anchor_z - source_z[anchor_lower]) / (source_z[anchor_upper] - source_z[anchor_lower])
+    )
+
+    return ColumnRemapPlan(
+        source_z_m=_readonly_float64(source_z),
+        target_z_m=_readonly_float64(target_z),
+        usable_start=usable_start,
+        lower_index=_readonly_int64(lower),
+        upper_index=_readonly_int64(upper),
+        fraction=_readonly_float64(fraction),
+        below_usable_source=_readonly_bool(below),
+        anchor_target_index=anchor_target_index,
+        anchor_source_lower=anchor_lower,
+        anchor_source_upper=anchor_upper,
+        anchor_source_fraction=anchor_fraction,
+        source_surface_m=source_surface,
+        target_surface_m=target_surface,
+        terrain_case=terrain_case,
+        below_source_level_count=int(np.sum(target_z < source_z[0])),
+        buried_source_level_count=usable_start,
+    )
+
+
 def _blend_function(distance: np.ndarray, transition_distance: float) -> np.ndarray:
     """Blahak (2010) compact smooth transition used by int2lm."""
     if transition_distance <= 0.0:
@@ -155,6 +277,26 @@ def interpolate_height_profile(
         raise ValueError("target profile must be finite and strictly ordered in height")
     if target_z[-1] > source_z[-1] + 1.0e-6:
         raise ValueError(f"target top {target_z[-1]:.3f} m exceeds source top {source_z[-1]:.3f} m")
+    return _interpolate_ordered_height_profile(
+        source_z,
+        source_value,
+        target_z,
+        lower_gradient_bounds=lower_gradient_bounds,
+        nonnegative=nonnegative,
+        monotone=monotone,
+    )
+
+
+def _interpolate_ordered_height_profile(
+    source_z: np.ndarray,
+    source_value: np.ndarray,
+    target_z: np.ndarray,
+    *,
+    lower_gradient_bounds: tuple[float, float] | None = None,
+    nonnegative: bool = False,
+    monotone: bool = True,
+) -> np.ndarray:
+    """Interpolate profiles already validated as finite and increasing."""
     result = np.interp(target_z, source_z, source_value)
     below = target_z < source_z[0]
     if np.any(below):
@@ -167,6 +309,57 @@ def interpolate_height_profile(
     if nonnegative:
         result = np.maximum(result, 0.0)
     return result
+
+
+def _interpolate_with_column_plan(
+    plan: ColumnRemapPlan,
+    source_value: np.ndarray,
+    *,
+    lower_gradient_bounds: tuple[float, float] | None = None,
+    nonnegative: bool = False,
+) -> np.ndarray:
+    """Apply the interpolation decisions cached in ``plan`` to one field."""
+    value = np.asarray(source_value, dtype=np.float64)[plan.usable_start :]
+    result = value[plan.lower_index] + plan.fraction * (
+        value[plan.upper_index] - value[plan.lower_index]
+    )
+    if np.any(plan.below_usable_source):
+        source_z = plan.source_z_m[plan.usable_start :]
+        gradient = (value[1] - value[0]) / (source_z[1] - source_z[0])
+        if lower_gradient_bounds is not None:
+            gradient = float(np.clip(gradient, *lower_gradient_bounds))
+        below = plan.below_usable_source
+        result[below] = value[0] + gradient * (plan.target_z_m[below] - source_z[0])
+    result = np.clip(result, np.min(value), np.max(value))
+    if nonnegative:
+        result = np.maximum(result, 0.0)
+    return result
+
+
+def _hydrostatic_pressure_with_plan(
+    plan: ColumnRemapPlan,
+    temperature_k: np.ndarray,
+    qv: np.ndarray,
+    *,
+    anchor_pressure_pa: float,
+    condensate: np.ndarray,
+) -> np.ndarray:
+    """Integrate from the target-level anchor already selected by ``plan``."""
+    virtual_temperature = temperature_k * (1.0 + RV_OVER_RD_MINUS_ONE * qv - condensate)
+    logp = np.empty_like(plan.target_z_m)
+    anchor = plan.anchor_target_index
+    logp[anchor] = np.log(anchor_pressure_pa)
+    for level in range(anchor + 1, logp.size):
+        tv_mid = 0.5 * (virtual_temperature[level - 1] + virtual_temperature[level])
+        logp[level] = logp[level - 1] - GRAVITY * (
+            plan.target_z_m[level] - plan.target_z_m[level - 1]
+        ) / (RD * tv_mid)
+    for level in range(anchor - 1, -1, -1):
+        tv_mid = 0.5 * (virtual_temperature[level + 1] + virtual_temperature[level])
+        logp[level] = logp[level + 1] + GRAVITY * (
+            plan.target_z_m[level + 1] - plan.target_z_m[level]
+        ) / (RD * tv_mid)
+    return np.exp(logp)
 
 
 def hydrostatic_pressure(
@@ -275,22 +468,23 @@ def reconstruct_column_state(
     else:
         usable = np.ones(source_z.shape, dtype=bool)
     profile_z = source_z[usable]
-    target_t = interpolate_height_profile(
+    target_t = _interpolate_ordered_height_profile(
         profile_z,
         np.asarray(temperature_k)[usable],
         target_z,
         lower_gradient_bounds=(-0.012, 0.003),
     )
-    target_u = interpolate_height_profile(
+    target_u = _interpolate_ordered_height_profile(
         profile_z, np.asarray(u_ms)[usable], target_z, lower_gradient_bounds=(-0.02, 0.02)
     )
-    target_v = interpolate_height_profile(
+    target_v = _interpolate_ordered_height_profile(
         profile_z, np.asarray(v_ms)[usable], target_z, lower_gradient_bounds=(-0.02, 0.02)
     )
 
+    log_pressure = np.log(np.asarray(pressure_pa))
     provisional_p = np.exp(
-        interpolate_height_profile(
-            profile_z, np.log(np.asarray(pressure_pa)[usable]), target_z, monotone=True
+        _interpolate_ordered_height_profile(
+            profile_z, log_pressure[usable], target_z, monotone=True
         )
     )
     source_hydrometeors: dict[str, np.ndarray] = {}
@@ -312,11 +506,11 @@ def reconstruct_column_state(
         1.0e-12,
     )
     source_rh = np.clip(source_rh, 0.0, float(np.max(source_rh)) if has_qc else 1.0)
-    target_rh = interpolate_height_profile(
+    target_rh = _interpolate_ordered_height_profile(
         profile_z, source_rh[usable], target_z, lower_gradient_bounds=(0.0, 0.0)
     )
     target_other_hydrometeors = {
-        name: interpolate_height_profile(
+        name: _interpolate_ordered_height_profile(
             profile_z,
             profile[usable],
             target_z,
@@ -340,7 +534,7 @@ def reconstruct_column_state(
         raise ValueError("source and target columns have no hydrostatic overlap anchor")
     target_anchor_index = int(candidates[0])
     anchor_z = float(target_z[target_anchor_index])
-    anchor_p = float(np.exp(np.interp(anchor_z, source_z, np.log(np.asarray(pressure_pa)))))
+    anchor_p = float(np.exp(np.interp(anchor_z, source_z, log_pressure)))
     target_p = provisional_p
     for _ in range(8):
         target_qsat = saturation_specific_humidity(target_t, target_p)
@@ -381,3 +575,159 @@ def reconstruct_column_state(
         buried_source_level_count=int(np.sum(~usable)),
     )
     return result, diagnostics
+
+
+def reconstruct_column_state_with_plan(
+    *,
+    plan: ColumnRemapPlan,
+    temperature_k: np.ndarray,
+    pressure_pa: np.ndarray,
+    qv: np.ndarray,
+    u_ms: np.ndarray,
+    v_ms: np.ndarray,
+    hydrometeors: dict[str, np.ndarray] | None = None,
+    validate_fields: bool = True,
+) -> tuple[dict[str, np.ndarray], ColumnDiagnostics]:
+    """Reconstruct a column while reusing a geometry-only remapping plan.
+
+    ``validate_fields=False`` is intended only for callers that have already
+    performed equivalent bulk shape, finiteness, and physical-domain checks.
+    Geometry is always validated when :func:`build_column_remap_plan` creates
+    the plan.
+    """
+    temperature = np.asarray(temperature_k, dtype=np.float64)
+    pressure = np.asarray(pressure_pa, dtype=np.float64)
+    vapor = np.asarray(qv, dtype=np.float64)
+    u = np.asarray(u_ms, dtype=np.float64)
+    v = np.asarray(v_ms, dtype=np.float64)
+    fields = (temperature, pressure, vapor, u, v)
+    if any(field.shape != plan.source_z_m.shape for field in fields):
+        raise ValueError("source full-level fields must match planned source HHL")
+    if validate_fields:
+        if not all(np.isfinite(field).all() for field in fields):
+            raise ValueError("source column contains non-finite atmospheric values")
+        if np.any(temperature <= 100.0) or np.any(pressure <= 0.0):
+            raise ValueError("source temperature or pressure is outside its physical domain")
+        if np.any(vapor < 0.0):
+            raise ValueError("source water-vapor mixing ratio is negative")
+
+    target_t = _interpolate_with_column_plan(
+        plan, temperature, lower_gradient_bounds=(-0.012, 0.003)
+    )
+    target_u = _interpolate_with_column_plan(plan, u, lower_gradient_bounds=(-0.02, 0.02))
+    target_v = _interpolate_with_column_plan(plan, v, lower_gradient_bounds=(-0.02, 0.02))
+    log_pressure = np.log(pressure)
+    provisional_p = np.exp(_interpolate_with_column_plan(plan, log_pressure))
+
+    source_hydrometeors: dict[str, np.ndarray] = {}
+    for name, profile in (hydrometeors or {}).items():
+        normalized = np.asarray(profile, dtype=np.float64)
+        if normalized.shape != plan.source_z_m.shape:
+            raise ValueError(f"{name}: source hydrometeor profile is invalid")
+        if validate_fields and (not np.isfinite(normalized).all() or np.any(normalized < 0.0)):
+            raise ValueError(f"{name}: source hydrometeor profile is invalid")
+        source_hydrometeors[name] = normalized
+
+    has_qc = "QC" in source_hydrometeors
+    source_qc = source_hydrometeors.get("QC", np.zeros_like(vapor))
+    source_rh = (vapor + source_qc) / np.maximum(
+        saturation_specific_humidity(temperature, pressure), 1.0e-12
+    )
+    source_rh = np.clip(source_rh, 0.0, float(np.max(source_rh)) if has_qc else 1.0)
+    target_rh = _interpolate_with_column_plan(plan, source_rh, lower_gradient_bounds=(0.0, 0.0))
+    target_other_hydrometeors = {
+        name: _interpolate_with_column_plan(
+            plan,
+            profile,
+            lower_gradient_bounds=(0.0, 0.0),
+            nonnegative=True,
+        )
+        for name, profile in source_hydrometeors.items()
+        if name != "QC"
+    }
+    target_qsat = saturation_specific_humidity(target_t, provisional_p)
+    target_qv = np.minimum(target_rh, 1.0) * target_qsat
+    target_qc = (
+        np.maximum(target_rh - 1.0, 0.0) * target_qsat if has_qc else np.zeros_like(target_qv)
+    )
+
+    lower = plan.anchor_source_lower
+    upper = plan.anchor_source_upper
+    anchor_logp = log_pressure[lower] + plan.anchor_source_fraction * (
+        log_pressure[upper] - log_pressure[lower]
+    )
+    anchor_p = float(np.exp(anchor_logp))
+    target_p = provisional_p
+    for _ in range(8):
+        target_qsat = saturation_specific_humidity(target_t, target_p)
+        updated_qv = np.minimum(target_rh, 1.0) * target_qsat
+        updated_qc = (
+            np.maximum(target_rh - 1.0, 0.0) * target_qsat if has_qc else np.zeros_like(updated_qv)
+        )
+        condensate = updated_qc + sum(
+            target_other_hydrometeors.values(), start=np.zeros_like(updated_qc)
+        )
+        updated_p = _hydrostatic_pressure_with_plan(
+            plan,
+            target_t,
+            updated_qv,
+            anchor_pressure_pa=anchor_p,
+            condensate=condensate,
+        )
+        converged = np.allclose(updated_p, target_p, rtol=1.0e-10, atol=1.0e-5)
+        target_qv, target_qc, target_p = updated_qv, updated_qc, updated_p
+        if converged:
+            break
+
+    result = {"T": target_t, "P": target_p, "QV": target_qv, "U": target_u, "V": target_v}
+    if has_qc:
+        result["QC"] = target_qc
+    result.update(target_other_hydrometeors)
+    result["THETA"] = target_t * np.power(100_000.0 / target_p, RD / 1004.5)
+    condensate = target_qc + sum(target_other_hydrometeors.values(), start=np.zeros_like(target_qv))
+    result["RHO"] = target_p / (
+        RD * target_t * (1.0 + RV_OVER_RD_MINUS_ONE * target_qv - condensate)
+    )
+    diagnostics = ColumnDiagnostics(
+        terrain_difference_m=plan.target_surface_m - plan.source_surface_m,
+        terrain_case=plan.terrain_case,
+        anchor_height_m=float(plan.target_z_m[plan.anchor_target_index]),
+        below_source_level_count=plan.below_source_level_count,
+        buried_source_level_count=plan.buried_source_level_count,
+    )
+    return result, diagnostics
+
+
+def reconstruct_column_state_fast(
+    *,
+    source_hhl_m: np.ndarray,
+    target_hhl_m: np.ndarray,
+    temperature_k: np.ndarray,
+    pressure_pa: np.ndarray,
+    qv: np.ndarray,
+    u_ms: np.ndarray,
+    v_ms: np.ndarray,
+    hydrometeors: dict[str, np.ndarray] | None = None,
+    validate_fields: bool = True,
+) -> tuple[dict[str, np.ndarray], ColumnDiagnostics]:
+    """Use an ephemeral remap plan without retaining per-column Python objects.
+
+    This is the production-oriented opt-in entry point for callers that still
+    reconstruct columns independently.  A future batch implementation should
+    store compact plan arrays rather than millions of ``ColumnRemapPlan``
+    instances.
+    """
+    plan = build_column_remap_plan(
+        source_hhl_m=source_hhl_m,
+        target_hhl_m=target_hhl_m,
+    )
+    return reconstruct_column_state_with_plan(
+        plan=plan,
+        temperature_k=temperature_k,
+        pressure_pa=pressure_pa,
+        qv=qv,
+        u_ms=u_ms,
+        v_ms=v_ms,
+        hydrometeors=hydrometeors,
+        validate_fields=validate_fields,
+    )

@@ -32,6 +32,7 @@ from .products import (
 )
 from .registry import FieldRegistry
 from .remap import (
+    RBF_APPLY_BACKENDS,
     RBFWeights,
     VectorRBFWeights,
     build_rbf_weights,
@@ -218,12 +219,18 @@ def _decode_icon_atmosphere(args: argparse.Namespace) -> int:
         args.valid_time,
         args.output,
         missing_qi_policy=args.missing_qi_policy,
+        compression_level=args.compression_level,
     )
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 0
 
 
 def _prepare_hicar_forcing(args: argparse.Namespace) -> int:
+    if args.static_sha256 is not None and (
+        len(args.static_sha256) != 64
+        or any(character not in "0123456789abcdef" for character in args.static_sha256)
+    ):
+        raise ValueError("--static-sha256 must be a lowercase SHA-256 digest")
     weights = RBFWeights.read(args.weights)
     vector_weights = VectorRBFWeights.read(args.vector_weights) if args.vector_weights else None
     state, diagnostics = transform_icon_state(
@@ -232,6 +239,7 @@ def _prepare_hicar_forcing(args: argparse.Namespace) -> int:
         weights,
         vector_weights=vector_weights,
         column_workers=args.column_workers,
+        rbf_backend=args.rbf_backend,
     )
     state = convert_water_to_hicar_mixing_ratios(state)
     lateral_relaxation_authority = (
@@ -247,6 +255,7 @@ def _prepare_hicar_forcing(args: argparse.Namespace) -> int:
         source_path=args.icon_state,
         target_sst_path=args.target_sst,
         lateral_relaxation_authority=lateral_relaxation_authority,
+        static_digest=args.static_sha256,
     )
     if args.boundary is not None:
         with netCDF4.Dataset(args.static) as static:
@@ -262,20 +271,25 @@ def _prepare_hicar_forcing(args: argparse.Namespace) -> int:
             valid_time=str(diagnostics["valid_time"]),
             water_representation="dry-air mixing ratio",
         )
+    source_digest = sha256(args.icon_state)
+    static_digest = args.static_sha256 or sha256(args.static)
+    target_sst_digest = sha256(args.target_sst)
+    weights_digest = sha256(args.weights)
+    output_digest = sha256(args.output)
     manifest = {
         "schema": "hicarprep-target-forcing-manifest-v1",
         "status": "PASS",
         "valid_time": str(diagnostics["valid_time"]).replace("Z", ""),
-        "source": {"path": str(args.icon_state), "sha256": sha256(args.icon_state)},
-        "static": {"path": str(args.static), "sha256": sha256(args.static)},
+        "source": {"path": str(args.icon_state), "sha256": source_digest},
+        "static": {"path": str(args.static), "sha256": static_digest},
         "target_sst": {
             "path": str(args.target_sst),
-            "sha256": sha256(args.target_sst),
+            "sha256": target_sst_digest,
         },
-        "weights": {"path": str(args.weights), "sha256": sha256(args.weights)},
-        "output": {"path": str(args.output), "sha256": sha256(args.output)},
+        "weights": {"path": str(args.weights), "sha256": weights_digest},
+        "output": {"path": str(args.output), "sha256": output_digest},
         "forcing_file": str(args.output),
-        "forcing_sha256": sha256(args.output),
+        "forcing_sha256": output_digest,
         "diagnostics": diagnostics,
         "water_representation": "dry-air mixing ratio",
         "lateral_relaxation_authority": lateral_relaxation_authority,
@@ -328,6 +342,14 @@ def parser() -> argparse.ArgumentParser:
         choices=("error", "source-absent-zero"),
         default="error",
         help="explicit policy for QI, which is absent from operational REA-L",
+    )
+    decode_atmosphere.add_argument(
+        "--compression-level",
+        type=int,
+        choices=range(10),
+        default=1,
+        metavar="0..9",
+        help="lossless deflate level for the job-local adapter (0 disables compression)",
     )
     decode_atmosphere.set_defaults(func=_decode_icon_atmosphere)
 
@@ -402,9 +424,7 @@ def parser() -> argparse.ArgumentParser:
     surface.add_argument("--output", type=Path, required=True)
     surface.add_argument("--noahmp-table", type=Path, required=True)
     surface.add_argument("--soil-water-method", choices=SOIL_WATER_METHODS, default="smi")
-    surface.add_argument(
-        "--water-snow-policy", choices=WATER_SNOW_POLICIES, default="zero"
-    )
+    surface.add_argument("--water-snow-policy", choices=WATER_SNOW_POLICIES, default="zero")
     surface.add_argument(
         "--temperature-height-method",
         choices=TEMPERATURE_HEIGHT_METHODS,
@@ -476,7 +496,6 @@ def parser() -> argparse.ArgumentParser:
     boundary_sequence.add_argument("--maximum-interval-seconds", type=float)
     boundary_sequence.set_defaults(func=_validate_boundaries)
 
-
     forcing = commands.add_parser(
         "prepare-hicar-forcing",
         help="write one target-grid HICAR forcing/clock record from native ICON",
@@ -502,9 +521,18 @@ def parser() -> argparse.ArgumentParser:
             "one preserves the serial path"
         ),
     )
+    forcing.add_argument(
+        "--rbf-backend",
+        choices=RBF_APPLY_BACKENDS,
+        default="numpy",
+        help="scalar horizontal-remapping implementation",
+    )
     forcing.add_argument("--manifest", type=Path)
+    forcing.add_argument(
+        "--static-sha256",
+        help="preverified lowercase static-domain SHA-256 reused by the campaign",
+    )
     forcing.set_defaults(func=_prepare_hicar_forcing)
-
 
     return result
 

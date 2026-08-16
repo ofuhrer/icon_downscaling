@@ -32,21 +32,25 @@ def die_with_watch_lock(root, config, ready) -> None:
 
 
 def test_hours_bracket_off_hour_segment() -> None:
-    assert list(hours(
-        datetime(2020, 2, 10, 1, 30),
-        datetime(2020, 2, 10, 2, 0),
-    )) == [
+    assert list(
+        hours(
+            datetime(2020, 2, 10, 1, 30),
+            datetime(2020, 2, 10, 2, 0),
+        )
+    ) == [
         datetime(2020, 2, 10, 1, 0),
         datetime(2020, 2, 10, 2, 0),
     ]
 
 
 def test_fractional_segment_length() -> None:
-    assert list(segments(
-        datetime(2020, 2, 10, 0, 0),
-        datetime(2020, 2, 10, 2, 0),
-        1.5,
-    )) == [
+    assert list(
+        segments(
+            datetime(2020, 2, 10, 0, 0),
+            datetime(2020, 2, 10, 2, 0),
+            1.5,
+        )
+    ) == [
         (datetime(2020, 2, 10, 0, 0), datetime(2020, 2, 10, 1, 30)),
         (datetime(2020, 2, 10, 1, 30), datetime(2020, 2, 10, 2, 0)),
     ]
@@ -161,6 +165,7 @@ def campaign(
     max_active_inputs=2,
     input_cpus=4,
     input_column_workers=1,
+    input_rbf_backend="numpy",
     input_exclusive=False,
     use_sparse_lbc=True,
     radiation_scheme="rrtmgp",
@@ -187,23 +192,26 @@ def campaign(
         "max_active_inputs": max_active_inputs,
         "input_cpus": input_cpus,
         "input_column_workers": input_column_workers,
+        "input_rbf_backend": input_rbf_backend,
         "input_exclusive": input_exclusive,
         "use_sparse_lbc": use_sparse_lbc,
         "radiation_update_interval": 600,
         "radiation_scheme": radiation_scheme,
         "model_partition": model_partition,
-        "allow_missing_restart_domain_provenance": (
-            allow_missing_restart_domain_provenance
-        ),
+        "allow_missing_restart_domain_provenance": (allow_missing_restart_domain_provenance),
         "acc_synchronous": acc_synchronous,
         "defer_uploads": defer_uploads,
         "gpu_metrics_interval_seconds": gpu_metrics_interval_seconds,
-        "seasons": seasons or [{
-            "name": "autumn",
-            "start": "2020-10-02T00:00:00",
-            "end": "2020-10-03T00:00:00",
-            "static": "static.nc",
-        }],
+        "seasons": seasons
+        or [
+            {
+                "name": "autumn",
+                "start": "2020-10-02T00:00:00",
+                "end": "2020-10-03T00:00:00",
+                "static": "static.nc",
+                "static_sha256": "a" * 64,
+            }
+        ],
     }
     if max_active_models is not None:
         config["max_active_models"] = max_active_models
@@ -246,6 +254,15 @@ def test_default_input_plan_remains_segment_local(tmp_path) -> None:
     assert boundary_list == segment_root / "lbc.txt"
 
 
+def test_sparse_lbc_defaults_to_disabled(tmp_path) -> None:
+    configured = campaign(tmp_path, full_season_input_lists=False)
+    payload = json.loads(configured.config_path.read_text())
+    payload.pop("use_sparse_lbc")
+    configured.config_path.write_text(json.dumps(payload))
+    defaulted = Campaign(configured.config_path)
+    assert defaulted.use_sparse_lbc is False
+
+
 def test_bounded_input_horizon_shares_endpoints_and_applies_backpressure(
     tmp_path, monkeypatch
 ) -> None:
@@ -256,12 +273,14 @@ def test_bounded_input_horizon_shares_endpoints_and_applies_backpressure(
         segment_hours=1,
         max_active_inputs=10,
         input_column_workers=2,
-        seasons=[{
-            "name": "autumn",
-            "start": "2020-10-02T00:00:00",
-            "end": "2020-10-02T03:00:00",
-            "static": "autumn.nc",
-        }],
+        seasons=[
+            {
+                "name": "autumn",
+                "start": "2020-10-02T00:00:00",
+                "end": "2020-10-02T03:00:00",
+                "static": "autumn.nc",
+            }
+        ],
     )
     submitted = []
 
@@ -285,9 +304,7 @@ def test_bounded_input_horizon_shares_endpoints_and_applies_backpressure(
         Path(f"{boundary}.ready").touch()
     assert configured.prepare_inputs() == 0
 
-    first_segment = (
-        configured.root / "autumn" / "000_20201002_0000_20201002_0100" / "attempt-1"
-    )
+    first_segment = configured.root / "autumn" / "000_20201002_0000_20201002_0100" / "attempt-1"
     first_segment.mkdir(parents=True)
     (first_segment / "segment.complete").touch()
     assert configured.prepare_inputs() == 1
@@ -376,9 +393,7 @@ def test_input_exclusive_adds_slurm_placement_option(tmp_path, monkeypatch) -> N
     assert options and "--exclusive" in options[0]
 
 
-def test_regular_relaxation_publishes_and_requires_only_forcing(
-    tmp_path, monkeypatch
-) -> None:
+def test_regular_relaxation_publishes_and_requires_only_forcing(tmp_path, monkeypatch) -> None:
     configured = campaign(
         tmp_path,
         full_season_input_lists=False,
@@ -394,6 +409,10 @@ def test_regular_relaxation_publishes_and_requires_only_forcing(
     monkeypatch.setattr(rd_campaign, "submit", fake_submit)
     assert configured.prepare_inputs() == 1
     assert submitted[0]["HICARPREP_WRITE_LBC"] == "0"
+    assert submitted[0]["HICARPREP_RBF_BACKEND"] == "numpy"
+    assert submitted[0]["HICARPREP_RBF_THREADS"] == "1"
+    assert submitted[0]["NUMBA_CACHE_DIR"].endswith("/campaign/input_numba_cache")
+    assert submitted[0]["HICAR_STATIC_SHA256"] == "a" * 64
 
     for when in hours(configured.seasons[0].start, configured.seasons[0].end):
         forcing, _ = configured.paths(configured.seasons[0], when)
@@ -403,20 +422,37 @@ def test_regular_relaxation_publishes_and_requires_only_forcing(
     assert configured.prepare_inputs() == 0
 
 
-def test_regular_relaxation_submits_segment_without_boundary_list(
-    tmp_path, monkeypatch
-) -> None:
+def test_campaign_rejects_invalid_static_publication_digest(tmp_path) -> None:
+    with pytest.raises(ValueError, match="static_sha256"):
+        campaign(
+            tmp_path,
+            full_season_input_lists=False,
+            seasons=[
+                {
+                    "name": "autumn",
+                    "start": "2020-10-02T00:00:00",
+                    "end": "2020-10-02T01:00:00",
+                    "static": "static.nc",
+                    "static_sha256": "not-a-digest",
+                }
+            ],
+        )
+
+
+def test_regular_relaxation_submits_segment_without_boundary_list(tmp_path, monkeypatch) -> None:
     configured = campaign(
         tmp_path,
         full_season_input_lists=False,
         use_sparse_lbc=False,
         segment_hours=1,
-        seasons=[{
-            "name": "autumn",
-            "start": "2020-10-02T00:00:00",
-            "end": "2020-10-02T01:00:00",
-            "static": "autumn.nc",
-        }],
+        seasons=[
+            {
+                "name": "autumn",
+                "start": "2020-10-02T00:00:00",
+                "end": "2020-10-02T01:00:00",
+                "static": "autumn.nc",
+            }
+        ],
     )
     for when in hours(configured.seasons[0].start, configured.seasons[0].end):
         forcing, _ = configured.paths(configured.seasons[0], when)
@@ -437,21 +473,21 @@ def test_regular_relaxation_submits_segment_without_boundary_list(
     assert not (segment / "lbc.txt").exists()
 
 
-def test_inputs_only_override_can_prepare_beyond_bounded_horizon(
-    tmp_path, monkeypatch
-) -> None:
+def test_inputs_only_override_can_prepare_beyond_bounded_horizon(tmp_path, monkeypatch) -> None:
     configured = campaign(
         tmp_path,
         full_season_input_lists=False,
         input_lookahead_segments=0,
         segment_hours=1,
         max_active_inputs=10,
-        seasons=[{
-            "name": "autumn",
-            "start": "2020-10-02T00:00:00",
-            "end": "2020-10-02T03:00:00",
-            "static": "autumn.nc",
-        }],
+        seasons=[
+            {
+                "name": "autumn",
+                "start": "2020-10-02T00:00:00",
+                "end": "2020-10-02T03:00:00",
+                "static": "autumn.nc",
+            }
+        ],
     )
     submitted = []
 
@@ -469,9 +505,7 @@ def test_inputs_only_override_can_prepare_beyond_bounded_horizon(
     ]
 
 
-def test_radiation_configuration_is_explicit_in_model_environment(
-    tmp_path, monkeypatch
-) -> None:
+def test_radiation_configuration_is_explicit_in_model_environment(tmp_path, monkeypatch) -> None:
     configured = campaign(
         tmp_path,
         full_season_input_lists=False,

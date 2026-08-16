@@ -30,7 +30,10 @@ weights=${HICARPREP_RBF_WEIGHTS:?}
 vector_weights=${HICARPREP_VECTOR_WEIGHTS:-}
 python=${HICAR_PYTHON:-python3}
 column_workers=${HICARPREP_COLUMN_WORKERS:-1}
-write_lbc=${HICARPREP_WRITE_LBC:-1}
+rbf_backend=${HICARPREP_RBF_BACKEND:-numpy}
+rbf_threads=${HICARPREP_RBF_THREADS:-1}
+write_lbc=${HICARPREP_WRITE_LBC:-0}
+trusted_static_digest=${HICAR_STATIC_SHA256:-}
 if ! [[ "$column_workers" =~ ^[1-9][0-9]*$ ]]; then
   echo "HICARPREP_COLUMN_WORKERS must be a positive integer" >&2
   exit 2
@@ -39,51 +42,90 @@ if test -n "${SLURM_CPUS_PER_TASK:-}" && (( column_workers > SLURM_CPUS_PER_TASK
   echo "HICARPREP_COLUMN_WORKERS exceeds SLURM_CPUS_PER_TASK" >&2
   exit 2
 fi
+if [[ "$rbf_backend" != numpy && "$rbf_backend" != numba ]]; then
+  echo "HICARPREP_RBF_BACKEND must be numpy or numba" >&2
+  exit 2
+fi
+if ! [[ "$rbf_threads" =~ ^[1-9][0-9]*$ ]]; then
+  echo "HICARPREP_RBF_THREADS must be a positive integer" >&2
+  exit 2
+fi
+if test -n "${SLURM_CPUS_PER_TASK:-}" && (( rbf_threads > SLURM_CPUS_PER_TASK )); then
+  echo "HICARPREP_RBF_THREADS exceeds SLURM_CPUS_PER_TASK" >&2
+  exit 2
+fi
+export HICARPREP_RBF_THREADS="$rbf_threads"
 if [[ "$write_lbc" != 0 && "$write_lbc" != 1 ]]; then
   echo "HICARPREP_WRITE_LBC must be 0 or 1" >&2
   exit 2
 fi
 boundary=${output%.nc}.lbc.nc
+manifest=${output}.hicarprep-manifest.json
 recovery="$repo_root/scripts/hicarprep_pair_recovery.sh"
 icon_extpar=${ICON_EXTPAR:-/oprusers/osm/opr.inn/data/ICON_INPUT/ICON-CH1-EPS/external_parameter_icon_grid_0001_R19B08_mch_tuned.nc}
 image=${REA_FDB_IMAGE_OVERRIDE:-${REA_FDB_IMAGE:?REA_FDB_IMAGE is required}}
 uenv_bin=${UENV_BIN:-/usr/bin/uenv}
+
+publication_args=()
+if test -n "$trusted_static_digest"; then
+  [[ "$trusted_static_digest" =~ ^[0-9a-f]{64}$ ]] || {
+    echo "HICAR_STATIC_SHA256 must be a lowercase SHA-256 digest" >&2
+    exit 2
+  }
+  publication_args=(
+    --mode publication --manifest "$manifest"
+    --expected-static-sha256 "$trusted_static_digest"
+  )
+fi
+
+validate_record() {
+  local boundary_args=()
+  test "$write_lbc" = 0 || boundary_args=(--boundary-file "$boundary")
+  if test -f "$manifest" && test -n "$trusted_static_digest"; then
+    "$python" "$repo_root/case_studies/swiss_200m/validation/validate_forcing.py" \
+      --forcing-file "$output" "${boundary_args[@]}" --static-file "$static" \
+      --expected-valid-time "$valid" "${publication_args[@]}"
+  else
+    "$python" "$repo_root/case_studies/swiss_200m/validation/validate_forcing.py" \
+      --forcing-file "$output" "${boundary_args[@]}" --static-file "$static" \
+      --expected-valid-time "$valid"
+  fi
+}
+
+quarantine_record() {
+  local quarantine
+  quarantine="$(dirname "$output")/.unpublished/$(basename "${output%.nc}").${SLURM_JOB_ID:-$$}"
+  mkdir -p "$quarantine"
+  for candidate in "$output" "$boundary" "$manifest"; do
+    test ! -e "$candidate" || mv -- "$candidate" "$quarantine/"
+  done
+}
 
 if test "$write_lbc" = 1; then
   test -f "$recovery" || { echo "missing pair recovery helper: $recovery" >&2; exit 2; }
   . "$recovery"
   pair_state=$(hicarprep_recover_pair "$output" "$boundary")
   if test "$pair_state" = ready; then
-    "$python" "$repo_root/case_studies/swiss_200m/validation/validate_forcing.py" \
-      --forcing-file "$output" --boundary-file "$boundary" \
-      --static-file "$static" --expected-valid-time "$valid"
+    validate_record
     exit 0
   fi
   if test "$pair_state" = complete_unmarked; then
-    "$python" "$repo_root/case_studies/swiss_200m/validation/validate_forcing.py" \
-      --forcing-file "$output" --boundary-file "$boundary" \
-      --static-file "$static" --expected-valid-time "$valid"
+    validate_record
     touch "$output.ready" "$boundary.ready"
     exit 0
   fi
 else
   if test -e "$output.ready"; then
     test -f "$output" || { echo "ready-marked forcing is missing: $output" >&2; exit 2; }
-    "$python" "$repo_root/case_studies/swiss_200m/validation/validate_forcing.py" \
-      --forcing-file "$output" --static-file "$static" \
-      --expected-valid-time "$valid"
+    validate_record
     exit 0
   fi
   if test -f "$output"; then
-    if "$python" "$repo_root/case_studies/swiss_200m/validation/validate_forcing.py" \
-      --forcing-file "$output" --static-file "$static" \
-      --expected-valid-time "$valid"; then
+    if validate_record; then
       touch "$output.ready"
       exit 0
     fi
-    quarantine="$(dirname "$output")/.unpublished/$(basename "${output%.nc}").${SLURM_JOB_ID:-$$}"
-    mkdir -p "$quarantine"
-    mv -- "$output" "$quarantine/"
+    quarantine_record
   fi
 fi
 for path in "$static" "$weights" "$icon_extpar" "$uenv_bin"; do
@@ -138,21 +180,50 @@ vector_args=()
 test -z "$vector_weights" || vector_args=(--vector-weights "$vector_weights")
 boundary_args=()
 validation_boundary_args=()
+published_boundary_args=()
 if test "$write_lbc" = 1; then
   boundary_args=(--boundary "$staged_boundary")
   validation_boundary_args=(--boundary-file "$staged_boundary")
+  published_boundary_args=(--published-boundary-path "$boundary")
 fi
-"$python" "$repo_root/scripts/hicarprep.py" prepare-hicar-forcing \
+manifest_args=()
+test -z "$trusted_static_digest" || manifest_args=(--manifest "$manifest")
+static_digest_args=()
+test -z "$trusted_static_digest" || static_digest_args=(--static-sha256 "$trusted_static_digest")
+if ! "$python" "$repo_root/scripts/hicarprep.py" prepare-hicar-forcing \
   --icon-state "$native" --static "$static" --weights "$weights" \
   --target-sst "$target_sst" "${vector_args[@]}" \
-  --output "$staged_output" "${boundary_args[@]}" \
-  --column-workers "$column_workers"
-"$python" "$repo_root/case_studies/swiss_200m/validation/validate_forcing.py" \
+  --output "$staged_output" "${boundary_args[@]}" "${manifest_args[@]}" \
+  "${static_digest_args[@]}" \
+  --column-workers "$column_workers" \
+  --rbf-backend "$rbf_backend"; then
+  quarantine_record
+  exit 1
+fi
+validation_mode_args=()
+if test -n "$trusted_static_digest"; then
+  validation_mode_args=(
+    "${publication_args[@]}"
+    --published-forcing-path "$output"
+    "${published_boundary_args[@]}"
+  )
+fi
+if ! "$python" "$repo_root/case_studies/swiss_200m/validation/validate_forcing.py" \
   --forcing-file "$staged_output" "${validation_boundary_args[@]}" \
-  --static-file "$static" --expected-valid-time "$valid"
-mv "$staged_output" "$output"
+  --static-file "$static" --expected-valid-time "$valid" \
+  "${validation_mode_args[@]}"; then
+  quarantine_record
+  exit 1
+fi
+if ! mv "$staged_output" "$output"; then
+  quarantine_record
+  exit 1
+fi
 if test "$write_lbc" = 1; then
-  mv "$staged_boundary" "$boundary"
+  if ! mv "$staged_boundary" "$boundary"; then
+    quarantine_record
+    exit 1
+  fi
   touch "$output.ready" "$boundary.ready"
 else
   touch "$output.ready"

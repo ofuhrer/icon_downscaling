@@ -22,6 +22,7 @@ MAXIMUM_RBF_WEIGHT_AMPLIFICATION = 10.0
 # Keeping this internal preserves the interpolation API while bounding both
 # the gather and weighted-product temporaries on national target grids.
 _RBF_APPLY_TARGET_CHUNK_SIZE = 32_768
+RBF_APPLY_BACKENDS = ("numpy", "numba")
 
 
 def coordinates_in_degrees(values: np.ndarray, units: str | None) -> np.ndarray:
@@ -146,26 +147,63 @@ class RBFWeights:
         if not np.allclose(np.sum(self.weight, axis=1), 1.0, atol=2.0e-7):
             raise ValueError("horizontal weights do not preserve constants")
 
-    def apply(self, source: np.ndarray, *, monotone: bool = False) -> np.ndarray:
+    def apply(
+        self,
+        source: np.ndarray,
+        *,
+        monotone: bool = False,
+        backend: str = "numpy",
+    ) -> np.ndarray:
         """Apply weights to an array whose final dimension is native cell."""
         source = np.asanyarray(source)
         if source.ndim == 0:
             raise ValueError("source must have at least one dimension")
         if source.shape[-1] <= int(np.max(self.donor_index)):
             raise ValueError("source cell dimension is shorter than cached donor index")
+        if backend not in RBF_APPLY_BACKENDS:
+            raise ValueError(
+                f"unsupported RBF apply backend {backend!r}; expected one of "
+                + ", ".join(RBF_APPLY_BACKENDS)
+            )
+        if backend == "numba":
+            if np.ma.isMaskedArray(source):
+                raise ValueError("the numba RBF backend requires an unmasked source array")
+            try:
+                from .accelerated_rbf import apply_rbf
+            except ImportError as exc:
+                raise RuntimeError(
+                    "the numba RBF backend requires the optional numba dependency"
+                ) from exc
+            result = apply_rbf(
+                source,
+                self.donor_index,
+                self.weight,
+                monotone=monotone,
+            )
+            return result.reshape((*source.shape[:-1], *self.target_shape))
 
         target_count = self.donor_index.shape[0]
         result = None
         for start in range(0, target_count, _RBF_APPLY_TARGET_CHUNK_SIZE):
             stop = min(start + _RBF_APPLY_TARGET_CHUNK_SIZE, target_count)
             donors = np.take(source, self.donor_index[start:stop], axis=-1)
-            chunk = np.sum(donors * self.weight[start:stop], axis=-1)
             if monotone:
-                chunk = np.clip(
-                    chunk,
-                    np.min(donors, axis=-1),
-                    np.max(donors, axis=-1),
-                )
+                lower = np.min(donors, axis=-1)
+                upper = np.max(donors, axis=-1)
+            product_dtype = np.result_type(donors.dtype, self.weight.dtype)
+            product_output = (
+                donors
+                if np.can_cast(product_dtype, donors.dtype, casting="same_kind")
+                else None
+            )
+            product = np.multiply(
+                donors,
+                self.weight[start:stop],
+                out=product_output,
+            )
+            chunk = np.sum(product, axis=-1)
+            if monotone:
+                np.clip(chunk, lower, upper, out=chunk)
             if result is None:
                 result_shape = (*source.shape[:-1], target_count)
                 if np.ma.isMaskedArray(chunk):
@@ -173,7 +211,7 @@ class RBFWeights:
                 else:
                     result = np.empty(result_shape, dtype=chunk.dtype)
             result[..., start:stop] = chunk
-            del donors, chunk
+            del donors, product, chunk
         if result is None:
             raise ValueError("cached RBF operator has no target points")
         return result.reshape((*source.shape[:-1], *self.target_shape))
