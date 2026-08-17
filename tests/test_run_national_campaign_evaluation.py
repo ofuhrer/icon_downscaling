@@ -8,6 +8,13 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+RESTART_SCRIPT = ROOT / "scripts" / "restart_transition_provenance.py"
+RESTART_SPEC = importlib.util.spec_from_file_location(
+    "restart_transition_provenance", RESTART_SCRIPT
+)
+RESTART_PROVENANCE = importlib.util.module_from_spec(RESTART_SPEC)
+sys.modules[RESTART_SPEC.name] = RESTART_PROVENANCE
+RESTART_SPEC.loader.exec_module(RESTART_PROVENANCE)
 SCRIPT = ROOT / "scripts" / "run_national_campaign_evaluation.py"
 SPEC = importlib.util.spec_from_file_location("national_evaluation_driver", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
@@ -114,7 +121,45 @@ def build_campaign(tmp_path):
             }
         )
     )
+    (campaign_root / "campaign.json").write_text(
+        json.dumps({"coordinator_source": {"commit": "c" * 40}})
+    )
     return config, data_root, output_root, output_times
+
+
+def campaign_attempts(config):
+    payload = json.loads(config.read_text())
+    root = Path(payload["root"])
+    return {
+        item["name"]: [
+            next(
+                path.parent
+                for path in (root / item["name"] / segment).glob(
+                    "attempt-*/segment.complete"
+                )
+            )
+            for segment in sorted(path.name for path in (root / item["name"]).iterdir())
+        ]
+        for item in payload["seasons"]
+    }
+
+
+def publish_all_transition_receipts(config):
+    paths = []
+    for season, attempts in campaign_attempts(config).items():
+        for index, (first, second) in enumerate(zip(attempts, attempts[1:])):
+            paths.append(
+                RESTART_PROVENANCE.publish_receipt(
+                    first,
+                    second,
+                    season=season,
+                    predecessor_index=index,
+                    successor_index=index + 1,
+                    campaign_commit="c" * 40,
+                    attestor_commit="d" * 40,
+                )
+            )
+    return paths
 
 
 def test_dry_run_builds_complete_command_plan_without_netcdf(tmp_path, monkeypatch):
@@ -243,3 +288,151 @@ def test_rejects_unlinked_or_multiply_completed_segment(tmp_path, monkeypatch):
     (duplicate / "segment.complete").touch()
     with pytest.raises(ValueError, match="exactly one completed attempt"):
         MODULE.completed_attempt(second_root)
+
+
+def test_accepts_durable_receipts_after_intermediate_restart_pruning(
+    tmp_path, monkeypatch
+):
+    config, data_root, output_root, output_times = build_campaign(tmp_path)
+    monkeypatch.setattr(MODULE, "decode_times", lambda path: output_times[path])
+    receipts = publish_all_transition_receipts(config)
+    attempts_by_season = campaign_attempts(config)
+
+    for attempts in attempts_by_season.values():
+        for first, second in zip(attempts, attempts[1:]):
+            Path(json.loads((first / "segment.json").read_text())["restart"]).unlink()
+            input_link = next(path for path in (second / "restart").glob("*.nc") if path.is_symlink())
+            input_link.unlink()
+
+    plan = MODULE.command_plan(config, ROOT, data_root, output_root, "python3")
+
+    assert len(receipts) == 12
+    assert all(
+        transition["mode"] == "durable_receipt"
+        for season in plan["inputs"].values()
+        for transition in season["restart_transitions"]
+    )
+    assert all(
+        season["segments"][-1]["terminal_restart"]["size_bytes"] > 0
+        for season in plan["inputs"].values()
+    )
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    (
+        (
+            lambda value: value["transition"]["predecessor"].__setitem__(
+                "segment_json_sha256", "0" * 64
+            ),
+            "does not match completed segment identity",
+        ),
+        (
+            lambda value: value["restart"]["predecessor_terminal"].__setitem__(
+                "size_bytes", 0
+            ),
+            "nonempty file",
+        ),
+        (
+            lambda value: value["restart"]["successor_input_link"].__setitem__(
+                "resolved_target", "/wrong/restart.nc"
+            ),
+            "link target does not match",
+        ),
+        (
+            lambda value: value["source"].__setitem__(
+                "campaign_coordinator_commit", "e" * 40
+            ),
+            "commit does not match campaign",
+        ),
+    ),
+)
+def test_rejects_mismatched_pruned_transition_receipt(
+    tmp_path, monkeypatch, mutate, message
+):
+    config, data_root, output_root, output_times = build_campaign(tmp_path)
+    monkeypatch.setattr(MODULE, "decode_times", lambda path: output_times[path])
+    attempts = campaign_attempts(config)["winter"]
+    receipt = RESTART_PROVENANCE.publish_receipt(
+        attempts[0],
+        attempts[1],
+        season="winter",
+        predecessor_index=0,
+        successor_index=1,
+        campaign_commit="c" * 40,
+        attestor_commit="d" * 40,
+    )
+    value = json.loads(receipt.read_text())
+    mutate(value)
+    receipt.write_text(json.dumps(value))
+    Path(json.loads((attempts[0] / "segment.json").read_text())["restart"]).unlink()
+    next(path for path in (attempts[1] / "restart").glob("*.nc") if path.is_symlink()).unlink()
+
+    with pytest.raises(ValueError, match=message):
+        MODULE.command_plan(config, ROOT, data_root, output_root, "python3")
+
+
+def test_rejects_missing_final_seasonal_restart_with_valid_receipts(tmp_path, monkeypatch):
+    config, data_root, output_root, output_times = build_campaign(tmp_path)
+    monkeypatch.setattr(MODULE, "decode_times", lambda path: output_times[path])
+    publish_all_transition_receipts(config)
+    final = campaign_attempts(config)["winter"][-1]
+    Path(json.loads((final / "segment.json").read_text())["restart"]).unlink()
+
+    with pytest.raises(ValueError, match="final seasonal restart is absent"):
+        MODULE.command_plan(config, ROOT, data_root, output_root, "python3")
+
+
+def test_rejects_receipt_sha_that_differs_from_retained_restart(tmp_path, monkeypatch):
+    config, data_root, output_root, output_times = build_campaign(tmp_path)
+    monkeypatch.setattr(MODULE, "decode_times", lambda path: output_times[path])
+    attempts = campaign_attempts(config)["winter"]
+    receipt = RESTART_PROVENANCE.publish_receipt(
+        attempts[0],
+        attempts[1],
+        season="winter",
+        predecessor_index=0,
+        successor_index=1,
+        campaign_commit="c" * 40,
+        attestor_commit="d" * 40,
+    )
+    value = json.loads(receipt.read_text())
+    value["restart"]["predecessor_terminal"]["sha256"] = "0" * 64
+    receipt.write_text(json.dumps(value))
+
+    with pytest.raises(ValueError, match="restart differs from transition receipt"):
+        MODULE.command_plan(config, ROOT, data_root, output_root, "python3")
+
+
+def test_rejects_missing_or_malformed_receipt_after_pruning(tmp_path, monkeypatch):
+    config, data_root, output_root, output_times = build_campaign(tmp_path)
+    monkeypatch.setattr(MODULE, "decode_times", lambda path: output_times[path])
+    attempts = campaign_attempts(config)["winter"]
+    terminal = Path(json.loads((attempts[0] / "segment.json").read_text())["restart"])
+    input_link = next(
+        path for path in (attempts[1] / "restart").glob("*.nc") if path.is_symlink()
+    )
+    terminal.unlink()
+    input_link.unlink()
+
+    with pytest.raises(ValueError, match="restart is absent and no receipt exists"):
+        MODULE.command_plan(config, ROOT, data_root, output_root, "python3")
+
+    receipt = RESTART_PROVENANCE.receipt_path(attempts[1])
+    receipt.write_text("{not JSON")
+    with pytest.raises(ValueError, match="cannot read JSON object"):
+        MODULE.command_plan(config, ROOT, data_root, output_root, "python3")
+
+
+def test_backfill_is_atomic_and_idempotently_validates_existing_receipts(
+    tmp_path, monkeypatch
+):
+    config, _, _, _ = build_campaign(tmp_path)
+    monkeypatch.setattr(RESTART_PROVENANCE, "source_commit", lambda path: "d" * 40)
+
+    created = RESTART_PROVENANCE.backfill_campaign(config, ROOT)
+    repeated = RESTART_PROVENANCE.backfill_campaign(config, ROOT)
+
+    assert len(created) == 12
+    assert repeated == []
+    assert all(path.name == "restart_transition.json" for path in created)

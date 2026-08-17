@@ -13,6 +13,19 @@ import subprocess
 import sys
 from tempfile import NamedTemporaryFile
 
+try:
+    from scripts.restart_transition_provenance import (
+        campaign_coordinator_commit,
+        receipt_path,
+        validate_receipt,
+    )
+except ModuleNotFoundError:  # Direct execution places scripts/, not the repository, on sys.path.
+    from restart_transition_provenance import (
+        campaign_coordinator_commit,
+        receipt_path,
+        validate_receipt,
+    )
+
 
 SEASON_LABELS = {
     "winter": "DJF",
@@ -130,7 +143,14 @@ def completed_attempt(segment_root: Path) -> Path:
     return marked[0]
 
 
-def validate_segment(attempt: Path, start: datetime, end: datetime, static: Path) -> dict:
+def validate_segment(
+    attempt: Path,
+    start: datetime,
+    end: datetime,
+    static: Path,
+    *,
+    require_restart: bool,
+) -> dict:
     report_path = attempt / "segment.json"
     report = json.loads(report_path.read_text(encoding="utf-8"))
     if parse_time(report["start"]) != start or parse_time(report["end"]) != end:
@@ -140,8 +160,8 @@ def validate_segment(attempt: Path, start: datetime, end: datetime, static: Path
     if Path(report["static"]).resolve() != static.resolve():
         raise ValueError(f"{report_path}: static file differs from campaign config")
     restart = Path(report["restart"])
-    if not restart.is_file():
-        raise ValueError(f"{report_path}: terminal restart is absent")
+    if require_restart and not restart.is_file():
+        raise ValueError(f"{report_path}: final seasonal restart is absent")
     outputs = sorted((attempt / "output").glob("*.nc"))
     if not outputs:
         raise ValueError(f"{attempt}: completed segment has no NetCDF output")
@@ -158,6 +178,7 @@ def validate_segment(attempt: Path, start: datetime, end: datetime, static: Path
     return {
         "attempt": attempt,
         "report": report_path,
+        "report_data": report,
         "restart": restart,
         "outputs": outputs,
         "times": sorted(seen),
@@ -166,7 +187,11 @@ def validate_segment(attempt: Path, start: datetime, end: datetime, static: Path
     }
 
 
-def require_link(first: dict, second: dict) -> None:
+def require_live_link(first: dict, second: dict) -> dict:
+    if not first["restart"].is_file():
+        raise ValueError(
+            f"{second['attempt']}: predecessor restart is absent and no receipt exists"
+        )
     target = first["restart"].resolve()
     links = [
         path
@@ -177,6 +202,39 @@ def require_link(first: dict, second: dict) -> None:
         raise ValueError(
             f"{second['attempt']}: continuation is not linked exactly once to {target}"
         )
+    return {
+        "mode": "live_restart",
+        "checkpoint_time": first["report_data"]["end"],
+        "predecessor_terminal": str(target),
+        "successor_input": str(links[0]),
+    }
+
+
+def require_transition(
+    first: dict,
+    second: dict,
+    *,
+    season: str,
+    predecessor_index: int,
+    campaign_commit: str,
+) -> dict:
+    path = receipt_path(second["attempt"])
+    if not path.exists():
+        return require_live_link(first, second)
+    validate_receipt(
+        path,
+        first["attempt"],
+        second["attempt"],
+        season=season,
+        predecessor_index=predecessor_index,
+        successor_index=predecessor_index + 1,
+        campaign_commit=campaign_commit,
+    )
+    return {
+        "mode": "durable_receipt",
+        "checkpoint_time": first["report_data"]["end"],
+        "receipt": file_record(path, hashed=True),
+    }
 
 
 def source_identity(repo_root: Path) -> dict:
@@ -204,6 +262,7 @@ def command_plan(
 ) -> dict:
     config = json.loads(config_path.read_text(encoding="utf-8"))
     campaign_root = Path(config["root"])
+    campaign_commit = campaign_coordinator_commit(campaign_root)
     if float(config.get("segment_hours", 0)) != 12.0:
         raise ValueError("national evaluation requires 12-hour campaign segments")
     output_interval = int(config.get("output_interval", 3600))
@@ -259,7 +318,13 @@ def command_plan(
                 / str(item["name"])
                 / (f"{index:03d}_{stamp(segment_start)}_{stamp(segment_end)}")
             )
-            segment = validate_segment(completed_attempt(root), segment_start, segment_end, static)
+            segment = validate_segment(
+                completed_attempt(root),
+                segment_start,
+                segment_end,
+                static,
+                require_restart=index == len(intervals) - 1,
+            )
             expected = expected_times(segment_start, segment_end, output_interval)
             if index:
                 expected = expected[1:]
@@ -269,8 +334,16 @@ def command_plan(
                     f"{expected[0].isoformat()}..{expected[-1].isoformat()} ({len(expected)})"
                 )
             segments.append(segment)
-        for first, second in zip(segments, segments[1:]):
-            require_link(first, second)
+        transitions = [
+            require_transition(
+                first,
+                second,
+                season=str(item["name"]),
+                predecessor_index=index,
+                campaign_commit=campaign_commit,
+            )
+            for index, (first, second) in enumerate(zip(segments, segments[1:]))
+        ]
         combined = [value for segment in segments for value in segment["times"]]
         complete_expected = expected_times(start, end, output_interval)
         if combined != complete_expected or len(set(combined)) != len(complete_expected):
@@ -302,6 +375,7 @@ def command_plan(
             "observation": observation,
             "reference": reference,
             "segments": segments,
+            "transitions": transitions,
             "outputs": outputs,
             "evaluator_report": season_dir / "evaluator.json",
             "footprint_report": season_dir / "wind_footprints.json",
@@ -384,7 +458,11 @@ def command_plan(
                 {
                     "attempt": str(segment["attempt"].resolve()),
                     "segment_json": file_record(segment["report"], hashed=True),
-                    "restart": file_record(segment["restart"]),
+                    "terminal_restart": (
+                        file_record(segment["restart"])
+                        if segment["restart"].is_file()
+                        else {"path": str(segment["restart"]), "retained": False}
+                    ),
                     "outputs": [file_record(path) for path in segment["outputs"]],
                     "output_times": [value.isoformat() for value in segment["times"]],
                     "serializer_time_offset_seconds": {
@@ -394,6 +472,7 @@ def command_plan(
                 }
                 for segment in item["segments"]
             ],
+            "restart_transitions": item["transitions"],
         }
     return {
         "commands": commands,

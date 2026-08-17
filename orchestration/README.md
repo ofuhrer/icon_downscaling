@@ -19,6 +19,18 @@ State is only what restart recovery needs:
 Interrupted or failed attempts use a new directory and are retried up to the
 configured bound. A chain advances only from a completed predecessor restart.
 
+After a successor is complete, `scripts/restart_transition_provenance.py`
+can atomically publish `restart_transition.json` in that successor attempt.
+The compact receipt binds both completed segment reports, the exact restart
+symlink target, restart size and SHA-256, and the campaign/attestor source
+identities.  The national evaluator accepts this receipt after the consumed
+intermediate restart and input symlink are removed, but still requires each
+season's final restart. Backfill all currently provable transitions with:
+
+```bash
+python scripts/restart_transition_provenance.py --campaign-config <source-campaign-config.json>
+```
+
 Run once to submit currently eligible work, or watch continuously:
 
 ```bash
