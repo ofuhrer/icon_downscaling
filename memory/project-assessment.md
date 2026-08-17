@@ -61,6 +61,17 @@ HICAR production is pinned at `0b9b0cb6`, the qualified GPU RRTMGP restart-
 reproducibility merge. The later `0545a55d` fused theta-reduction optimization
 and its `5503dacd` hourly-wind-output descendant are research-only: fresh exact
 national reruns exposed nondeterministic invalid state as described below.
+The 8-day national campaign also exposed a remaining asynchronous execution
+hazard in `0b9b0cb6`: winter attempts `5118606` and `5118666` first developed
+non-finite surface/thermodynamic state at 00:40 and 01:20 respectively, despite
+identical inputs and bounded winds. With `NVCOMPILER_ACC_SYNCHRONOUS=1` and
+deferred uploads disabled, the otherwise identical two-hour job `5118697` and
+12-hour job `5118701` completed in 7:54 and 29:42. The production-length gate
+validated 73 exact ten-minute records, 13 forcing frames, a 12:00 restart, and
+10/50 m maxima of 28.53/26.72 m/s. The selected long-run execution is therefore
+synchronous; asynchronous GPU execution is not production-qualified for this
+national winter state. This is an execution-reliability workaround, not a
+scientific configuration change, and its throughput cost must remain visible.
 Static/forcing validation preserves exact
 HHL/HFL geometry, chronology, finite/range contracts, and runtime-domain
 identity. Deterministic eight-worker preparation reduced a representative

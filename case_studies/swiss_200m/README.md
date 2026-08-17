@@ -4,7 +4,10 @@
 `config/hicar_swiss_200m.nml.in` is the executable namelist template. The
 evaluated configuration uses 80 levels to 15 km, native hourly hicarprep
 forcing on exact HHL/HFL, regular full-domain relaxation, fixed alpha 1,
-Sx/TPI off, Noah-MP, and terrain-corrected 600 s radiation.
+Sx/TPI on, Noah-MP, and terrain-corrected 600 s radiation. National RRTMGP
+production currently uses synchronous OpenACC execution with deferred uploads
+disabled; asynchronous execution produced placement-dependent non-finite
+winter state despite passing shorter autumn qualifications.
 
 Two four-season campaigns found neither Sx setting consistently better than
 native REA-L/interpolation-only. Sx-off reduces common-regime over-damping but

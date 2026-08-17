@@ -1,5 +1,5 @@
 {
-  "root": "/scratch/mch/olifu/icon_hicar/seasonal_8day_alpha1_sxon_rrtmgp_v1/campaign_v2",
+  "root": "/scratch/mch/olifu/icon_hicar/seasonal_8day_alpha1_sxon_rrtmgp_v1/campaign_sync_v1",
   "repo_root": "/scratch/mch/olifu/icon_hicar/seasonal_8day_alpha1_sxoff_rrtmgp_v1/source/coordinator-production",
   "forcing_dir": "/scratch/mch/olifu/icon_hicar/seasonal_8day_alpha1_sxon_rrtmgp_v1/input/forcing",
   "python": "/scratch/mch/olifu/icon_hicar/seasonal_8day_alpha1_sxoff_rrtmgp_v1/venv/bin/python",
@@ -11,8 +11,8 @@
   "use_sparse_lbc": false,
   "full_season_input_lists": false,
   "input_lookahead_segments": 1,
-  "acc_synchronous": false,
-  "defer_uploads": true,
+  "acc_synchronous": true,
+  "defer_uploads": false,
   "max_attempts": 4,
   "input_partitions": ["pp-long"],
   "max_active_inputs": 5,
