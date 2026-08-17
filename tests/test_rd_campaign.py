@@ -694,13 +694,15 @@ def test_model_submission_is_bounded_globally(tmp_path, monkeypatch) -> None:
                 Path(f"{path}.ready").touch()
 
     submitted = []
+    live_jobs = {}
 
     def fake_submit(script, environment, job_name, *, partition, sbatch_options=()):
         submitted.append((job_name, partition))
+        live_jobs["12345"] = ("PENDING", partition)
         return "12345"
 
     monkeypatch.setattr(rd_campaign, "submit", fake_submit)
-    monkeypatch.setattr(rd_campaign, "slurm_state", lambda _: "PENDING")
+    monkeypatch.setattr(rd_campaign, "active_slurm_jobs", lambda: live_jobs)
     assert configured.submit_segments() == 1
     assert configured.submit_segments() == 0
     assert submitted == [("hc-aut-000-a1", "preemptible")]

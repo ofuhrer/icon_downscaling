@@ -621,10 +621,13 @@ class Campaign:
         return records, list_root / "forcing.txt", list_root / "lbc.txt"
 
     def active_model_attempts(self) -> int:
-        active_states = {"PENDING", "RUNNING", "CONFIGURING", "COMPLETING", "SUSPENDED"}
-        return sum(
-            slurm_state(job_file) in active_states
-            for job_file in self.root.glob("*/*/attempt-*.job")
+        live_jobs = active_slurm_jobs()
+        return len(
+            {
+                job
+                for job_file in self.root.glob("*/*/attempt-*.job")
+                if (job := job_file.read_text().strip()) in live_jobs
+            }
         )
 
     def validate_model_partition_capacity(self) -> None:
