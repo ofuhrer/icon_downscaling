@@ -63,3 +63,36 @@ separate 2 h continuous-versus-1 h segmented comparison is required before a
 seasonal campaign. Acceptance is based on finite fields, timing continuity and
 perturbation magnitude relative to uninterrupted evolution; bit identity is
 not required.
+
+## Rolling payload cleanup
+
+Completed segment outputs and compact hicarprep manifests are sufficient for
+evaluation; multi-gigabyte forcing payloads are operational inputs. A forcing
+record becomes cleanup-eligible only when its valid time is strictly before
+the first incomplete segment of its season. This preserves the endpoint
+shared with the next segment. The cleanup planner additionally excludes every
+record referenced by a live model or input job and retains each publication
+manifest.
+
+Run the tool as a module on an authorized CPU node. Dry-run is the default:
+
+```bash
+python -m orchestration.cleanup_campaign_payloads campaign.json \
+  --plan-output cleanup-plan.json
+```
+
+Review the exact targets and byte count, then provide both the saved plan and
+its printed digest:
+
+```bash
+python -m orchestration.cleanup_campaign_payloads campaign.json \
+  --plan-file cleanup-plan.json --apply PLAN_SHA256
+```
+
+Apply mode authenticates the saved plan, obtains a campaign-local cleanup
+lock, and recomputes configuration, filesystem, segment-frontier, receipt, and
+Slurm-job safety. It refuses the entire operation if any planned target has
+changed. For each accepted record it removes the zero-byte `.ready` marker
+before the payload, so an interrupted cleanup never leaves a missing file
+advertised as ready. The `.hicarprep-manifest.json` remains as the compact
+validated input-generation receipt.
