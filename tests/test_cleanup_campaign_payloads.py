@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,11 @@ from orchestration.cleanup_campaign_payloads import (
     build_plan,
 )
 from orchestration.rd_campaign import Campaign, hours, segments, stamp
+from scripts.restart_transition_provenance import (
+    publish_receipt,
+    receipt_path,
+    validate_receipt,
+)
 
 
 def configured_campaign(tmp_path: Path, *, full_season_input_lists: bool = False) -> Campaign:
@@ -40,7 +46,12 @@ def configured_campaign(tmp_path: Path, *, full_season_input_lists: bool = False
     }
     path = tmp_path / "config.json"
     path.write_text(json.dumps(config), encoding="utf-8")
-    return Campaign(path)
+    campaign = Campaign(path)
+    campaign.root.mkdir(parents=True)
+    (campaign.root / "campaign.json").write_text(
+        json.dumps({"coordinator_source": {"commit": "c" * 40}}), encoding="utf-8"
+    )
+    return campaign
 
 
 def write_manifest(campaign: Campaign, when: datetime, payload: bytes = b"forcing") -> Path:
@@ -84,6 +95,32 @@ def complete_segment(campaign: Campaign, index: int) -> Path:
     (attempt / "segment.json").write_text(json.dumps(payload), encoding="utf-8")
     (attempt / "segment_validation.json").write_text(json.dumps(payload), encoding="utf-8")
     (attempt / "segment.complete").touch()
+    terminal = Path(payload["restart"])
+    terminal.parent.mkdir(parents=True)
+    terminal.write_bytes(f"restart-{index}".encode())
+    if index:
+        previous_start, previous_end = list(
+            segments(season.start, season.end, campaign.segment_hours)
+        )[index - 1]
+        previous_root = (
+            campaign.root
+            / season.name
+            / f"{index - 1:03d}_{stamp(previous_start)}_{stamp(previous_end)}"
+        )
+        previous = campaign.completed_attempt(previous_root)
+        assert previous is not None
+        previous_report = json.loads((previous / "segment.json").read_text(encoding="utf-8"))
+        previous_terminal = Path(previous_report["restart"])
+        (attempt / "restart" / previous_terminal.name).symlink_to(previous_terminal)
+        publish_receipt(
+            previous,
+            attempt,
+            season=season.name,
+            predecessor_index=index - 1,
+            successor_index=index,
+            campaign_commit="c" * 40,
+            attestor_commit="d" * 40,
+        )
     return attempt
 
 
@@ -100,8 +137,10 @@ def test_plan_prunes_only_strictly_before_first_incomplete_start(tmp_path: Path)
 
     plan = build_plan(campaign, [])
 
-    assert [Path(item["path"]) for item in plan["targets"]] == forcing[:2]
-    assert plan["summary"] == {"blocked_count": 0, "target_bytes": 14, "target_count": 2}
+    forcing_targets = [item for item in plan["targets"] if item["kind"] == "forcing"]
+    assert [Path(item["path"]) for item in forcing_targets] == forcing[:2]
+    assert plan["summary"]["blocked_count"] == 0
+    assert plan["summary"]["target_count"] == 3
     assert plan["frontiers"][0]["first_incomplete_start"] == "2020-01-01T02:00:00"
     # The shared 02:00 endpoint belongs to both the completed predecessor and
     # the next incomplete segment, so it is deliberately retained.
@@ -116,7 +155,9 @@ def test_completed_season_can_prune_its_terminal_forcing_endpoint(tmp_path: Path
 
     plan = build_plan(campaign, [])
 
-    assert [Path(item["path"]) for item in plan["targets"]] == forcing
+    assert [
+        Path(item["path"]) for item in plan["targets"] if item["kind"] == "forcing"
+    ] == forcing
     assert plan["frontiers"][0]["first_incomplete_start"] is None
 
 
@@ -130,7 +171,9 @@ def test_live_model_reference_blocks_even_a_past_record(tmp_path: Path) -> None:
 
     plan = build_plan(campaign, [ActiveJob("123", "COMPLETING", "hc-win-000-a1")])
 
-    assert [item["path"] for item in plan["targets"]] == [str(forcing[1])]
+    assert [
+        item["path"] for item in plan["targets"] if item["kind"] == "forcing"
+    ] == [str(forcing[1])]
     assert plan["blockers"] == [
         {"path": str(forcing[0]), "reason": "referenced_by_live_model"}
     ]
@@ -147,7 +190,9 @@ def test_live_input_producer_target_blocks_cleanup(tmp_path: Path) -> None:
 
     plan = build_plan(campaign, [ActiveJob("234", "RUNNING", "hp-010101")])
 
-    assert [item["path"] for item in plan["targets"]] == [str(forcing[0])]
+    assert [
+        item["path"] for item in plan["targets"] if item["kind"] == "forcing"
+    ] == [str(forcing[0])]
     assert plan["blockers"] == [
         {"path": str(forcing[1]), "reason": "target_of_live_producer"}
     ]
@@ -164,7 +209,9 @@ def test_unmapped_campaign_like_job_fails_closed(tmp_path: Path) -> None:
 def test_noncontiguous_complete_chain_fails_closed(tmp_path: Path) -> None:
     campaign = configured_campaign(tmp_path)
     populate(campaign)
+    first = complete_segment(campaign, 0)
     complete_segment(campaign, 1)
+    (first / "segment.complete").unlink()
 
     with pytest.raises(CleanupSafetyError, match="non-contiguous"):
         build_plan(campaign, [])
@@ -243,7 +290,7 @@ def test_apply_rejects_tampered_plan_and_changed_payload(tmp_path: Path) -> None
         apply_plan(campaign, tampered, plan["plan_sha256"], [])
 
     forcing[0].write_bytes(b"changed-size")
-    with pytest.raises(CleanupSafetyError, match=r"changed \(bytes\)"):
+    with pytest.raises(CleanupSafetyError, match=r"changed \(bytes, mtime_ns\)"):
         apply_plan(campaign, plan, plan["plan_sha256"], [])
     assert forcing[0].is_file()
 
@@ -283,4 +330,100 @@ def test_full_season_input_lists_are_not_cleanup_eligible(tmp_path: Path) -> Non
     campaign = configured_campaign(tmp_path, full_season_input_lists=True)
 
     with pytest.raises(CleanupSafetyError, match="segment-local"):
+        build_plan(campaign, [])
+
+
+def test_restart_plan_requires_receipt_and_preserves_latest_checkpoint(tmp_path: Path) -> None:
+    campaign = configured_campaign(tmp_path)
+    first = complete_segment(campaign, 0)
+    second = complete_segment(campaign, 1)
+    first_restart = Path(json.loads((first / "segment.json").read_text())["restart"])
+    second_restart = Path(json.loads((second / "segment.json").read_text())["restart"])
+
+    plan = build_plan(campaign, [])
+
+    restarts = [item for item in plan["targets"] if item["kind"] == "restart"]
+    assert [item["path"] for item in restarts] == [str(first_restart)]
+    assert plan["retained_restarts"] == [
+        {
+            "bytes": second_restart.stat().st_size,
+            "path": str(second_restart),
+            "reason": "latest_completed_checkpoint",
+            "season": "winter",
+        }
+    ]
+    assert receipt_path(second).is_file()
+
+
+def test_restart_plan_refuses_missing_or_corrupt_receipt(tmp_path: Path) -> None:
+    campaign = configured_campaign(tmp_path)
+    complete_segment(campaign, 0)
+    second = complete_segment(campaign, 1)
+    receipt = receipt_path(second)
+    original = receipt.read_text(encoding="utf-8")
+    receipt.unlink()
+    with pytest.raises(CleanupSafetyError, match="not durably attested"):
+        build_plan(campaign, [])
+
+    receipt.write_text(original.replace("hicar.restart-transition/v1", "unknown"))
+    with pytest.raises(CleanupSafetyError, match="not durably attested"):
+        build_plan(campaign, [])
+
+
+def test_restart_apply_removes_payload_and_input_link_but_retains_receipt(
+    tmp_path: Path,
+) -> None:
+    campaign = configured_campaign(tmp_path)
+    first = complete_segment(campaign, 0)
+    second = complete_segment(campaign, 1)
+    first_restart = Path(json.loads((first / "segment.json").read_text())["restart"])
+    second_restart = Path(json.loads((second / "segment.json").read_text())["restart"])
+    receipt = receipt_path(second)
+    receipt_payload = json.loads(receipt.read_text(encoding="utf-8"))
+    input_link = Path(receipt_payload["restart"]["successor_input_link"]["path"])
+    plan = build_plan(campaign, [])
+
+    result = apply_plan(campaign, plan, plan["plan_sha256"], [])
+
+    assert result["deleted_paths"] == [str(first_restart)]
+    assert result["restart_links_removed"] == [str(input_link)]
+    assert result["restart_receipts_retained"] == [str(receipt)]
+    assert not first_restart.exists() and not os.path.lexists(input_link)
+    assert second_restart.is_file() and receipt.is_file()
+    validate_receipt(
+        receipt,
+        first,
+        second,
+        season="winter",
+        predecessor_index=0,
+        successor_index=1,
+        campaign_commit="c" * 40,
+    )
+    assert not [item for item in build_plan(campaign, [])["targets"] if item["kind"] == "restart"]
+
+
+def test_live_model_restart_reference_blocks_restart_cleanup(tmp_path: Path) -> None:
+    campaign = configured_campaign(tmp_path)
+    first = complete_segment(campaign, 0)
+    second = complete_segment(campaign, 1)
+    first_restart = Path(json.loads((first / "segment.json").read_text())["restart"])
+    job_file = second.parent / "attempt-1.job"
+    job_file.write_text("456\n", encoding="utf-8")
+    (second.parent / "forcing.txt").write_text("", encoding="utf-8")
+
+    plan = build_plan(campaign, [ActiveJob("456", "COMPLETING", "hc-win-001-a1")])
+
+    assert not [item for item in plan["targets"] if item["kind"] == "restart"]
+    assert {"path": str(first_restart), "reason": "referenced_by_live_model"} in plan[
+        "blockers"
+    ]
+
+
+def test_missing_latest_restart_always_fails_closed(tmp_path: Path) -> None:
+    campaign = configured_campaign(tmp_path)
+    latest = complete_segment(campaign, 0)
+    restart = Path(json.loads((latest / "segment.json").read_text())["restart"])
+    restart.unlink()
+
+    with pytest.raises(CleanupSafetyError, match="latest completed checkpoint"):
         build_plan(campaign, [])

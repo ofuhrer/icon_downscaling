@@ -25,6 +25,11 @@ import sys
 from typing import Any, Iterable
 
 from orchestration.rd_campaign import Campaign, hours, segments, stamp
+from scripts.restart_transition_provenance import (
+    campaign_coordinator_commit,
+    receipt_path,
+    validate_receipt,
+)
 
 
 PLAN_SCHEMA = "hicar-campaign-payload-cleanup-plan-v1"
@@ -151,10 +156,11 @@ def _job_files(root: Path) -> dict[str, Path]:
 
 def _active_references(
     campaign: Campaign, active_jobs: Iterable[ActiveJob]
-) -> tuple[set[Path], set[Path], list[dict[str, str]]]:
+) -> tuple[set[Path], set[Path], set[Path], list[dict[str, str]]]:
     """Resolve live model input lists and producer targets from job records."""
     records = _job_files(campaign.root)
     model_forcing: set[Path] = set()
+    model_restarts: set[Path] = set()
     producer_targets: set[Path] = set()
     mapped: list[dict[str, str]] = []
     seasons = {item.name: item for item in campaign.seasons}
@@ -189,6 +195,18 @@ def _active_references(
                 producer_targets.add(boundary)
             kind = "input"
         elif len(parts) == 3:
+            season = seasons.get(parts[0])
+            if season is None:
+                raise CleanupSafetyError(f"model job has unknown season: {job_file}")
+            windows = list(segments(season.start, season.end, campaign.segment_hours))
+            matching = [
+                index
+                for index, (start, end) in enumerate(windows)
+                if job_file.parent.name == f"{index:03d}_{stamp(start)}_{stamp(end)}"
+            ]
+            if len(matching) != 1:
+                raise CleanupSafetyError(f"model job has invalid segment path: {job_file}")
+            index = matching[0]
             forcing_list = job_file.parent / "forcing.txt"
             if not forcing_list.is_file() or forcing_list.is_symlink():
                 raise CleanupSafetyError(f"live model job lacks regular forcing list: {job_file}")
@@ -197,6 +215,32 @@ def _active_references(
                 if len(value) < 3 or value[0] != '"' or value[-1] != '"':
                     raise CleanupSafetyError(f"invalid forcing-list entry in {forcing_list}")
                 model_forcing.add(Path(value[1:-1]))
+            if index:
+                previous_start, previous_end = windows[index - 1]
+                previous_root = (
+                    campaign.root
+                    / season.name
+                    / f"{index - 1:03d}_{stamp(previous_start)}_{stamp(previous_end)}"
+                )
+                previous = _validated_completed_attempt(
+                    campaign, previous_root, previous_start, previous_end
+                )
+                if previous is None:
+                    raise CleanupSafetyError(
+                        f"live model job lacks a completed predecessor: {job_file}"
+                    )
+                report = json.loads((previous / "segment.json").read_text(encoding="utf-8"))
+                model_restarts.add(Path(report["restart"]).resolve(strict=False))
+            run_restart = job_file.parent / job_file.stem / "restart"
+            if run_restart.is_dir():
+                for link in run_restart.glob("*.nc"):
+                    if link.is_symlink():
+                        try:
+                            model_restarts.add(link.resolve(strict=True))
+                        except FileNotFoundError as error:
+                            raise CleanupSafetyError(
+                                f"live model job has a broken restart link: {link}"
+                            ) from error
             kind = "model"
         else:
             raise CleanupSafetyError(f"unexpected active-job record path: {job_file}")
@@ -214,7 +258,12 @@ def _active_references(
     # live.  Conversely, every active HICAR/hicarprep job must map above.
     if not active_ids.issuperset(item["job_id"] for item in mapped):
         raise AssertionError("internal active-job mapping inconsistency")
-    return model_forcing, producer_targets, sorted(mapped, key=lambda item: item["job_id"])
+    return (
+        model_forcing,
+        model_restarts,
+        producer_targets,
+        sorted(mapped, key=lambda item: item["job_id"]),
+    )
 
 
 def _validated_completed_attempt(
@@ -244,8 +293,15 @@ def _validated_completed_attempt(
     return attempt
 
 
-def _season_frontiers(campaign: Campaign) -> tuple[dict[str, datetime | None], list[dict[str, Any]]]:
+def _season_frontiers(
+    campaign: Campaign,
+) -> tuple[
+    dict[str, datetime | None],
+    dict[str, list[Path]],
+    list[dict[str, Any]],
+]:
     frontiers: dict[str, datetime | None] = {}
+    completed_attempts: dict[str, list[Path]] = {}
     evidence: list[dict[str, Any]] = []
     for season in campaign.seasons:
         windows = list(segments(season.start, season.end, campaign.segment_hours))
@@ -260,6 +316,9 @@ def _season_frontiers(campaign: Campaign) -> tuple[dict[str, datetime | None], l
             raise CleanupSafetyError(f"non-contiguous completed chain for season {season.name}")
         frontier = None if first_incomplete is None else windows[first_incomplete][0]
         frontiers[season.name] = frontier
+        completed_attempts[season.name] = [
+            item for item in completed if item is not None
+        ]
         latest = None
         if first_incomplete not in (None, 0):
             latest = str(completed[first_incomplete - 1])
@@ -276,7 +335,7 @@ def _season_frontiers(campaign: Campaign) -> tuple[dict[str, datetime | None], l
                 "total_segments": len(windows),
             }
         )
-    return frontiers, evidence
+    return frontiers, completed_attempts, evidence
 
 
 def _forcing_manifest(
@@ -323,6 +382,109 @@ def _regular_file_stat(path: Path) -> os.stat_result | None:
     return result
 
 
+def _restart_cleanup_targets(
+    campaign: Campaign,
+    completed_attempts: dict[str, list[Path]],
+    model_restarts: set[Path],
+) -> tuple[list[dict[str, Any]], list[dict[str, str]], list[dict[str, Any]]]:
+    """Validate transition receipts and select only non-latest checkpoints."""
+    campaign_commit = campaign_coordinator_commit(campaign.root)
+    targets: list[dict[str, Any]] = []
+    blockers: list[dict[str, str]] = []
+    retained: list[dict[str, Any]] = []
+    for season in campaign.seasons:
+        attempts = completed_attempts[season.name]
+        if not attempts:
+            continue
+        latest_report = json.loads(
+            (attempts[-1] / "segment.json").read_text(encoding="utf-8")
+        )
+        latest = Path(latest_report["restart"])
+        latest_stat = _regular_file_stat(latest)
+        if latest_stat is None or latest_stat.st_size <= 0:
+            raise CleanupSafetyError(
+                f"latest completed checkpoint must remain present and nonempty: {latest}"
+            )
+        retained.append(
+            {
+                "bytes": latest_stat.st_size,
+                "path": str(latest),
+                "reason": "latest_completed_checkpoint",
+                "season": season.name,
+            }
+        )
+
+        for predecessor_index, (predecessor, successor) in enumerate(
+            zip(attempts, attempts[1:])
+        ):
+            receipt = receipt_path(successor)
+            try:
+                evidence = validate_receipt(
+                    receipt,
+                    predecessor,
+                    successor,
+                    season=season.name,
+                    predecessor_index=predecessor_index,
+                    successor_index=predecessor_index + 1,
+                    campaign_commit=campaign_commit,
+                )
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                raise CleanupSafetyError(
+                    f"restart transition is not durably attested: {receipt}: {error}"
+                ) from error
+            restart = evidence["restart"]
+            terminal_record = restart["predecessor_terminal"]
+            input_record = restart["successor_input_link"]
+            terminal = Path(terminal_record["path"])
+            input_link = Path(input_record["path"])
+            terminal_stat = _regular_file_stat(terminal)
+            input_stat = input_link.lstat() if os.path.lexists(input_link) else None
+            if input_stat is not None and not input_link.is_symlink():
+                raise CleanupSafetyError(
+                    f"successor restart input is not a symlink: {input_link}"
+                )
+            if terminal_stat is None:
+                if input_stat is not None:
+                    raise CleanupSafetyError(
+                        f"deleted predecessor restart left a successor link: {input_link}"
+                    )
+                # Both large payload and staging link were already pruned. The
+                # receipt validation above still proves the transition.
+                continue
+            if terminal_stat.st_size <= 0:
+                raise CleanupSafetyError(f"restart cleanup target is empty: {terminal}")
+            if terminal.resolve(strict=True) in model_restarts:
+                blockers.append(
+                    {"path": str(terminal), "reason": "referenced_by_live_model"}
+                )
+                continue
+            targets.append(
+                {
+                    "bytes": terminal_stat.st_size,
+                    "device": terminal_stat.st_dev,
+                    "inode": terminal_stat.st_ino,
+                    "input_link": str(input_link),
+                    "input_link_device": None if input_stat is None else input_stat.st_dev,
+                    "input_link_inode": None if input_stat is None else input_stat.st_ino,
+                    "input_link_mtime_ns": (
+                        None if input_stat is None else input_stat.st_mtime_ns
+                    ),
+                    "kind": "restart",
+                    "mtime_ns": terminal_stat.st_mtime_ns,
+                    "path": str(terminal),
+                    "predecessor_attempt": str(predecessor),
+                    "predecessor_index": predecessor_index,
+                    "receipt": str(receipt),
+                    "receipt_sha256": _sha256_small(receipt),
+                    "restart_sha256": terminal_record["sha256"],
+                    "season": season.name,
+                    "successor_attempt": str(successor),
+                    "successor_index": predecessor_index + 1,
+                }
+            )
+    return targets, blockers, retained
+
+
 def build_plan(campaign: Campaign, active_jobs: Iterable[ActiveJob]) -> dict[str, Any]:
     """Build a conservative cleanup plan without modifying the filesystem."""
     if campaign.full_season_input_lists:
@@ -337,8 +499,10 @@ def build_plan(campaign: Campaign, active_jobs: Iterable[ActiveJob]) -> dict[str
     if len(set(season_names)) != len(season_names):
         raise CleanupSafetyError("campaign season names must be unique")
 
-    model_forcing, producer_targets, mapped_jobs = _active_references(campaign, active_jobs)
-    frontiers, frontier_evidence = _season_frontiers(campaign)
+    model_forcing, model_restarts, producer_targets, mapped_jobs = _active_references(
+        campaign, active_jobs
+    )
+    frontiers, completed_attempts, frontier_evidence = _season_frontiers(campaign)
     targets: list[dict[str, Any]] = []
     blockers: list[dict[str, str]] = []
 
@@ -392,6 +556,12 @@ def build_plan(campaign: Campaign, active_jobs: Iterable[ActiveJob]) -> dict[str
                 }
             )
 
+    restart_targets, restart_blockers, retained_restarts = _restart_cleanup_targets(
+        campaign, completed_attempts, model_restarts
+    )
+    targets.extend(restart_targets)
+    blockers.extend(restart_blockers)
+
     config_digest = _sha256_small(campaign.config_path)
     plan: dict[str, Any] = {
         "active_jobs": mapped_jobs,
@@ -403,6 +573,7 @@ def build_plan(campaign: Campaign, active_jobs: Iterable[ActiveJob]) -> dict[str
         "frontiers": frontier_evidence,
         "observed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "schema": PLAN_SCHEMA,
+        "retained_restarts": retained_restarts,
         "summary": {
             "blocked_count": len(blockers),
             "target_bytes": sum(item["bytes"] for item in targets),
@@ -460,39 +631,50 @@ def apply_plan(
             live = current_by_key.get(key)
             if live is None:
                 raise CleanupSafetyError(f"planned target is no longer present and safe: {key[1]}")
-            for field in (
-                "bytes",
-                "device",
-                "forcing_sha256",
-                "inode",
-                "kind",
-                "manifest",
-                "manifest_sha256",
-                "mtime_ns",
-                "path",
-                "ready",
-                "season",
-                "valid_time",
-            ):
-                if target.get(field) != live.get(field):
-                    raise CleanupSafetyError(f"planned target changed ({field}): {key[1]}")
+            if target != live:
+                changed = sorted(
+                    key for key in set(target) | set(live) if target.get(key) != live.get(key)
+                )
+                raise CleanupSafetyError(
+                    f"planned target changed ({', '.join(changed)}): {key[1]}"
+                )
 
         deleted = []
         marker_only_repairs = []
+        restart_links_removed = []
         deleted_bytes = 0
         for target in planned_targets:
             path = Path(target["path"])
-            ready = Path(target["ready"])
-            # Invalidate publication first.  A crash can leave an unready payload,
-            # which a later cleanup or hicarprep regeneration can safely recover.
-            ready.unlink(missing_ok=True)
-            _fsync_directory(path.parent)
-            if path.exists():
+            if target["kind"] == "forcing":
+                ready = Path(target["ready"])
+                # Invalidate publication first. A crash can leave an unready
+                # payload, which cleanup or regeneration can safely recover.
+                ready.unlink(missing_ok=True)
+                _fsync_directory(path.parent)
+                if path.exists():
+                    path.unlink()
+                    deleted.append(str(path))
+                    deleted_bytes += int(target["bytes"])
+                else:
+                    marker_only_repairs.append(str(path))
+                _fsync_directory(path.parent)
+            elif target["kind"] == "restart":
+                input_link = Path(target["input_link"])
+                # Remove the staging symlink first. If interrupted, the
+                # receipt can still validate the retained terminal payload.
+                if os.path.lexists(input_link):
+                    if not input_link.is_symlink():
+                        raise CleanupSafetyError(
+                            f"restart input changed before unlink: {input_link}"
+                        )
+                    input_link.unlink()
+                    restart_links_removed.append(str(input_link))
+                    _fsync_directory(input_link.parent)
                 path.unlink()
                 deleted.append(str(path))
                 deleted_bytes += int(target["bytes"])
             else:
-                marker_only_repairs.append(str(path))
+                raise CleanupSafetyError(f"unsupported cleanup target kind: {target['kind']}")
             _fsync_directory(path.parent)
 
     return {
@@ -500,9 +682,15 @@ def apply_plan(
         "deleted_bytes": deleted_bytes,
         "deleted_count": len(deleted),
         "deleted_paths": deleted,
-        "manifests_retained": [item["manifest"] for item in planned_targets],
+        "manifests_retained": [
+            item["manifest"] for item in planned_targets if item["kind"] == "forcing"
+        ],
         "marker_only_repair_count": len(marker_only_repairs),
         "marker_only_repair_paths": marker_only_repairs,
+        "restart_links_removed": restart_links_removed,
+        "restart_receipts_retained": [
+            item["receipt"] for item in planned_targets if item["kind"] == "restart"
+        ],
         "schema": "hicar-campaign-payload-cleanup-result-v1",
     }
 

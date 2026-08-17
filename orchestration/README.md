@@ -84,7 +84,10 @@ record becomes cleanup-eligible only when its valid time is strictly before
 the first incomplete segment of its season. This preserves the endpoint
 shared with the next segment. The cleanup planner additionally excludes every
 record referenced by a live model or input job and retains each publication
-manifest.
+manifest. An intermediate restart becomes eligible only after the completed
+successor has a valid transition receipt. The latest completed checkpoint of
+every season is always retained, including the final checkpoint of a finished
+season.
 
 Run the tool as a module on an authorized CPU node. Dry-run is the default:
 
@@ -107,4 +110,7 @@ Slurm-job safety. It refuses the entire operation if any planned target has
 changed. For each accepted record it removes the zero-byte `.ready` marker
 before the payload, so an interrupted cleanup never leaves a missing file
 advertised as ready. The `.hicarprep-manifest.json` remains as the compact
-validated input-generation receipt.
+validated input-generation receipt. For a restart it removes the successor's
+staging symlink before the consumed predecessor checkpoint, retaining
+`restart_transition.json`; interruption therefore leaves either the original
+fully verifiable transition or a resumable receipt-plus-terminal state.
