@@ -427,6 +427,7 @@ def _restart_cleanup_targets(
                     predecessor_index=predecessor_index,
                     successor_index=predecessor_index + 1,
                     campaign_commit=campaign_commit,
+                    verify_retained_payload=False,
                 )
             except (OSError, ValueError, KeyError, TypeError) as error:
                 raise CleanupSafetyError(

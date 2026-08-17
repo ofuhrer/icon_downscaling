@@ -334,8 +334,9 @@ def validate_receipt(
     predecessor_index: int,
     successor_index: int,
     campaign_commit: str,
+    verify_retained_payload: bool = True,
 ) -> dict:
-    """Validate a receipt against retained reports and any still-present payloads."""
+    """Validate a receipt and optionally reread any retained restart payload."""
     predecessor_attempt = predecessor_attempt.resolve()
     successor_attempt = successor_attempt.resolve()
     expected_receipt = receipt_path(successor_attempt)
@@ -426,7 +427,9 @@ def validate_receipt(
     if os.path.lexists(terminal_path):
         if terminal_path.is_symlink() or not terminal_path.is_file():
             raise ValueError("retained predecessor restart is not a regular file")
-        if terminal_path.stat().st_size != terminal_size or digest(terminal_path) != terminal_sha:
+        if terminal_path.stat().st_size != terminal_size:
+            raise ValueError("retained predecessor restart differs from transition receipt")
+        if verify_retained_payload and digest(terminal_path) != terminal_sha:
             raise ValueError("retained predecessor restart differs from transition receipt")
     if os.path.lexists(input_path):
         if not input_path.is_symlink():
@@ -498,6 +501,7 @@ def backfill_campaign(config_path: Path, repo_root: Path) -> list[Path]:
                     predecessor_index=predecessor_index,
                     successor_index=predecessor_index + 1,
                     campaign_commit=campaign_commit,
+                    verify_retained_payload=False,
                 )
                 continue
             created.append(

@@ -431,6 +431,14 @@ def test_backfill_is_atomic_and_idempotently_validates_existing_receipts(
     monkeypatch.setattr(RESTART_PROVENANCE, "source_commit", lambda path: "d" * 40)
 
     created = RESTART_PROVENANCE.backfill_campaign(config, ROOT)
+    original_digest = RESTART_PROVENANCE.digest
+
+    def reject_restart_reread(path):
+        if Path(path).suffix == ".nc":
+            raise AssertionError(f"existing receipt reread restart payload: {path}")
+        return original_digest(path)
+
+    monkeypatch.setattr(RESTART_PROVENANCE, "digest", reject_restart_reread)
     repeated = RESTART_PROVENANCE.backfill_campaign(config, ROOT)
 
     assert len(created) == 12

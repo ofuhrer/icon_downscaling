@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+import scripts.restart_transition_provenance as restart_provenance
 from orchestration.cleanup_campaign_payloads import (
     ActiveJob,
     CleanupSafetyError,
@@ -333,12 +334,22 @@ def test_full_season_input_lists_are_not_cleanup_eligible(tmp_path: Path) -> Non
         build_plan(campaign, [])
 
 
-def test_restart_plan_requires_receipt_and_preserves_latest_checkpoint(tmp_path: Path) -> None:
+def test_restart_plan_requires_receipt_and_preserves_latest_checkpoint(
+    tmp_path: Path, monkeypatch
+) -> None:
     campaign = configured_campaign(tmp_path)
     first = complete_segment(campaign, 0)
     second = complete_segment(campaign, 1)
     first_restart = Path(json.loads((first / "segment.json").read_text())["restart"])
     second_restart = Path(json.loads((second / "segment.json").read_text())["restart"])
+    original_digest = restart_provenance.digest
+
+    def reject_restart_reread(path):
+        if Path(path).suffix == ".nc":
+            raise AssertionError(f"cleanup reread attested restart payload: {path}")
+        return original_digest(path)
+
+    monkeypatch.setattr(restart_provenance, "digest", reject_restart_reread)
 
     plan = build_plan(campaign, [])
 

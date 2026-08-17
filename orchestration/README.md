@@ -25,7 +25,11 @@ The compact receipt binds both completed segment reports, the exact restart
 symlink target, restart size and SHA-256, and the campaign/attestor source
 identities.  The national evaluator accepts this receipt after the consumed
 intermediate restart and input symlink are removed, but still requires each
-season's final restart. Backfill all currently provable transitions with:
+season's final restart. Receipt creation reads the checkpoint once. Repeated
+backfill and cleanup validate the retained size and receipt identity without
+rereading tens of gigabytes; evaluator validation keeps full payload hashing
+as its default while a payload remains present. Backfill all currently
+provable transitions with:
 
 ```bash
 python scripts/restart_transition_provenance.py --campaign-config <source-campaign-config.json>
