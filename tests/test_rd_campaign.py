@@ -18,6 +18,11 @@ from orchestration.rd_campaign import (
 )
 
 
+@pytest.fixture(autouse=True)
+def no_live_slurm_input_jobs(monkeypatch) -> None:
+    monkeypatch.setattr(rd_campaign, "active_slurm_jobs", lambda: {})
+
+
 def hold_watch_lock(root, config, ready, release) -> None:
     with WatchControllerLock(Path(root), Path(config)):
         ready.set()
@@ -378,6 +383,43 @@ def test_bounded_input_submission_is_fair_and_season_state_does_not_collide(
         assert (
             configured.root / "input_jobs" / season / "20201002_0000" / "attempt-1.job"
         ).is_file()
+
+
+def test_bounded_input_cap_counts_active_jobs_outside_current_horizon(
+    tmp_path, monkeypatch
+) -> None:
+    configured = campaign(
+        tmp_path,
+        full_season_input_lists=False,
+        input_lookahead_segments=0,
+        segment_hours=1,
+        max_active_inputs=1,
+        seasons=[
+            {
+                "name": "autumn",
+                "start": "2020-10-02T00:00:00",
+                "end": "2020-10-02T03:00:00",
+                "static": "autumn.nc",
+            }
+        ],
+    )
+    completed = configured.root / "autumn" / "000_20201002_0000_20201002_0100" / "attempt-1"
+    completed.mkdir(parents=True)
+    (completed / "segment.complete").touch()
+    old_job = configured.root / "input_jobs" / "autumn" / "20201002_0000" / "attempt-1.job"
+    old_job.parent.mkdir(parents=True)
+    old_job.write_text("9876\n")
+
+    monkeypatch.setattr(
+        rd_campaign,
+        "active_slurm_jobs",
+        lambda: {"9876": ("RUNNING", "pp-long")},
+    )
+    submitted = []
+    monkeypatch.setattr(rd_campaign, "submit", lambda *args, **kwargs: submitted.append(args))
+
+    assert configured.prepare_inputs() == 0
+    assert submitted == []
 
 
 def test_bounded_lookahead_rejects_full_season_lists(tmp_path) -> None:

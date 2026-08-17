@@ -20,6 +20,7 @@ from typing import Iterator
 
 
 TIME = "%Y-%m-%dT%H:%M:%S"
+ACTIVE_SLURM_STATES = {"PENDING", "RUNNING", "CONFIGURING", "COMPLETING", "SUSPENDED"}
 
 
 class ControllerLockError(RuntimeError):
@@ -185,7 +186,10 @@ def slurm_state(job_file: Path) -> str:
         return "NOT_SUBMITTED"
     job = job_file.read_text().strip()
     active = subprocess.run(
-        ["squeue", "-h", "-j", job, "-o", "%T"], text=True, stdout=subprocess.PIPE
+        ["squeue", "-h", "-j", job, "-o", "%T"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
     ).stdout.strip()
     if active:
         return active.splitlines()[0]
@@ -200,7 +204,10 @@ def slurm_state(job_file: Path) -> str:
 def slurm_partition(job_file: Path) -> str:
     job = job_file.read_text().strip()
     active = subprocess.run(
-        ["squeue", "-h", "-j", job, "-o", "%P"], text=True, stdout=subprocess.PIPE
+        ["squeue", "-h", "-j", job, "-o", "%P"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
     ).stdout.strip()
     if active:
         return active.splitlines()[0]
@@ -210,6 +217,22 @@ def slurm_partition(job_file: Path) -> str:
         stdout=subprocess.PIPE,
     ).stdout.strip()
     return result.split()[0] if result else "unknown"
+
+
+def active_slurm_jobs() -> dict[str, tuple[str, str]]:
+    """Return one consistent snapshot of this user's live Slurm jobs."""
+    result = subprocess.run(
+        ["squeue", "-h", "-u", os.environ["USER"], "-o", "%i|%T|%P"],
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+    )
+    jobs: dict[str, tuple[str, str]] = {}
+    for line in result.stdout.splitlines():
+        fields = line.strip().split("|", 2)
+        if len(fields) == 3 and fields[1] in ACTIVE_SLURM_STATES:
+            jobs[fields[0]] = (fields[1], fields[2])
+    return jobs
 
 
 def submitted_attempt(directory: Path, maximum: int) -> tuple[int, str] | None:
@@ -501,7 +524,16 @@ class Campaign:
         input_jobs = self.root / "input_jobs"
         input_jobs.mkdir(parents=True, exist_ok=True)
         self.input_numba_cache.mkdir(parents=True, exist_ok=True)
+        live_jobs = active_slurm_jobs()
         active_by_partition = {partition: 0 for partition in self.input_partitions}
+        counted_jobs: set[str] = set()
+        for job_file in input_jobs.glob("*/*/attempt-*.job"):
+            job = job_file.read_text().strip()
+            live = live_jobs.get(job)
+            if live is None or job in counted_jobs:
+                continue
+            active_by_partition[live[1]] = active_by_partition.get(live[1], 0) + 1
+            counted_jobs.add(job)
         per_partition = max(1, self.max_active_inputs // len(self.input_partitions))
         submitted = 0
         for season, when, static in self.input_candidates(bounded=bounded):
@@ -514,9 +546,7 @@ class Campaign:
             directory = input_jobs / season_name / stamp(when)
             directory.mkdir(parents=True, exist_ok=True)
             previous = submitted_attempt(directory, self.max_attempts)
-            if previous and previous[1] in {"PENDING", "RUNNING", "CONFIGURING", "COMPLETING"}:
-                partition = slurm_partition(directory / f"attempt-{previous[0]}.job")
-                active_by_partition[partition] = active_by_partition.get(partition, 0) + 1
+            if previous and previous[1] in ACTIVE_SLURM_STATES:
                 continue
             attempt = 1 if previous is None else previous[0] + 1
             if attempt > self.max_attempts:
