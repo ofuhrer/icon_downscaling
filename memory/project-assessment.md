@@ -72,6 +72,23 @@ validated 73 exact ten-minute records, 13 forcing frames, a 12:00 restart, and
 synchronous; asynchronous GPU execution is not production-qualified for this
 national winter state. This is an execution-reliability workaround, not a
 scientific configuration change, and its throughput cost must remain visible.
+
+Coordinator `52d0fb2` reduces segmented-campaign retention without weakening
+restart continuity. Each completed join can be replaced by an atomic compact
+receipt binding both immutable `segment.json` digests, the exact checkpoint
+time and attempt identities, the predecessor restart size/SHA-256, the
+successor link target, and the campaign/attestor commits. Evaluation accepts
+that receipt after the intermediate payload and staging link are removed, but
+still requires the final seasonal checkpoint and fails closed on missing or
+altered evidence. The companion cleanup tool keeps forcing manifests and the
+latest checkpoint per unfinished season, selects forcing only behind the first
+incomplete segment, authenticates a saved dry-run plan, rechecks live Slurm
+references and file identities, and unpublishes markers/links before payloads.
+For the four 8-day events this changes projected peak retention from about
+8 TiB to roughly 2.5--3 TiB while preserving model output through evaluation.
+It deliberately does not retain forcing/restart payloads merely because an
+evaluator once required them.
+
 Static/forcing validation preserves exact
 HHL/HFL geometry, chronology, finite/range contracts, and runtime-domain
 identity. Deterministic eight-worker preparation reduced a representative
