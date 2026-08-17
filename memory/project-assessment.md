@@ -73,6 +73,18 @@ synchronous; asynchronous GPU execution is not production-qualified for this
 national winter state. This is an execution-reliability workaround, not a
 scientific configuration change, and its throughput cost must remain visible.
 
+The same longer campaign showed that the earlier 30 m s-1 wind ceiling was an
+event gate rather than a universal physical bound. Spring segment 6 reached
+38.46 m s-1 at 10 m and 34.56 m s-1 at 50 m in a sparse Monte Rosa footprint,
+while its exact 12 UTC prepared ICON forcing already reached 32.78 and 35.32
+m s-1 at the corresponding cells. Across 72 output times, only 118 ten-metre
+cell-times exceeded 30 m s-1 and the domain p99.99 was 21.43 m s-1. This is not
+the rejected 139 m s-1 dynamic-alpha pathology. The eight-day campaign uses a
+60 m s-1 gross-failure ceiling, records the actual maxima per segment, and
+keeps the 30 m s-1 failure plus forcing comparison as the explicit validator-
+only amendment evidence; executable, namelist, inputs, and model state are
+unchanged.
+
 Coordinator `52d0fb2` reduces segmented-campaign retention without weakening
 restart continuity. Each completed join can be replaced by an atomic compact
 receipt binding both immutable `segment.json` digests, the exact checkpoint

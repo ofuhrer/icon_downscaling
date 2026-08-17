@@ -25,8 +25,11 @@ The authoritative national specification is
 
 With dynamic alpha, an otherwise fixed winter initialization reached 139.30
 m s-1 at 10 m, versus 21.085 m s-1 for alpha 1. The campaign used alpha 1.
-Its 30 m s-1 validation bound is an explicit four-event gate, not a universal
-physical limit. The Sx-off comparison was event-dependent.
+Its 30 m s-1 validation bound was an explicit four-event gate, not a universal
+physical limit: in the eight-day spring event the prepared ICON forcing itself
+reached 35.3 m s-1 over Monte Rosa. The longer campaign therefore uses 60
+m s-1 only as a gross-failure ceiling and retains the actual maxima in every
+segment report. The Sx-off comparison was event-dependent.
 
 ## Trust checks
 
