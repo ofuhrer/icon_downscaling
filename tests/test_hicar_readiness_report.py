@@ -22,7 +22,7 @@ def dump(path, value):
     path.write_text(json.dumps(value) + "\n")
 
 
-def fixture(tmp_path):
+def fixture(tmp_path, evaluation_pair_count=24):
     results = tmp_path / "results"
     results.mkdir()
     campaign = {
@@ -36,8 +36,10 @@ def fixture(tmp_path):
         "pilot": {"continuous_completed": True, "segmented_completed": True,
             "same_executable_and_inputs": True, "integrated_hours_each": 2},
         "seasonal_campaign": {"events": [
-            {"season": season, "status": "complete", "integrated_hours": 24,
-             "segment_count": 2, "preemptible": True, "restart_linked": True,
+            {"season": season, "status": "complete",
+             "integrated_hours": evaluation_pair_count + 24,
+             "segment_count": (evaluation_pair_count + 24) // 12,
+             "preemptible": True, "restart_linked": True,
              "validation_passed": True} for season in MODULE.SEASONS]},
     }
     geometry = {"status": "PASS", "static_sha256": "c" * 64,
@@ -78,7 +80,7 @@ def fixture(tmp_path):
                         "equal_station_mean_rea_l_model_mean": 10.2 + metric_index,
                         "equal_station_mean_observation": 10.1 + metric_index})
                 summaries.append(summary)
-            for hour in range(1, 25):
+            for hour in range(1, evaluation_pair_count + 1):
                 lead = {"lead_hour": hour, "physical_lead_hour": hour + 24,
                     "metric": metric, "pair_count": 96,
                     "hicar_rmse": hicar + hour / 50, "rea_l_rmse": rea_l + hour / 100}
@@ -92,7 +94,7 @@ def fixture(tmp_path):
                         "observation_mean": 10.1 + metric_index})
                 leads[season].append(lead)
         for stratum_index, stratum in enumerate(MODULE.RIDGE_LEAD_STRATA):
-            for hour in range(1, 25):
+            for hour in range(1, evaluation_pair_count + 1):
                 leads[season].append({
                     "lead_hour": hour, "physical_lead_hour": hour + 24,
                     "stratum": stratum,
@@ -119,7 +121,9 @@ def fixture(tmp_path):
         "pairing_rule": "retain equal model pair counts of at least 20",
         "aggregation": "arithmetic means of station RMSEs",
         "lead_hour_aggregation": "all-sites pooled-pair RMSE"},
-        "coverage": {"events": {season: {} for season in MODULE.SEASONS},
+        "coverage": {"events": {
+            season: {"matched_model_time_count": evaluation_pair_count + 1}
+            for season in MODULE.SEASONS},
             "station_key_union_count": 166, "station_key_four_season_intersection_count": 12},
         "station_season_row_count": len(stations), "equal_station_summaries": summaries,
         "lead_hour_tables": leads}
@@ -255,6 +259,19 @@ def test_artifact_is_deterministic_and_canonical(tmp_path):
     dump(national_path, national)
     with pytest.raises(ValueError, match="all six headline metrics"):
         MODULE.derive_datasets(MODULE.load_evidence(tmp_path / "inputs.json"))
+
+
+def test_report_accepts_complete_seven_day_evaluation_windows(tmp_path):
+    evidence = MODULE.load_evidence(fixture(tmp_path, evaluation_pair_count=168))
+    artifact = MODULE.build_artifact(evidence)
+
+    lead = artifact["snapshot"]["datasets"]["lead_metrics"]
+    ridge_lead = artifact["snapshot"]["datasets"]["ridge_lead_metrics"]
+    assert len(lead) == 4 * len(MODULE.METRICS) * 168
+    assert len(ridge_lead) == 4 * len(MODULE.RIDGE_LEAD_STRATA) * 168
+    assert {row["lead_hour"] for row in lead} == set(range(1, 169))
+    assert {row["evaluation_segment_index"] for row in ridge_lead} == set(range(14))
+    assert {row["turnover_relative_hour"] for row in ridge_lead} == set(range(1, 13))
 
 
 def test_notebook_executes_top_to_bottom(tmp_path, monkeypatch):

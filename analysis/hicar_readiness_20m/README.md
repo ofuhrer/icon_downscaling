@@ -1,4 +1,4 @@
-# HICAR 20 m readiness report
+# HICAR 20 m verification report
 
 This directory is the reproducible, local reporting surface for the national
 four-season HICAR assessment.  It is intentionally downstream-only: it does
@@ -41,16 +41,17 @@ The report never treats all station keys as valid for every metric: every row
 shows its actual station or observation count, and wind results include counts
 by elevation and terrain class. Seasonal headline results use every eligible
 station available in that season; each metric's exact four-season eligible
-station intersection is retained as a population-sensitivity table. For each
-24-hour event the report requires evaluation-relative leads 1--24 for all six
-ending-hour headline metrics. Physical simulation lead is retained separately;
+station intersection is retained as a population-sensitivity table. The
+report derives one common positive evaluation duration from the inclusive
+matched-endpoint counts and then requires every season and all six ending-hour
+headline metrics to contain exactly leads 1 through that duration. This is 168
+scored hours for the current eight-day simulations after their first 24 hours
+are excluded as spin-up. Physical simulation lead is retained separately;
 evaluation lead 0 initializes the REA-L interval baseline and is not scored.
 Wind-vector lead trajectories are also retained for terrain-ridge and
-at-least-2000 m station strata so the 11--14 h transition around the restart
-can be inspected directly. The few stations at or above 3000 m remain named
-station evidence rather than a network aggregate. Lead 24 is shown but
-excluded from descriptive fitted slopes because the staged instantaneous
-REA-L fields switch native cycle there.
+at-least-2000 m station strata across every 12-hour restart boundary. The few
+stations at or above 3000 m remain named station evidence rather than a
+network aggregate.
 Seasonal tables use equal-station network RMSE
 (`sqrt(mean(station RMSE squared))`) as the primary score. They separately
 retain the arithmetic mean of station RMSEs and the observation-pair-pooled

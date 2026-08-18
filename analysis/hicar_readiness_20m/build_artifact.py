@@ -37,7 +37,7 @@ RIDGE_LEAD_STRATA = {
 }
 FINDINGS = ("seasonal_skill", "lead_time", "elevation_wind",
             "footprint_sensitivity", "inputs_and_grid", "restart")
-TITLE = "HICAR 20 m national four-season readiness assessment"
+TITLE = "HICAR 20 m national four-season verification"
 SEASON_ORDER = "CASE season WHEN 'DJF' THEN 1 WHEN 'MAM' THEN 2 WHEN 'JJA' THEN 3 ELSE 4 END"
 QUERIES = {
     "seasonal_metrics": f"SELECT * FROM seasonal ORDER BY {SEASON_ORDER}, metric_order",
@@ -156,6 +156,25 @@ def normalized_difference(hicar, rea_l):
     return (hicar - rea_l) / scale if scale else 0.0
 
 
+def evaluation_pair_count(national):
+    """Return the common positive whole-hour evaluation span for all events."""
+    try:
+        endpoint_counts = {
+            int(event["matched_model_time_count"])
+            for event in national["coverage"]["events"].values()
+        }
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError(
+            "national coverage must report matched_model_time_count for every season"
+        ) from error
+    if len(endpoint_counts) != 1:
+        raise ValueError("all seasons must have the same matched endpoint count")
+    endpoint_count = next(iter(endpoint_counts))
+    if endpoint_count < 2:
+        raise ValueError("each season needs at least two matched hourly endpoints")
+    return endpoint_count - 1
+
+
 def scalar_stats(row, label, prefix):
     """Read bias/model/observation means from enhanced postprocessor rows."""
     if prefix == "equal_station_mean_":
@@ -193,6 +212,8 @@ def scalar_stats(row, label, prefix):
 
 def derive_datasets(evidence):
     national = evidence["national_summary"]
+    event_pair_count = evaluation_pair_count(national)
+    expected_lead_hours = set(range(1, event_pair_count + 1))
     seasonal = []
     seasonal_sensitivity = []
     for row in national["equal_station_summaries"]:
@@ -276,7 +297,7 @@ def derive_datasets(evidence):
     for season in SEASONS:
         for metric in METRICS:
             hours = [row["lead_hour"] for row in lead if row["season"] == season and row["metric"] == metric]
-            expected = set(range(1, 25))
+            expected = expected_lead_hours
             if len(hours) != len(expected) or set(hours) != expected:
                 raise ValueError(f"{season}/{metric} lead hours must be exactly {sorted(expected)}; got {sorted(hours)}")
 
@@ -293,7 +314,8 @@ def derive_datasets(evidence):
                 "lead_hour": hour,
                 "physical_lead_hour": int(row["physical_lead_hour"]),
                 "segment": "first" if hour <= 12 else "restarted",
-                "turnover_relative_hour": hour - 12,
+                "evaluation_segment_index": (hour - 1) // 12,
+                "turnover_relative_hour": (hour - 1) % 12 + 1,
                 "stratum": stratum,
                 "stratum_label": RIDGE_LEAD_STRATA[stratum],
                 "pair_count": int(row["pair_count"]),
@@ -314,7 +336,7 @@ def derive_datasets(evidence):
                 for row in ridge_lead
                 if row["season"] == season and row["stratum"] == stratum
             ]
-            expected = set(range(1, 25))
+            expected = expected_lead_hours
             if len(hours) != len(expected) or set(hours) != expected:
                 raise ValueError(
                     f"{season}/{stratum} wind-vector lead hours must be exactly "
@@ -473,8 +495,8 @@ def build_artifact(evidence):
              "tooltip": [encoding("pair_count", "Paired observations"),
                          encoding("physical_lead_hour", "Physical simulation lead", unit="h"),
                          encoding("unit", "Native unit", "text")]}},
-        {"id": "ridge_lead_metrics", "title": "Ridge/high-elevation wind-vector skill around restart turnover",
-         "subtitle": "Lead 12 is the first segment endpoint; lead 13 is the first unique restarted-segment output",
+        {"id": "ridge_lead_metrics", "title": "Ridge/high-elevation wind-vector skill across evaluated lead hours",
+         "subtitle": "Twelve-hour restart boundaries occur at leads 12, 24, ...; lead 13 is the first output after the first boundary",
          "type": "line", "dataset": "ridge_lead_metrics", "sourceId": "ridge_lead_metrics_query",
          "encodings": {"x": encoding("lead_hour", "Lead hour", unit="h"),
              "y": encoding("normalized_rmse_difference", "Normalized RMSE difference"),
