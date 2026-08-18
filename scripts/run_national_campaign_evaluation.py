@@ -291,8 +291,11 @@ def command_plan(
             )
         if not start <= evaluation_start < evaluation_end <= end:
             raise ValueError(f"{item['name']}: evaluation window lies outside the campaign")
-        if evaluation_end - evaluation_start != timedelta(hours=24):
-            raise ValueError(f"{item['name']}: evaluation window is not 24 hours")
+        evaluation_duration_seconds = (evaluation_end - evaluation_start).total_seconds()
+        if evaluation_duration_seconds <= 0 or evaluation_duration_seconds % 3600:
+            raise ValueError(
+                f"{item['name']}: evaluation window is not a positive whole-hour interval"
+            )
         if any(
             (value - start).total_seconds() % 3600
             for value in (evaluation_start, evaluation_end)

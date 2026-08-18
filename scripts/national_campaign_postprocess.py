@@ -701,9 +701,8 @@ def nonnegative_count(value: object, context: str) -> int:
 def validate_wind_source_reports(
     reports: dict[str, tuple[Path, dict]],
 ) -> dict[str, dict]:
-    """Prove the fixed 24-hour wind-decision input contract for each event."""
+    """Prove an exact whole-hour wind-decision input contract for each event."""
     evidence: dict[str, dict] = {}
-    expected_lead_keys = {str(value) for value in REQUIRED_WIND_PHYSICAL_LEADS}
     for season in SEASONS:
         path, report = reports[season]
         sampling = report.get("sampling")
@@ -722,18 +721,27 @@ def validate_wind_source_reports(
         )
         if evaluation_start - simulation_start != timedelta(hours=24):
             raise ValueError(f"{path}: wind evaluation must start at physical lead 24")
-        if evaluation_end - evaluation_start != timedelta(hours=24):
-            raise ValueError(f"{path}: wind evaluation endpoints must span exactly 24 hours")
+        duration_seconds = (evaluation_end - evaluation_start).total_seconds()
+        if duration_seconds <= 0 or duration_seconds % 3600:
+            raise ValueError(
+                f"{path}: wind evaluation endpoints must span a positive whole-hour interval"
+            )
+        event_pair_count = int(duration_seconds // 3600)
+        matched_endpoint_count = event_pair_count + 1
+        evaluation_start_lead = int(
+            (evaluation_start - simulation_start).total_seconds() // 3600
+        )
+        physical_leads = tuple(
+            range(evaluation_start_lead + 1, evaluation_start_lead + event_pair_count + 1)
+        )
+        expected_lead_keys = {str(value) for value in physical_leads}
 
         raw_times = report.get("matched_model_times")
-        if (
-            not isinstance(raw_times, list)
-            or len(raw_times) != REQUIRED_WIND_MATCHED_ENDPOINT_COUNT
-        ):
+        if not isinstance(raw_times, list) or len(raw_times) != matched_endpoint_count:
             count = len(raw_times) if isinstance(raw_times, list) else "invalid"
             raise ValueError(
                 f"{path}: wind decision requires exactly "
-                f"{REQUIRED_WIND_MATCHED_ENDPOINT_COUNT} matched endpoints; got {count}"
+                f"{matched_endpoint_count} matched endpoints; got {count}"
             )
         matched_times = [
             parsed_utc_time(value, f"{path}: matched_model_times[{index}]")
@@ -741,21 +749,26 @@ def validate_wind_source_reports(
         ]
         expected_times = [
             evaluation_start + timedelta(hours=index)
-            for index in range(REQUIRED_WIND_MATCHED_ENDPOINT_COUNT)
+            for index in range(matched_endpoint_count)
         ]
         if matched_times != expected_times:
             raise ValueError(
-                f"{path}: matched_model_times must be the 25 ordered inclusive "
+                f"{path}: matched_model_times must be the {matched_endpoint_count} ordered inclusive "
                 "hourly evaluation endpoints"
             )
 
         lead_metrics = report.get("lead_time_metrics")
         if not isinstance(lead_metrics, dict) or set(lead_metrics) != expected_lead_keys:
-            raise ValueError(f"{path}: lead_time_metrics physical leads must be exactly 25..48")
-        evaluation_start_lead = int((evaluation_start - simulation_start).total_seconds() // 3600)
+            raise ValueError(
+                f"{path}: lead_time_metrics physical leads must be exactly "
+                f"{physical_leads[0]}..{physical_leads[-1]}"
+            )
         normalized_leads = {int(raw_lead) - evaluation_start_lead for raw_lead in lead_metrics}
-        if normalized_leads != set(range(1, 25)):
-            raise ValueError(f"{path}: normalized wind evaluation leads must be exactly 1..24")
+        if normalized_leads != set(range(1, event_pair_count + 1)):
+            raise ValueError(
+                f"{path}: normalized wind evaluation leads must be exactly "
+                f"1..{event_pair_count}"
+            )
 
         accounting = report.get("common_triplet_accounting", {}).get("metrics", {})
         aggregate_metrics = report.get("metrics")
@@ -838,10 +851,11 @@ def validate_wind_source_reports(
             }
         evidence[season] = {
             "matched_endpoint_count": len(matched_times),
+            "common_ending_hour_pair_count": event_pair_count,
             "first_matched_endpoint": matched_times[0].isoformat(),
             "last_matched_endpoint": matched_times[-1].isoformat(),
-            "physical_leads": list(REQUIRED_WIND_PHYSICAL_LEADS),
-            "normalized_leads": list(range(1, 25)),
+            "physical_leads": list(physical_leads),
+            "normalized_leads": list(range(1, event_pair_count + 1)),
             "common_triplet_reconciliation": reconciled,
         }
     return evidence
@@ -897,8 +911,14 @@ def delta_direction(value: float) -> str:
     return "neutral"
 
 
-def wind_decision_readout(rows: list[dict]) -> dict:
+def wind_decision_readout(
+    rows: list[dict], required_pair_count: int = REQUIRED_WIND_EVENT_PAIR_COUNT
+) -> dict:
     """Apply the fixed four-event wind added-value rule without significance claims."""
+    if required_pair_count < MINIMUM_STATION_EVENT_PAIRS:
+        raise ValueError(
+            "wind decision required_pair_count must satisfy the minimum station-event count"
+        )
     required_fields = {
         "season",
         "event_name",
@@ -966,7 +986,7 @@ def wind_decision_readout(rows: list[dict]) -> dict:
             for row in wind_rows
             if row["season"] == season
             and row["metric"] == metric
-            and row["pair_count"] == REQUIRED_WIND_EVENT_PAIR_COUNT
+            and row["pair_count"] == required_pair_count
         }
         for season in SEASONS
         for metric in WIND_METRICS
@@ -998,10 +1018,10 @@ def wind_decision_readout(rows: list[dict]) -> dict:
                 if row["season"] == season and row["station_key"] == station_key
             ]
             pair_counts = {row["metric"]: row["pair_count"] for row in station_rows}
-            if pair_counts != {metric: REQUIRED_WIND_EVENT_PAIR_COUNT for metric in WIND_METRICS}:
+            if pair_counts != {metric: required_pair_count for metric in WIND_METRICS}:
                 raise ValueError(
                     f"{season}/{station_key}: vector and speed must each have exactly "
-                    f"{REQUIRED_WIND_EVENT_PAIR_COUNT} common ending-hour pairs"
+                    f"{required_pair_count} common ending-hour pairs"
                 )
     for station_key in cohort:
         metadata = {
@@ -1202,12 +1222,13 @@ def wind_decision_readout(rows: list[dict]) -> dict:
                 "two-metric station cohort of station RMSE squared)"
             ),
             "cohort": (
-                "Exact intersection of station keys with 24 common ending-hour pairs "
+                f"Exact intersection of station keys with {required_pair_count} common "
+                "ending-hour pairs "
                 "for both wind_vector and wind_speed_10m_m_s in all four events"
             ),
             "source_report_contract": (
-                "Each event has exactly 25 ordered inclusive hourly matched_model_times; "
-                "lead_time_metrics has physical leads 25..48, normalized to 1..24"
+                f"Each event has exactly {required_pair_count + 1} ordered inclusive hourly "
+                "matched_model_times and exact contiguous physical/normalized lead metrics"
             ),
             "delta_sign": "negative favors HICAR",
             "material_threshold": "max(0.10 m s-1, 0.05 * REA-L RMSE)",
@@ -1231,7 +1252,7 @@ def wind_decision_readout(rows: list[dict]) -> dict:
             },
             "required_event_counts": {
                 "event_count": 4,
-                "common_ending_hour_pairs_per_station_event_metric": REQUIRED_WIND_EVENT_PAIR_COUNT,
+                "common_ending_hour_pairs_per_station_event_metric": required_pair_count,
                 "vector_nondegradation_minimum": 3,
                 "vector_material_improvement_minimum": 2,
                 "vector_leave_one_event_out_nondegradation_minimum": 4,
@@ -1412,6 +1433,15 @@ def run(args: argparse.Namespace) -> dict:
 
     reports = {season: (specs[season], load_report(specs[season])) for season in SEASONS}
     wind_source_evidence = validate_wind_source_reports(reports)
+    wind_pair_counts = {
+        evidence["common_ending_hour_pair_count"]
+        for evidence in wind_source_evidence.values()
+    }
+    if len(wind_pair_counts) != 1:
+        raise ValueError(
+            "wind decision requires the same whole-hour evaluation duration in all seasons"
+        )
+    wind_pair_count = next(iter(wind_pair_counts))
     common_keys, common_provenance = load_common_keys(
         args.common_65_report, args.common_65_site_file
     )
@@ -1428,14 +1458,17 @@ def run(args: argparse.Namespace) -> dict:
     if not rows:
         raise ValueError("no valid paired station-season RMSE rows")
     wind_rows, wind_exclusions, _ = station_season_rows(reports, common_keys, set(WIND_METRICS))
-    wind_decision = wind_decision_readout(wind_rows)
+    wind_decision = wind_decision_readout(
+        wind_rows, required_pair_count=wind_pair_count
+    )
     wind_decision["data_quality"] = {
         "station_event_exclusions": wind_exclusions,
         "source_report_contract": wind_source_evidence,
         "population_policy": (
             "The decision cohort is the exact four-event/two-metric intersection. "
-            "Every retained station-event metric has 24 common pairs; source reports "
-            "prove 25 inclusive endpoints and physical leads 25..48."
+            f"Every retained station-event metric has {wind_pair_count} common pairs; "
+            f"source reports prove {wind_pair_count + 1} inclusive endpoints and exact "
+            "contiguous physical leads."
         ),
     }
     lead_tables, lead_exclusions = lead_hour_tables(reports, selected_metrics)

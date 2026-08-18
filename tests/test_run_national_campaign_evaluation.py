@@ -46,7 +46,7 @@ def test_decode_times_normalizes_only_the_known_subsecond_serializer_offset(tmp_
         MODULE.decode_times(rejected)
 
 
-def build_campaign(tmp_path):
+def build_campaign(tmp_path, campaign_hours=48, evaluation_spinup_hours=24):
     campaign_root = tmp_path / "campaign"
     data_root = tmp_path / "data"
     output_root = tmp_path / "evaluation"
@@ -60,8 +60,8 @@ def build_campaign(tmp_path):
     output_times = {}
     for name, raw_start in seasons:
         start = MODULE.parse_time(raw_start)
-        end = start + MODULE.timedelta(hours=48)
-        evaluation_start = start + MODULE.timedelta(hours=24)
+        end = start + MODULE.timedelta(hours=campaign_hours)
+        evaluation_start = start + MODULE.timedelta(hours=evaluation_spinup_hours)
         static = tmp_path / "static" / f"{name}.nc"
         static.parent.mkdir(exist_ok=True)
         static.write_bytes(b"static")
@@ -70,7 +70,7 @@ def build_campaign(tmp_path):
         (data_root / "observations" / f"{name}.csv").write_text("observations\n")
         (data_root / "reference" / f"{name}.csv").write_text("reference\n")
         previous_restart = None
-        for index in range(4):
+        for index in range(campaign_hours // 12):
             segment_start = start + MODULE.timedelta(hours=12 * index)
             segment_end = segment_start + MODULE.timedelta(hours=12)
             segment_root = (
@@ -168,7 +168,6 @@ def test_dry_run_builds_complete_command_plan_without_netcdf(tmp_path, monkeypat
     monkeypatch.setattr(
         MODULE, "source_identity", lambda path: {"repo_root": str(path), "commit": "a" * 40}
     )
-
     assert (
         MODULE.main(
             [
@@ -220,6 +219,24 @@ def test_dry_run_builds_complete_command_plan_without_netcdf(tmp_path, monkeypat
             for segment in item["segments"]
         )
         for item in manifest["inputs"].values()
+    )
+
+
+def test_command_plan_accepts_seven_day_post_spinup_windows(tmp_path, monkeypatch):
+    config, data_root, output_root, output_times = build_campaign(
+        tmp_path, campaign_hours=192, evaluation_spinup_hours=24
+    )
+    monkeypatch.setattr(MODULE, "decode_times", lambda path: output_times[path])
+
+    plan = MODULE.command_plan(config, ROOT, data_root, output_root, "python3")
+
+    assert all(len(item["segments"]) == 16 for item in plan["inputs"].values())
+    assert all(len(item["evaluation_times"]) == 169 for item in plan["inputs"].values())
+    assert all(
+        MODULE.parse_time(item["evaluation_end"])
+        - MODULE.parse_time(item["evaluation_start"])
+        == MODULE.timedelta(hours=168)
+        for item in plan["inputs"].values()
     )
 
 

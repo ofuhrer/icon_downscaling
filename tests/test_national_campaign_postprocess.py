@@ -432,7 +432,7 @@ def test_network_pooled_rmse_uses_pair_counts_and_preserves_equal_station_mean()
     )
 
 
-def make_wind_decision_rows(event_deltas, site_count=30):
+def make_wind_decision_rows(event_deltas, site_count=30, pair_count=24):
     rows = []
     for season, (vector_delta, speed_delta) in zip(MODULE.SEASONS, event_deltas, strict=True):
         for index in range(site_count):
@@ -455,7 +455,7 @@ def make_wind_decision_rows(event_deltas, site_count=30):
                         "station_elevation_m": 1600.0 if index < 10 else 500.0,
                         "terrain_class": terrain,
                         "metric": metric_name,
-                        "pair_count": 24,
+                        "pair_count": pair_count,
                         "hicar_rmse": 2.0 + delta,
                         "rea_l_rmse": 2.0,
                         "rmse_delta_hicar_minus_rea_l": delta,
@@ -701,6 +701,49 @@ def test_wind_source_contract_proves_times_leads_and_reconciles_counts(tmp_path)
         ]
         == 67 * 24
     )
+
+
+def test_wind_source_and_decision_contract_accepts_seven_day_events(tmp_path):
+    reports = source_reports(tmp_path)
+    pair_count = 168
+    for path, report in reports.values():
+        evaluation_start = datetime.fromisoformat(
+            report["sampling"]["evaluation_start_inclusive"]
+        )
+        report["sampling"]["evaluation_end_inclusive"] = (
+            evaluation_start + timedelta(hours=pair_count)
+        ).isoformat()
+        report["matched_model_times"] = [
+            (evaluation_start + timedelta(hours=index)).isoformat()
+            for index in range(pair_count + 1)
+        ]
+        template = next(iter(report["lead_time_metrics"].values()))
+        report["lead_time_metrics"] = {
+            str(lead): template for lead in range(25, 25 + pair_count)
+        }
+        for values in report["site_metrics"].values():
+            for source in MODULE.SOURCES:
+                for metric_name in MODULE.WIND_METRICS:
+                    values[source][metric_name]["count"] = pair_count
+        refresh_wind_report_totals(report)
+        path.write_text(json.dumps(report))
+
+    evidence = MODULE.validate_wind_source_reports(
+        {season: (path, MODULE.load_report(path)) for season, (path, _) in reports.items()}
+    )
+    decision = MODULE.wind_decision_readout(
+        make_wind_decision_rows([(-0.2, 0.0)] * 4, pair_count=pair_count),
+        required_pair_count=pair_count,
+    )
+
+    assert {item["common_ending_hour_pair_count"] for item in evidence.values()} == {
+        pair_count
+    }
+    assert all(item["matched_endpoint_count"] == 169 for item in evidence.values())
+    assert evidence["DJF"]["physical_leads"] == list(range(25, 193))
+    assert decision["rule"]["required_event_counts"][
+        "common_ending_hour_pairs_per_station_event_metric"
+    ] == pair_count
 
 
 @pytest.mark.parametrize("broken_field", ["matched_model_times", "lead_time_metrics"])
