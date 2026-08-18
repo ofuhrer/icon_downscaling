@@ -23,6 +23,12 @@ Use `hicarprep`; fieldextra atmospheric preprocessing is retired.
   but serialize regular U/V earth-relative.
 - Require `target_w_vertical_coordinate=authoritative_static_HFL` and
   `target_w_terrain_wind_basis=HICAR_grid_relative`; older records are stale.
+- Require every native W value to be finite. Its conservative magnitude bound
+  may be evaluated on the exact fingerprint-matched scalar-RBF donor support;
+  record global extrema and excluded-cell counts, and retain the independent
+  all-target-cell 100 m/s forcing validator. This prevents irrelevant finite
+  archive extremes outside the target stencil from blocking a domain without
+  relaxing any value HICAR consumes.
 - Regular forcing contains P/T/QV/QC/QI/U/V/W/SST and uses
   `relax_filters=.True.`. Sparse LBC is an explicit scalar-only experiment and
   never inserts winds.

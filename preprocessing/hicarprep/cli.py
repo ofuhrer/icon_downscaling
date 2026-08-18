@@ -220,6 +220,7 @@ def _decode_icon_atmosphere(args: argparse.Namespace) -> int:
         args.output,
         missing_qi_policy=args.missing_qi_policy,
         compression_level=args.compression_level,
+        range_support_weights=args.range_support_weights,
     )
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 0
@@ -337,6 +338,14 @@ def parser() -> argparse.ArgumentParser:
     decode_atmosphere.add_argument("--icon-extpar", type=Path, required=True)
     decode_atmosphere.add_argument("--valid-time", required=True)
     decode_atmosphere.add_argument("--output", type=Path, required=True)
+    decode_atmosphere.add_argument(
+        "--range-support-weights",
+        type=Path,
+        help=(
+            "validate native W magnitude on the exact scalar-RBF donor support; "
+            "all source values must still be finite"
+        ),
+    )
     decode_atmosphere.add_argument(
         "--missing-qi-policy",
         choices=("error", "source-absent-zero"),

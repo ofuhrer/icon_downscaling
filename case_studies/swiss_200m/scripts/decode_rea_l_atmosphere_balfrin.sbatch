@@ -14,6 +14,7 @@
 #   ICON_EXTPAR                   native-grid EXTPAR file
 #   ICON_MISSING_QI_POLICY        error or source-absent-zero
 #   ICON_NATIVE_COMPRESSION_LEVEL lossless deflate 0..9 (default 1)
+#   ICON_ATMOSPHERE_RANGE_SUPPORT_WEIGHTS scalar target-grid RBF weights
 #   REA_FDB_IMAGE_OVERRIDE        FDB uenv image
 #SBATCH --job-name=rea-l-atmosphere
 #SBATCH --partition=pp-short
@@ -43,6 +44,7 @@ valid_time=${ICON_ATMOSPHERE_VALID_TIME:?Set ICON_ATMOSPHERE_VALID_TIME}
 icon_extpar=${ICON_EXTPAR:-/oprusers/osm/opr.inn/data/ICON_INPUT/ICON-CH1-EPS/external_parameter_icon_grid_0001_R19B08_mch_tuned.nc}
 missing_qi_policy=${ICON_MISSING_QI_POLICY:-source-absent-zero}
 compression_level=${ICON_NATIVE_COMPRESSION_LEVEL:-1}
+range_support_weights=${ICON_ATMOSPHERE_RANGE_SUPPORT_WEIGHTS:-}
 image=${REA_FDB_IMAGE_OVERRIDE:-${REA_FDB_IMAGE:?REA_FDB_IMAGE is required}}
 uenv_bin=${UENV_BIN:-/usr/bin/uenv}
 hicarprep=$repo_root/scripts/hicarprep.py
@@ -55,6 +57,10 @@ case "$missing_qi_policy" in error|source-absent-zero) ;; *) echo "unsupported Q
 for path in "$repo_root" "$icon_extpar" "$uenv_bin" "$hicarprep"; do
   test -e "$path" || { echo "missing required path: $path" >&2; exit 2; }
 done
+test -z "$range_support_weights" || test -s "$range_support_weights" || {
+  echo "missing W range-support weights: $range_support_weights" >&2
+  exit 2
+}
 test ! -e "$output" || { echo "refusing to overwrite $output" >&2; exit 2; }
 test ! -e "$output.ready" || { echo "refusing to overwrite $output.ready" >&2; exit 2; }
 mkdir -p "$(dirname "$output")" "$SCRATCH/icon_hicar/tmp"
@@ -128,6 +134,10 @@ geometry_count=$("$uenv_bin" run --view=rea-l-ch1 "$image" -- grib_count "$work/
 test "$dynamic_count" = 561
 test "$geometry_count" = 83
 
+range_support_args=()
+test -z "$range_support_weights" || range_support_args=(
+  --range-support-weights "$range_support_weights"
+)
 "$uenv_bin" run --view=rea-l-ch1 "$image" -- python "$hicarprep" \
   decode-icon-atmosphere \
   --dynamic-grib "$work/dynamic.grib" \
@@ -135,6 +145,7 @@ test "$geometry_count" = 83
   --icon-extpar "$icon_extpar" \
   --valid-time "$valid_time" \
   --missing-qi-policy "$missing_qi_policy" \
+  "${range_support_args[@]}" \
   --compression-level "$compression_level" \
   --output "$output"
 test -s "$output"

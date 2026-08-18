@@ -150,6 +150,7 @@ ICON_ATMOSPHERE_CYCLE_TIME=0000 \
 ICON_ATMOSPHERE_STEP_HOURS="$((10#$step))" \
 ICON_ATMOSPHERE_VALID_TIME="${valid}Z" \
 ICON_MISSING_QI_POLICY=source-absent-zero \
+ICON_ATMOSPHERE_RANGE_SUPPORT_WEIGHTS="$weights" \
 bash "$repo_root/case_studies/swiss_200m/scripts/decode_rea_l_atmosphere_balfrin.sbatch"
 
 cat > "$work/skt.mars" <<EOF
