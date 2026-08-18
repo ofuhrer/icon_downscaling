@@ -226,7 +226,13 @@ def index_inventory(
     return inventory, common
 
 
-def decode_values(field, spec: FieldSpec, cell_count: int) -> np.ndarray:
+def decode_values(
+    field,
+    spec: FieldSpec,
+    cell_count: int,
+    *,
+    range_support_indices: np.ndarray | None = None,
+) -> np.ndarray:
     raw = np.ma.asarray(field.to_numpy(flatten=True))
     if np.ma.isMaskedArray(raw) and np.any(np.ma.getmaskarray(raw)):
         raise ValueError(f"{spec.name} contains bitmap/missing values")
@@ -235,9 +241,12 @@ def decode_values(field, spec: FieldSpec, cell_count: int) -> np.ndarray:
         raise ValueError(f"{spec.name} has {values.size} cells, expected {cell_count}")
     if not np.isfinite(values).all():
         raise ValueError(f"{spec.name} contains non-finite values")
-    if np.any((values < spec.minimum) | (values > spec.maximum)):
+    checked = values if range_support_indices is None else values[range_support_indices]
+    if np.any((checked < spec.minimum) | (checked > spec.maximum)):
+        scope = "all source cells" if range_support_indices is None else "required source support"
         raise ValueError(
-            f"{spec.name} lies outside conservative range {spec.minimum}..{spec.maximum}"
+            f"{spec.name} lies outside conservative range {spec.minimum}..{spec.maximum} "
+            f"on {scope}"
         )
     return values
 
@@ -271,6 +280,7 @@ def decode_icon_atmosphere(
     *,
     missing_qi_policy: str = "error",
     compression_level: int = 1,
+    range_support_weights: Path | None = None,
 ) -> dict[str, object]:
     """Decode one operational REA-L valid time into canonical native ICON NetCDF."""
     if output.exists():
@@ -311,6 +321,20 @@ def decode_icon_atmosphere(
         raise ValueError("EXTPAR clat is outside radian latitude range")
     if np.any((clon < -2.0 * np.pi) | (clon > 2.0 * np.pi)):
         raise ValueError("EXTPAR clon is outside radian longitude range")
+
+    w_range_support = None
+    range_support_weights_sha256 = ""
+    if range_support_weights is not None:
+        from .remap import RBFWeights, grid_fingerprint
+
+        weights = RBFWeights.read(range_support_weights)
+        source_fingerprint = grid_fingerprint(clat, clon)
+        if weights.source_fingerprint != source_fingerprint:
+            raise ValueError("range-support weights do not belong to the native ICON grid")
+        w_range_support = np.unique(weights.donor_index)
+        if w_range_support.size == 0 or int(w_range_support[-1]) >= cell_count:
+            raise ValueError("range-support weights contain invalid native source indices")
+        range_support_weights_sha256 = sha256(range_support_weights)
 
     output.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
@@ -386,8 +410,25 @@ def decode_icon_atmosphere(
                 qi[out_level, :] = 0.0
 
             previous_hhl = None
+            w_source_minimum = np.inf
+            w_source_maximum = -np.inf
+            w_outside_support_range_count = 0
             for out_level, source in enumerate(source_half_level):
-                w_values = decode_values(dynamic["W"][int(source)], HALF_LEVEL_SPECS[0], cell_count)
+                w_values = decode_values(
+                    dynamic["W"][int(source)],
+                    HALF_LEVEL_SPECS[0],
+                    cell_count,
+                    range_support_indices=w_range_support,
+                )
+                w_source_minimum = min(w_source_minimum, float(np.min(w_values)))
+                w_source_maximum = max(w_source_maximum, float(np.max(w_values)))
+                if w_range_support is not None:
+                    w_outside_support_range_count += int(
+                        np.count_nonzero(
+                            (w_values < HALF_LEVEL_SPECS[0].minimum)
+                            | (w_values > HALF_LEVEL_SPECS[0].maximum)
+                        )
+                    )
                 hhl_values = decode_values(
                     geometry["HHL"][int(source)], HALF_LEVEL_SPECS[1], cell_count
                 )
@@ -421,6 +462,19 @@ def decode_icon_atmosphere(
             target.dynamic_grib_sha256 = sha256(dynamic_grib)
             target.geometry_grib_sha256 = sha256(geometry_grib)
             target.icon_extpar_sha256 = sha256(icon_extpar)
+            target.w_conservative_range_validation = (
+                "all_source_cells"
+                if w_range_support is None
+                else "target_scalar_rbf_donor_support"
+            )
+            target.w_conservative_range_support_count = (
+                cell_count if w_range_support is None else int(w_range_support.size)
+            )
+            target.w_source_global_minimum_ms = w_source_minimum
+            target.w_source_global_maximum_ms = w_source_maximum
+            target.w_source_outside_support_range_count = w_outside_support_range_count
+            if range_support_weights is not None:
+                target.range_support_weights_sha256 = range_support_weights_sha256
             target.field_contract_json = json.dumps(
                 {
                     "full_level": {spec.name: spec.param_id for spec in FULL_LEVEL_SPECS},
@@ -441,6 +495,18 @@ def decode_icon_atmosphere(
         "cell_count": cell_count,
         "missing_qi_policy": missing_qi_policy,
         "compression_level": compression_level,
+        "w_conservative_range_validation": (
+            "all_source_cells"
+            if w_range_support is None
+            else "target_scalar_rbf_donor_support"
+        ),
+        "w_conservative_range_support_count": (
+            cell_count if w_range_support is None else int(w_range_support.size)
+        ),
+        "w_source_global_minimum_ms": w_source_minimum,
+        "w_source_global_maximum_ms": w_source_maximum,
+        "w_source_outside_support_range_count": w_outside_support_range_count,
+        "range_support_weights_sha256": range_support_weights_sha256,
         "dynamic_message_count": dynamic_contract["message_count"],
         "geometry_message_count": geometry_contract["message_count"],
     }

@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from preprocessing.hicarprep import icon_atmosphere as atmosphere
+from preprocessing.hicarprep.remap import RBFWeights, grid_fingerprint
 
 
 class FakeGeography:
@@ -130,6 +131,21 @@ def test_grib_step_hours_accepts_operational_minute_metadata():
         atmosphere.grib_step_hours("30m")
 
 
+def test_w_range_can_be_scoped_to_consumed_source_support():
+    spec = atmosphere.HALF_LEVEL_SPECS[0]
+    field = fake_field(spec, np.array([1.0, 106.0]), level=1)
+    with pytest.raises(ValueError, match="all source cells"):
+        atmosphere.decode_values(field, spec, 2)
+    values = atmosphere.decode_values(
+        field, spec, 2, range_support_indices=np.array([0], dtype=np.int64)
+    )
+    np.testing.assert_array_equal(values, [1.0, 106.0])
+    with pytest.raises(ValueError, match="required source support"):
+        atmosphere.decode_values(
+            field, spec, 2, range_support_indices=np.array([1], dtype=np.int64)
+        )
+
+
 def test_operational_decode_reverses_levels_and_records_explicit_missing_qi(tmp_path, monkeypatch):
     dynamic, geometry = inventories()
     dynamic_path = tmp_path / "dynamic.grib"
@@ -172,6 +188,88 @@ def test_operational_decode_reverses_levels_and_records_explicit_missing_qi(tmp_
         assert dataset["HHL"][0, 0] < dataset["HHL"][-1, 0]
         assert dataset["source_level"][0] == 80
         assert dataset["source_half_level"][0] == 81
+
+
+def test_operational_decode_records_target_supported_w_range_validation(tmp_path, monkeypatch):
+    dynamic, geometry = inventories()
+    first_w = next(field for field in dynamic if field._metadata["shortName"] == "W")
+    first_w.values[1] = 106.0
+    dynamic_path = tmp_path / "dynamic.grib"
+    geometry_path = tmp_path / "geometry.grib"
+    extpar_path = tmp_path / "extpar.nc"
+    weights_path = tmp_path / "weights.nc"
+    output_path = tmp_path / "atmosphere.nc"
+    dynamic_path.write_bytes(b"dynamic")
+    geometry_path.write_bytes(b"geometry")
+    write_extpar(extpar_path)
+    RBFWeights(
+        donor_index=np.array([[0]], dtype=np.int64),
+        weight=np.array([[1.0]], dtype=np.float64),
+        target_shape=(1,),
+        source_fingerprint=grid_fingerprint(
+            np.array([0.8, 0.81]), np.array([0.1, 0.11])
+        ),
+        target_fingerprint="synthetic-target",
+    ).write(weights_path)
+    monkeypatch.setattr(
+        atmosphere,
+        "read_grib_fields",
+        lambda path: dynamic if path == dynamic_path else geometry,
+    )
+
+    report = atmosphere.decode_icon_atmosphere(
+        dynamic_path,
+        geometry_path,
+        extpar_path,
+        "2020-02-10T01:00:00Z",
+        output_path,
+        missing_qi_policy="source-absent-zero",
+        range_support_weights=weights_path,
+    )
+
+    assert report["w_conservative_range_validation"] == "target_scalar_rbf_donor_support"
+    assert report["w_conservative_range_support_count"] == 1
+    assert report["w_source_global_maximum_ms"] == 106.0
+    assert report["w_source_outside_support_range_count"] == 1
+    with netCDF4.Dataset(output_path) as dataset:
+        assert dataset.w_conservative_range_validation == "target_scalar_rbf_donor_support"
+        assert dataset.w_conservative_range_support_count == 1
+        assert dataset.w_source_outside_support_range_count == 1
+        assert dataset["W"][-1, 1] == 106.0
+
+
+def test_operational_decode_rejects_range_support_from_another_grid(tmp_path, monkeypatch):
+    dynamic, geometry = inventories()
+    dynamic_path = tmp_path / "dynamic.grib"
+    geometry_path = tmp_path / "geometry.grib"
+    extpar_path = tmp_path / "extpar.nc"
+    weights_path = tmp_path / "weights.nc"
+    dynamic_path.write_bytes(b"dynamic")
+    geometry_path.write_bytes(b"geometry")
+    write_extpar(extpar_path)
+    RBFWeights(
+        donor_index=np.array([[0]], dtype=np.int64),
+        weight=np.array([[1.0]], dtype=np.float64),
+        target_shape=(1,),
+        source_fingerprint="different-grid",
+        target_fingerprint="synthetic-target",
+    ).write(weights_path)
+    monkeypatch.setattr(
+        atmosphere,
+        "read_grib_fields",
+        lambda path: dynamic if path == dynamic_path else geometry,
+    )
+
+    with pytest.raises(ValueError, match="do not belong to the native ICON grid"):
+        atmosphere.decode_icon_atmosphere(
+            dynamic_path,
+            geometry_path,
+            extpar_path,
+            "2020-02-10T01:00:00Z",
+            tmp_path / "atmosphere.nc",
+            missing_qi_policy="source-absent-zero",
+            range_support_weights=weights_path,
+        )
 
 
 def test_decode_rejects_nonmonotone_pressure(tmp_path, monkeypatch):
