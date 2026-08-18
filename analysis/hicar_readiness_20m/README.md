@@ -16,16 +16,19 @@ The required inputs are:
 
 - `geometry_validation.json`: output of `scripts/validate_sleve_geometry.py`.
 - `campaign_evidence.json`: compact provenance and completion evidence for
-  new hicarprep, the national pilot, and all four seasonal runs. The focused
+  hicarprep, the national pilot, and all four seasonal runs. The focused
   test fixture shows the fields the report reads.
 - `restart_comparison.json`: exact restart-state comparison produced by
   `compare_restart_states_exact.py`.
 - `national_summary.json` and `station_season_metrics.csv`: outputs from
   `scripts/national_campaign_postprocess.py`. They must cover 2 m temperature,
   2 m relative humidity, elevation-adjusted surface pressure, interval
-  precipitation, 10 m wind speed, and wind-vector RMSE. Temperature, humidity,
-  pressure, and precipitation summaries must also provide HICAR/REA-L bias,
-  model mean, and observation mean.
+  precipitation, snow height, 10 m wind speed, and wind-vector RMSE. Scalar
+  summaries must also provide HICAR/REA-L bias, MAE, centered RMSE, model mean,
+  observation mean, standard-deviation ratio, and correlation where defined.
+  The national summary must retain the evaluator's daylight HICAR-versus-
+  SwissMetNet global-shortwave diagnostic; it is reported separately because
+  staged native REA-L has no comparable shortwave field.
 - one footprint diagnostic JSON for each climatological season, produced by
   `scripts/diagnose_station_wind_footprints.py`.
 - `reviewed_assessment.json`: the analyst-authored conclusion and prose,
@@ -43,7 +46,7 @@ by elevation and terrain class. Seasonal headline results use every eligible
 station available in that season; each metric's exact four-season eligible
 station intersection is retained as a population-sensitivity table. The
 report derives one common positive evaluation duration from the inclusive
-matched-endpoint counts and then requires every season and all six ending-hour
+matched-endpoint counts and then requires every season and all seven ending-hour
 headline metrics to contain exactly leads 1 through that duration. This is 168
 scored hours for the current eight-day simulations after their first 24 hours
 are excluded as spin-up. Physical simulation lead is retained separately;

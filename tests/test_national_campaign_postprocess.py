@@ -175,6 +175,16 @@ def make_report(path, season, site_count=67, common_count=65, mismatch=False):
         "station_mapping": {"sites": sites},
         "site_metrics": site_metrics,
         "lead_time_metrics": lead,
+        "hicar_observation_shortwave_daylight_only": {
+            "interpretation": "HICAR daylight shortwave versus observations.",
+            "statistics": metric(
+                50.0,
+                count=100,
+                model_mean=300.0,
+                observation_mean=280.0,
+                bias=20.0,
+            ),
+        },
         "issues": [],
     }
     refresh_wind_report_totals(report)
@@ -237,6 +247,12 @@ def test_national_summary_and_exact_common_65(tmp_path):
         rows = list(csv.DictReader(stream))
 
     assert summary["coverage"]["station_key_union_count"] == 67
+    assert set(summary["hicar_observation_shortwave_daylight_only"]["events"]) == set(
+        MODULE.SEASONS
+    )
+    assert summary["hicar_observation_shortwave_daylight_only"]["events"]["DJF"][
+        "statistics"
+    ]["root_mean_squared_error"] == 50.0
     assert summary["coverage"]["station_key_four_season_intersection_count"] == 67
     assert summary["national_four_season_intersection"]["site_count"] == 67
     assert summary["coverage"]["metric_eligible_four_season_intersection_counts"] == {

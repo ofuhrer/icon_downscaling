@@ -861,6 +861,72 @@ def validate_wind_source_reports(
     return evidence
 
 
+def shortwave_observation_diagnostics(
+    reports: dict[str, tuple[Path, dict]],
+) -> dict[str, dict]:
+    """Retain the finite daylight HICAR-versus-observation diagnostic by season."""
+    required = (
+        "model_mean",
+        "observation_mean",
+        "bias",
+        "mean_absolute_error",
+        "root_mean_squared_error",
+        "centered_root_mean_squared_error",
+        "model_standard_deviation",
+        "observation_standard_deviation",
+    )
+    nonnegative = {
+        "mean_absolute_error",
+        "root_mean_squared_error",
+        "centered_root_mean_squared_error",
+        "model_standard_deviation",
+        "observation_standard_deviation",
+    }
+    output = {}
+    for season in SEASONS:
+        path, report = reports[season]
+        diagnostic = report.get("hicar_observation_shortwave_daylight_only")
+        if not isinstance(diagnostic, dict):
+            raise ValueError(f"{path}: daylight shortwave diagnostic is missing")
+        statistics = diagnostic.get("statistics")
+        if not isinstance(statistics, dict):
+            raise ValueError(f"{path}: daylight shortwave statistics are missing")
+        count = nonnegative_count(
+            statistics.get("count"), f"{path}: daylight shortwave count"
+        )
+        if count < 1:
+            raise ValueError(f"{path}: daylight shortwave diagnostic has no finite pairs")
+        retained = {"count": count}
+        for field in required:
+            try:
+                value = float(statistics[field])
+            except (KeyError, TypeError, ValueError) as error:
+                raise ValueError(
+                    f"{path}: daylight shortwave {field} is missing or invalid"
+                ) from error
+            if not math.isfinite(value) or (field in nonnegative and value < 0.0):
+                raise ValueError(f"{path}: daylight shortwave {field} is not finite/valid")
+            retained[field] = value
+        correlation = statistics.get("correlation")
+        if correlation is not None:
+            try:
+                correlation = float(correlation)
+            except (TypeError, ValueError) as error:
+                raise ValueError(
+                    f"{path}: daylight shortwave correlation is invalid"
+                ) from error
+            if not math.isfinite(correlation) or not -1.0 <= correlation <= 1.0:
+                raise ValueError(
+                    f"{path}: daylight shortwave correlation is outside [-1, 1]"
+                )
+        retained["correlation"] = correlation
+        output[season] = {
+            "interpretation": diagnostic.get("interpretation", ""),
+            "statistics": retained,
+        }
+    return output
+
+
 def material_wind_change(hicar_rmse: float, rea_l_rmse: float) -> dict:
     """Classify one preregistered HICAR-minus-REA-L wind RMSE difference."""
     if not all(math.isfinite(value) and value >= 0.0 for value in (hicar_rmse, rea_l_rmse)):
@@ -1432,6 +1498,7 @@ def run(args: argparse.Namespace) -> dict:
         raise ValueError(f"reports must cover exactly {', '.join(SEASONS)}")
 
     reports = {season: (specs[season], load_report(specs[season])) for season in SEASONS}
+    shortwave_diagnostics = shortwave_observation_diagnostics(reports)
     wind_source_evidence = validate_wind_source_reports(reports)
     wind_pair_counts = {
         evidence["common_ending_hour_pair_count"]
@@ -1580,6 +1647,14 @@ def run(args: argparse.Namespace) -> dict:
         "station_season_row_count": len(rows),
         "metrics": sorted({row["metric"] for row in rows}),
         "wind_decision_readout": wind_decision,
+        "hicar_observation_shortwave_daylight_only": {
+            "interpretation": (
+                "HICAR ending-hour daylight shortwave versus SwissMetNet. Native "
+                "REA-L has no matching staged shortwave field, so this diagnostic "
+                "is excluded from HICAR-versus-REA-L added-value ranking."
+            ),
+            "events": shortwave_diagnostics,
+        },
         "equal_station_summaries": equal_station_summaries(
             rows, common_keys is not None, national_metric_four_season_keys
         ),

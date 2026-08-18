@@ -126,7 +126,15 @@ def fixture(tmp_path, evaluation_pair_count=24):
             for season in MODULE.SEASONS},
             "station_key_union_count": 166, "station_key_four_season_intersection_count": 12},
         "station_season_row_count": len(stations), "equal_station_summaries": summaries,
-        "lead_hour_tables": leads}
+        "lead_hour_tables": leads,
+        "hicar_observation_shortwave_daylight_only": {"events": {
+            season: {"statistics": {"count": 48, "model_mean": 320.0,
+                "observation_mean": 300.0, "bias": 20.0,
+                "mean_absolute_error": 45.0, "root_mean_squared_error": 60.0,
+                "centered_root_mean_squared_error": 56.5685424949,
+                "model_standard_deviation": 140.0,
+                "observation_standard_deviation": 130.0, "correlation": 0.82}}
+            for season in MODULE.SEASONS}}}
     station_path = results / "station_season_metrics.csv"
     with station_path.open("w", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=stations[0])
@@ -192,9 +200,10 @@ def test_artifact_is_deterministic_and_canonical(tmp_path):
     assert first["surface"] == first["manifest"]["surface"] == "report"
     assert first["snapshot"]["status"] == "ready"
     assert {name: len(rows) for name, rows in first["snapshot"]["datasets"].items()} == {
-        "seasonal_metrics": 24, "seasonal_population_sensitivity": 48,
-        "lead_metrics": 576, "ridge_lead_metrics": 192, "station_wind": 96,
-        "elevation_counts": 32, "footprint_wind": 8}
+        "seasonal_metrics": 28, "seasonal_population_sensitivity": 56,
+        "lead_metrics": 672, "ridge_lead_metrics": 192, "station_wind": 96,
+        "elevation_counts": 32, "footprint_wind": 8,
+        "shortwave_summary": 4, "shortwave_scores": 12}
     seasonal = first["snapshot"]["datasets"]["seasonal_metrics"]
     assert {row["metric"] for row in seasonal} == set(MODULE.METRICS)
     assert all(row["paired_station_count"] == 12 for row in seasonal)
@@ -257,7 +266,7 @@ def test_artifact_is_deterministic_and_canonical(tmp_path):
         for season, rows in national["lead_hour_tables"].items()
     }
     dump(national_path, national)
-    with pytest.raises(ValueError, match="all six headline metrics"):
+    with pytest.raises(ValueError, match="all headline metrics"):
         MODULE.derive_datasets(MODULE.load_evidence(tmp_path / "inputs.json"))
 
 

@@ -20,6 +20,7 @@ METRICS = {
     "relative_humidity_2m_percent": ("2 m relative humidity", "%"),
     "surface_pressure_height_adjusted_pa": ("Surface pressure, elevation adjusted", "Pa"),
     "precipitation_interval_kg_m2": ("Interval precipitation", "kg m^-2"),
+    "snow_height_m": ("Snow height", "m"),
     "wind_speed_10m_m_s": ("10 m wind speed", "m s^-1"),
     "wind_vector": ("10 m wind vector", "m s^-1"),
 }
@@ -28,6 +29,7 @@ SCALAR_STATS = {
     "relative_humidity_2m_percent",
     "surface_pressure_height_adjusted_pa",
     "precipitation_interval_kg_m2",
+    "snow_height_m",
 }
 ERROR_ANATOMY_METRICS = SCALAR_STATS | {"wind_speed_10m_m_s"}
 WIND_METRICS = {"wind_speed_10m_m_s", "wind_vector"}
@@ -35,7 +37,7 @@ RIDGE_LEAD_STRATA = {
     "terrain_ridge_relative_gt_150m": "Terrain ridge (>150 m relative)",
     "station_elevation_ge_2000m": "Station elevation >=2000 m",
 }
-FINDINGS = ("seasonal_skill", "lead_time", "elevation_wind",
+FINDINGS = ("seasonal_skill", "shortwave", "lead_time", "elevation_wind",
             "footprint_sensitivity", "inputs_and_grid", "restart")
 TITLE = "HICAR 20 m national four-season verification"
 SEASON_ORDER = "CASE season WHEN 'DJF' THEN 1 WHEN 'MAM' THEN 2 WHEN 'JJA' THEN 3 ELSE 4 END"
@@ -47,6 +49,8 @@ QUERIES = {
     "station_wind": f"SELECT * FROM station ORDER BY {SEASON_ORDER}, metric_order, station_elevation_m, station_key",
     "elevation_counts": f"SELECT * FROM elevation ORDER BY {SEASON_ORDER}, metric_order, stratification, stratum",
     "footprint_wind": f"SELECT * FROM footprint ORDER BY {SEASON_ORDER}, site_key, radius_km",
+    "shortwave_summary": f"SELECT * FROM shortwave_summary ORDER BY {SEASON_ORDER}",
+    "shortwave_scores": f"SELECT * FROM shortwave_scores ORDER BY {SEASON_ORDER}, score_order",
 }
 
 
@@ -119,7 +123,7 @@ def load_evidence(inputs_path):
             raise ValueError(f"{season} footprint evidence is incomplete or time-mismatched")
     assessment = evidence["reviewed_assessment"]
     if set(assessment["findings"]) != set(FINDINGS):
-        raise ValueError("reviewed assessment must contain the six report findings")
+        raise ValueError("reviewed assessment must contain all report findings")
     if any(not assessment.get(name) for name in ("technical_summary", "limitations", "recommended_next_steps", "further_questions")):
         raise ValueError("reviewed assessment is missing summary, limitations, next steps, or questions")
     return {"generated_at": spec["snapshot_generated_at"], "relative": relative,
@@ -272,7 +276,7 @@ def derive_datasets(evidence):
     if {(row["season"], row["metric"]) for row in seasonal} != {
         (season, metric) for season in SEASONS for metric in METRICS
     }:
-        raise ValueError("national seasonal summaries must contain all six headline metrics in all four seasons")
+        raise ValueError("national seasonal summaries must contain all headline metrics in all four seasons")
     if {(row["season"], row["metric"], row["population_order"]) for row in seasonal_sensitivity} != {
         (season, metric, population) for season in SEASONS for metric in METRICS for population in (0, 1)
     }:
@@ -417,12 +421,64 @@ def derive_datasets(evidence):
                     "actual_cell_count": int(geometry["actual_cell_count"])})
     if len(footprint) < 8:
         raise ValueError("footprint results are too sparse")
+    shortwave_summary = []
+    shortwave_scores = []
+    try:
+        shortwave_events = national["hicar_observation_shortwave_daylight_only"]["events"]
+    except (KeyError, TypeError) as error:
+        raise ValueError("national summary lacks daylight shortwave diagnostics") from error
+    if set(shortwave_events) != set(SEASONS):
+        raise ValueError("daylight shortwave diagnostics must cover all four seasons")
+    for season in SEASONS:
+        statistics = shortwave_events[season]["statistics"]
+        observation_sd = float(statistics["observation_standard_deviation"])
+        model_sd = float(statistics["model_standard_deviation"])
+        item = {
+            "season": season,
+            "pair_count": int(statistics["count"]),
+            "hicar_mean_w_m2": float(statistics["model_mean"]),
+            "observation_mean_w_m2": float(statistics["observation_mean"]),
+            "bias_w_m2": float(statistics["bias"]),
+            "mae_w_m2": float(statistics["mean_absolute_error"]),
+            "rmse_w_m2": float(statistics["root_mean_squared_error"]),
+            "centered_rmse_w_m2": float(
+                statistics["centered_root_mean_squared_error"]
+            ),
+            "hicar_standard_deviation_w_m2": model_sd,
+            "observation_standard_deviation_w_m2": observation_sd,
+            "standard_deviation_ratio": (
+                model_sd / observation_sd if observation_sd > 0.0 else None
+            ),
+            "correlation": statistics.get("correlation"),
+        }
+        if not all(
+            math.isfinite(value)
+            for key, value in item.items()
+            if key not in {"season", "correlation", "standard_deviation_ratio"}
+        ):
+            raise ValueError(f"{season} daylight shortwave diagnostic is nonfinite")
+        shortwave_summary.append(item)
+        for score_order, (field, label) in enumerate(
+            (("bias_w_m2", "Bias"), ("mae_w_m2", "MAE"), ("rmse_w_m2", "RMSE"))
+        ):
+            shortwave_scores.append(
+                {
+                    "season": season,
+                    "score": field,
+                    "score_label": label,
+                    "score_order": score_order,
+                    "value_w_m2": item[field],
+                    "pair_count": item["pair_count"],
+                }
+            )
     tables = {"seasonal_metrics": "seasonal", "seasonal_population_sensitivity": "seasonal_sensitivity",
               "lead_metrics": "lead", "ridge_lead_metrics": "ridge_lead", "station_wind": "station",
-              "elevation_counts": "elevation", "footprint_wind": "footprint"}
+              "elevation_counts": "elevation", "footprint_wind": "footprint",
+              "shortwave_summary": "shortwave_summary", "shortwave_scores": "shortwave_scores"}
     rows = {"seasonal_metrics": seasonal, "seasonal_population_sensitivity": seasonal_sensitivity,
             "lead_metrics": lead, "ridge_lead_metrics": ridge_lead, "station_wind": station,
-            "elevation_counts": elevation, "footprint_wind": footprint}
+            "elevation_counts": elevation, "footprint_wind": footprint,
+            "shortwave_summary": shortwave_summary, "shortwave_scores": shortwave_scores}
     return {name: query_rows(tables[name], rows[name], QUERIES[name]) for name in rows}
 
 
@@ -453,6 +509,8 @@ def build_artifact(evidence):
         "station_wind": ["station_season_metrics.csv"],
         "elevation_counts": ["station_season_metrics.csv"],
         "footprint_wind": [f"footprint_{season}.json#sites" for season in SEASONS],
+        "shortwave_summary": ["national_summary.json#hicar_observation_shortwave_daylight_only"],
+        "shortwave_scores": ["national_summary.json#hicar_observation_shortwave_daylight_only"],
     }
     for name in datasets:
         sources.append({"id": f"{name}_query", "label": name.replace("_", " ").title(),
@@ -480,7 +538,7 @@ def build_artifact(evidence):
          "type": "bar", "dataset": "seasonal_metrics", "sourceId": "seasonal_metrics_query",
          "encodings": {"x": encoding("season", "Season", "ordinal"),
              "y": encoding("normalized_rmse_difference", "Normalized RMSE difference"),
-             "color": encoding("metric_label", "Metric", "nominal"),
+             "facet": encoding("metric_label", "Metric", "nominal"),
              "tooltip": [encoding("paired_station_count", "Paired stations"),
                          encoding("mean_station_hicar_rmse", "Mean station HICAR RMSE"),
                          encoding("network_pooled_hicar_rmse", "Pair-pooled HICAR RMSE"),
@@ -530,6 +588,14 @@ def build_artifact(evidence):
              "tooltip": [encoding("season", "Season", "nominal"),
                          encoding("pair_count", "Paired observations"),
                          encoding("terrain_relative_elevation_m", "Terrain-relative elevation", unit="m")]}},
+        {"id": "shortwave_scores", "title": "Daylight global-shortwave scores against SwissMetNet",
+         "subtitle": "HICAR only; native REA-L has no staged matching field and is excluded from added-value ranking",
+         "type": "bar", "dataset": "shortwave_scores", "sourceId": "shortwave_scores_query",
+         "encodings": {"x": encoding("season", "Season", "ordinal"),
+             "y": encoding("value_w_m2", "Score", unit="W m^-2"),
+             "color": encoding("score_label", "Score", "nominal"),
+             "tooltip": [encoding("pair_count", "Daylight pairs"),
+                         encoding("score_label", "Score", "nominal")]}},
     ]
 
     def columns(*pairs):
@@ -594,6 +660,18 @@ def build_artifact(evidence):
              ("radius_km", "Radius (km)"), ("pair_count", "Paired observations"),
              ("nearest_rmse_m_s", "Nearest RMSE"),
              ("footprint_mean_rmse_m_s", "Footprint mean RMSE"))},
+        {"id": "shortwave_table", "title": "Daylight global-shortwave diagnostic",
+         "subtitle": "HICAR versus SwissMetNet; no comparable staged native REA-L shortwave field",
+         "dataset": "shortwave_summary", "sourceId": "shortwave_summary_query", "density": "spacious",
+         "defaultSort": {"field": "season", "direction": "asc"},
+         "columns": columns(("season", "Season"), ("pair_count", "Daylight pairs"),
+             ("hicar_mean_w_m2", "HICAR mean (W m^-2)"),
+             ("observation_mean_w_m2", "Observation mean (W m^-2)"),
+             ("bias_w_m2", "Bias (W m^-2)"), ("mae_w_m2", "MAE (W m^-2)"),
+             ("rmse_w_m2", "RMSE (W m^-2)"),
+             ("centered_rmse_w_m2", "Centered RMSE (W m^-2)"),
+             ("standard_deviation_ratio", "HICAR/obs SD ratio"),
+             ("correlation", "Correlation"))},
     ]
     assessment_method = evidence["national_summary"]["method"]
     coverage = evidence["national_summary"]["coverage"]
@@ -607,6 +685,9 @@ def build_artifact(evidence):
         {"id": "seasonal_chart", "type": "chart", "chartId": "seasonal_metrics"},
         {"id": "seasonal_table_block", "type": "table", "tableId": "seasonal_table"},
         {"id": "population_table_block", "type": "table", "tableId": "population_table"},
+        finding("shortwave", "national_file"),
+        {"id": "shortwave_chart", "type": "chart", "chartId": "shortwave_scores"},
+        {"id": "shortwave_table_block", "type": "table", "tableId": "shortwave_table"},
         finding("lead_time", "national_file"),
         {"id": "lead_chart", "type": "chart", "chartId": "lead_metrics"},
         {"id": "ridge_lead_chart", "type": "chart", "chartId": "ridge_lead_metrics"},
@@ -656,7 +737,7 @@ def main():
         write_json(args.output, artifact)
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as error:
         parser.error(str(error))
-    print(f"Wrote {args.output} with six headline metrics from reviewed evidence")
+    print(f"Wrote {args.output} with seven headline metrics from reviewed evidence")
 
 
 if __name__ == "__main__":
