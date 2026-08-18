@@ -207,7 +207,8 @@ def test_operational_decode_records_target_supported_w_range_validation(tmp_path
         weight=np.array([[1.0]], dtype=np.float64),
         target_shape=(1,),
         source_fingerprint=grid_fingerprint(
-            np.array([0.8, 0.81]), np.array([0.1, 0.11])
+            np.rad2deg(np.array([0.8, 0.81])),
+            np.rad2deg(np.array([0.1, 0.11])),
         ),
         target_fingerprint="synthetic-target",
     ).write(weights_path)

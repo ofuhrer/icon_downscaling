@@ -325,10 +325,13 @@ def decode_icon_atmosphere(
     w_range_support = None
     range_support_weights_sha256 = ""
     if range_support_weights is not None:
-        from .remap import RBFWeights, grid_fingerprint
+        from .remap import RBFWeights, coordinates_in_degrees, grid_fingerprint
 
         weights = RBFWeights.read(range_support_weights)
-        source_fingerprint = grid_fingerprint(clat, clon)
+        source_fingerprint = grid_fingerprint(
+            coordinates_in_degrees(clat, "radian"),
+            coordinates_in_degrees(clon, "radian"),
+        )
         if weights.source_fingerprint != source_fingerprint:
             raise ValueError("range-support weights do not belong to the native ICON grid")
         w_range_support = np.unique(weights.donor_index)
