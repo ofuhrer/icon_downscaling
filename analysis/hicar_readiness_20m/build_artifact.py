@@ -20,7 +20,6 @@ METRICS = {
     "relative_humidity_2m_percent": ("2 m relative humidity", "%"),
     "surface_pressure_height_adjusted_pa": ("Surface pressure, elevation adjusted", "Pa"),
     "precipitation_interval_kg_m2": ("Interval precipitation", "kg m^-2"),
-    "snow_height_m": ("Snow height", "m"),
     "wind_speed_10m_m_s": ("10 m wind speed", "m s^-1"),
     "wind_vector": ("10 m wind vector", "m s^-1"),
 }
@@ -29,7 +28,6 @@ SCALAR_STATS = {
     "relative_humidity_2m_percent",
     "surface_pressure_height_adjusted_pa",
     "precipitation_interval_kg_m2",
-    "snow_height_m",
 }
 ERROR_ANATOMY_METRICS = SCALAR_STATS | {"wind_speed_10m_m_s"}
 WIND_METRICS = {"wind_speed_10m_m_s", "wind_vector"}
@@ -39,7 +37,7 @@ RIDGE_LEAD_STRATA = {
 }
 FINDINGS = ("seasonal_skill", "shortwave", "lead_time", "elevation_wind",
             "footprint_sensitivity", "inputs_and_grid", "restart")
-TITLE = "HICAR 20 m national four-season verification"
+TITLE = "HICAR 200 m national four-season verification"
 SEASON_ORDER = "CASE season WHEN 'DJF' THEN 1 WHEN 'MAM' THEN 2 WHEN 'JJA' THEN 3 ELSE 4 END"
 QUERIES = {
     "seasonal_metrics": f"SELECT * FROM seasonal ORDER BY {SEASON_ORDER}, metric_order",
@@ -82,7 +80,7 @@ def load_evidence(inputs_path):
 
     relative, paths = {}, {}
     for name in (
-        "campaign_evidence", "geometry_validation", "restart_comparison",
+        "campaign_evidence", "geometry_validation", "restart_transition_audit",
         "national_summary", "station_season_csv", "reviewed_assessment",
     ):
         relative[name], paths[name] = resolve(files[name])
@@ -115,6 +113,27 @@ def load_evidence(inputs_path):
         raise ValueError("station CSV row count differs from the national summary")
     if set(event["season"] for event in campaign["seasonal_campaign"]["events"]) != set(SEASONS):
         raise ValueError("campaign evidence must cover all four seasons")
+    events = campaign["seasonal_campaign"]["events"]
+    expected_segments = sum(int(event["segment_count"]) for event in events)
+    expected_transitions = sum(int(event["segment_count"]) - 1 for event in events)
+    restart_audit = evidence["restart_transition_audit"]
+    expected_restart_audit = {
+        "schema": "hicar-restart-transition-audit/v1",
+        "status": "PASS",
+        "season_count": len(SEASONS),
+        "completed_segment_count": expected_segments,
+        "validated_transition_count": expected_transitions,
+        "retained_final_restart_count": len(SEASONS),
+        "all_transitions_validated": True,
+        "all_final_restarts_present": True,
+    }
+    mismatches = {
+        name: (restart_audit.get(name), expected)
+        for name, expected in expected_restart_audit.items()
+        if restart_audit.get(name) != expected
+    }
+    if mismatches:
+        raise ValueError(f"restart transition audit is incomplete or mismatched: {mismatches}")
     for season, report in evidence["footprint_reports"].items():
         if (
             not report["data_quality"].get("required_ten_minute_samples_complete")
@@ -304,6 +323,19 @@ def derive_datasets(evidence):
             expected = expected_lead_hours
             if len(hours) != len(expected) or set(hours) != expected:
                 raise ValueError(f"{season}/{metric} lead hours must be exactly {sorted(expected)}; got {sorted(hours)}")
+    # Keep the complete-hour validation above, but bound the portable snapshot.
+    # Three points per 12-hour segment retain the first post-restart hour,
+    # segment midpoint, and endpoint while keeping browser rendering bounded.
+    retained_turnover_hours = {1, 6, 12}
+    lead = [
+        {
+            **row,
+            "evaluation_segment_index": (row["lead_hour"] - 1) // 12,
+            "turnover_relative_hour": (row["lead_hour"] - 1) % 12 + 1,
+        }
+        for row in lead
+        if (row["lead_hour"] - 1) % 12 + 1 in retained_turnover_hours
+    ]
 
     ridge_lead = []
     for season in SEASONS:
@@ -346,6 +378,10 @@ def derive_datasets(evidence):
                     f"{season}/{stratum} wind-vector lead hours must be exactly "
                     f"{sorted(expected)}; got {sorted(hours)}"
                 )
+    ridge_lead = [
+        row for row in ridge_lead
+        if row["turnover_relative_hour"] in retained_turnover_hours
+    ]
 
     station = []
     for row in evidence["station_rows"]:
@@ -410,6 +446,12 @@ def derive_datasets(evidence):
                 nearest, mean, geometry = result["nearest_cell"], result["footprint_mean_vector"], result["geometry"]
                 if int(nearest["pair_count"]) != int(mean["pair_count"]):
                     raise ValueError(f"{season}/{site['site_key']}/{radius} footprint pair counts differ")
+                if int(nearest["pair_count"]) == 0:
+                    continue
+                if nearest.get("vector_rmse_m_s") is None or mean.get("vector_rmse_m_s") is None:
+                    raise ValueError(
+                        f"{season}/{site['site_key']}/{radius} positive-pair footprint lacks RMSE"
+                    )
                 footprint.append({"season": season, "site_key": site["site_key"],
                     "station_elevation_m": float(site["station_elevation_m"]),
                     "terrain_relative_elevation_m": float(site["terrain_relative_elevation_m"]),
@@ -495,7 +537,7 @@ def build_artifact(evidence):
     sources = [
         source(evidence, "campaign_file", "campaign_evidence", "Campaign evidence"),
         source(evidence, "geometry_file", "geometry_validation", "Geometry validation"),
-        source(evidence, "restart_file", "restart_comparison", "Exact restart comparison"),
+        source(evidence, "restart_file", "restart_transition_audit", "Restart transition audit"),
         source(evidence, "national_file", "national_summary", "National station summary"),
         source(evidence, "station_file", "station_season_csv", "Station-season metrics"),
         source(evidence, "assessment_file", "reviewed_assessment", "Analyst-authored assessment"),
@@ -543,8 +585,8 @@ def build_artifact(evidence):
                          encoding("mean_station_hicar_rmse", "Mean station HICAR RMSE"),
                          encoding("network_pooled_hicar_rmse", "Pair-pooled HICAR RMSE"),
                          encoding("unit", "Native unit", "text")]}},
-        {"id": "lead_metrics", "title": "Normalized RMSE difference by lead hour and metric",
-         "subtitle": "Four event trajectories per metric; lead hour remains confounded with valid time",
+        {"id": "lead_metrics", "title": "Normalized RMSE difference by selected lead hour and metric",
+         "subtitle": "First post-restart hour plus hours 6 and 12 of every segment; lead remains confounded with valid time",
          "type": "line", "dataset": "lead_metrics", "sourceId": "lead_metrics_query",
          "encodings": {"x": encoding("lead_hour", "Lead hour", unit="h"),
              "y": encoding("normalized_rmse_difference", "Normalized RMSE difference"),
@@ -572,7 +614,6 @@ def build_artifact(evidence):
              "y": encoding("normalized_rmse_difference", "Normalized RMSE difference"),
              "color": encoding("season", "Season", "nominal"),
              "facet": encoding("metric_label", "Wind metric", "nominal"),
-             "label": encoding("station_key", "Station", "text"),
              "tooltip": [encoding("pair_count", "Paired observations"),
                          encoding("hicar_minus_station_elevation_m", "HICAR minus station elevation", unit="m"),
                          encoding("nearest_cell_distance_km", "Nearest-cell distance", unit="km"),
@@ -584,8 +625,8 @@ def build_artifact(evidence):
          "encodings": {"x": encoding("nearest_rmse_m_s", "Nearest-cell RMSE", unit="m s^-1"),
              "y": encoding("footprint_mean_rmse_m_s", "Footprint-mean RMSE", unit="m s^-1"),
              "color": encoding("radius_km", "Radius (km)", "nominal"),
-             "label": encoding("site_key", "Station", "text"),
              "tooltip": [encoding("season", "Season", "nominal"),
+                         encoding("site_key", "Station", "text"),
                          encoding("pair_count", "Paired observations"),
                          encoding("terrain_relative_elevation_m", "Terrain-relative elevation", unit="m")]}},
         {"id": "shortwave_scores", "title": "Daylight global-shortwave scores against SwissMetNet",
@@ -737,7 +778,7 @@ def main():
         write_json(args.output, artifact)
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as error:
         parser.error(str(error))
-    print(f"Wrote {args.output} with seven headline metrics from reviewed evidence")
+    print(f"Wrote {args.output} with six headline metrics from reviewed evidence")
 
 
 if __name__ == "__main__":

@@ -18,17 +18,25 @@ The required inputs are:
 - `campaign_evidence.json`: compact provenance and completion evidence for
   hicarprep, the national pilot, and all four seasonal runs. The focused
   test fixture shows the fields the report reads.
-- `restart_comparison.json`: exact restart-state comparison produced by
-  `compare_restart_states_exact.py`.
+- `restart_transition_audit.json`: compact audit of every validated segment
+  handoff. It must prove that all predecessor-to-successor transitions have
+  checksum-bound receipts and that one final seasonal restart remains. The
+  intermediate restart payloads may already have been pruned after receipt
+  validation; the report must not imply they remain available or that a
+  continuous and restarted trajectory was bitwise identical.
 - `national_summary.json` and `station_season_metrics.csv`: outputs from
   `scripts/national_campaign_postprocess.py`. They must cover 2 m temperature,
   2 m relative humidity, elevation-adjusted surface pressure, interval
-  precipitation, snow height, 10 m wind speed, and wind-vector RMSE. Scalar
+  precipitation, 10 m wind speed, and wind-vector RMSE. Scalar
   summaries must also provide HICAR/REA-L bias, MAE, centered RMSE, model mean,
   observation mean, standard-deviation ratio, and correlation where defined.
   The national summary must retain the evaluator's daylight HICAR-versus-
   SwissMetNet global-shortwave diagnostic; it is reported separately because
   staged native REA-L has no comparable shortwave field.
+  Snow height is not included in the national added-value table because the
+  completed postprocessor produced no eligible snow station aggregate; the
+  report records this as an evidence limitation rather than fabricating a
+  zero-skill or missing-value score.
 - one footprint diagnostic JSON for each climatological season, produced by
   `scripts/diagnose_station_wind_footprints.py`.
 - `reviewed_assessment.json`: the analyst-authored conclusion and prose,

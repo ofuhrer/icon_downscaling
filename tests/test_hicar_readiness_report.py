@@ -46,8 +46,14 @@ def fixture(tmp_path, evaluation_pair_count=24):
         "configuration": {"height_lowest_level_m": 20},
         "acceptance": {"minimum_interface_layer_thickness_m": 12},
         "minimum_interface_layer_thickness": {"value_m": 15.956}}
-    restart = {"bitwise_equal_model_core_state": True, "differing_variable_count": 0,
-        "schema": {"compared_variable_count": 196}}
+    segment_count = (evaluation_pair_count + 24) // 12
+    restart = {"schema": "hicar-restart-transition-audit/v1", "status": "PASS",
+        "season_count": 4, "completed_segment_count": 4 * segment_count,
+        "validated_transition_count": 4 * (segment_count - 1),
+        "retained_final_restart_count": 4,
+        "retained_intermediate_restart_count": 0,
+        "all_transitions_validated": True, "all_final_restarts_present": True,
+        "policy": "Every restart transition is verified and durably attested."}
 
     summaries, leads, stations = [], {}, []
     for season_index, season in enumerate(MODULE.SEASONS):
@@ -149,7 +155,7 @@ def fixture(tmp_path, evaluation_pair_count=24):
         "further_questions": ["Does skill persist?"]}
     files = {
         "campaign_evidence": "results/campaign.json", "geometry_validation": "results/geometry.json",
-        "restart_comparison": "results/restart.json", "national_summary": "results/national.json",
+        "restart_transition_audit": "results/restart.json", "national_summary": "results/national.json",
         "station_season_csv": "results/station_season_metrics.csv",
         "reviewed_assessment": "results/assessment.json", "footprint_reports": {},
     }
@@ -172,7 +178,7 @@ def fixture(tmp_path, evaluation_pair_count=24):
 
 def test_missing_results_are_reported_together(tmp_path):
     files = {name: f"results/{name}" for name in (
-        "campaign_evidence", "geometry_validation", "restart_comparison",
+        "campaign_evidence", "geometry_validation", "restart_transition_audit",
         "national_summary", "station_season_csv", "reviewed_assessment")}
     files["footprint_reports"] = {season: f"results/{season}" for season in MODULE.SEASONS}
     inputs = tmp_path / "inputs.json"
@@ -200,8 +206,8 @@ def test_artifact_is_deterministic_and_canonical(tmp_path):
     assert first["surface"] == first["manifest"]["surface"] == "report"
     assert first["snapshot"]["status"] == "ready"
     assert {name: len(rows) for name, rows in first["snapshot"]["datasets"].items()} == {
-        "seasonal_metrics": 28, "seasonal_population_sensitivity": 56,
-        "lead_metrics": 672, "ridge_lead_metrics": 192, "station_wind": 96,
+        "seasonal_metrics": 24, "seasonal_population_sensitivity": 48,
+        "lead_metrics": 144, "ridge_lead_metrics": 48, "station_wind": 96,
         "elevation_counts": 32, "footprint_wind": 8,
         "shortwave_summary": 4, "shortwave_scores": 12}
     seasonal = first["snapshot"]["datasets"]["seasonal_metrics"]
@@ -220,8 +226,10 @@ def test_artifact_is_deterministic_and_canonical(tmp_path):
     assert {row["stratum"] for row in ridge_lead} == set(MODULE.RIDGE_LEAD_STRATA)
     assert {row["segment"] for row in ridge_lead} == {"first", "restarted"}
     lead = first["snapshot"]["datasets"]["lead_metrics"]
-    assert {row["lead_hour"] for row in lead} == set(range(1, 25))
-    assert {row["physical_lead_hour"] for row in lead} == set(range(25, 49))
+    assert {row["lead_hour"] for row in lead} == {1, 6, 12, 13, 18, 24}
+    assert {row["physical_lead_hour"] for row in lead} == {
+        hour + 24 for hour in {1, 6, 12, 13, 18, 24}
+    }
     assert all(row["hicar_bias"] is not None for row in seasonal
         if row["metric"] in MODULE.ERROR_ANATOMY_METRICS)
     sensitivity = first["snapshot"]["datasets"]["seasonal_population_sensitivity"]
@@ -276,11 +284,11 @@ def test_report_accepts_complete_seven_day_evaluation_windows(tmp_path):
 
     lead = artifact["snapshot"]["datasets"]["lead_metrics"]
     ridge_lead = artifact["snapshot"]["datasets"]["ridge_lead_metrics"]
-    assert len(lead) == 4 * len(MODULE.METRICS) * 168
-    assert len(ridge_lead) == 4 * len(MODULE.RIDGE_LEAD_STRATA) * 168
-    assert {row["lead_hour"] for row in lead} == set(range(1, 169))
+    assert len(lead) == 4 * len(MODULE.METRICS) * 42
+    assert len(ridge_lead) == 4 * len(MODULE.RIDGE_LEAD_STRATA) * 42
+    assert {row["turnover_relative_hour"] for row in lead} == {1, 6, 12}
     assert {row["evaluation_segment_index"] for row in ridge_lead} == set(range(14))
-    assert {row["turnover_relative_hour"] for row in ridge_lead} == set(range(1, 13))
+    assert {row["turnover_relative_hour"] for row in ridge_lead} == {1, 6, 12}
 
 
 def test_notebook_executes_top_to_bottom(tmp_path, monkeypatch):
